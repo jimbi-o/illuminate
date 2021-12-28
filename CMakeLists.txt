@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(minimalcpppj
+project(illuminate
   VERSION 1.0
   DESCRIPTION "render graph parser"
   LANGUAGES CXX
