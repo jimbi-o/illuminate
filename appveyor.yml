@@ -13,10 +13,6 @@ configuration:
 - Debug
 - Release
 
-install:
-- choco install opencppcoverage codecov
-- set PATH=C:\Program Files\OpenCppCoverage;%PATH%
-
 before_build:
 - cmake -S . -B build -DBUILD_WITH_TEST=ON
 
@@ -37,6 +33,9 @@ for:
   matrix:
     only:
     - configuration: Debug
+  install:
+  - choco install opencppcoverage codecov
+  - set PATH=C:\Program Files\OpenCppCoverage;%PATH%
   after_build:
   - cd build
   - OpenCppCoverage.exe --sources src --sources tests --export_type cobertura:coverage.xml --modules "*.exe" --cover_children -- %configuration%/illuminate.exe -C %configuration% --output-on-failure
