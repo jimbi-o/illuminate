@@ -34,9 +34,7 @@ for:
   - 7z a cov-int cov-int.zip
   - curl --form token=%coverity_token% --form email=%coverity_email% --form file=@cov-int.zip --form version="%APPVEYOR_BUILD_VERSION%" --form description="%APPVEYOR_BUILD_VERSION%" https://scan.coverity.com/builds?project=%APPVEYOR_REPO_NAME%
 -
-  branches:
-    only:
-      - main
+  matrix:
   configuration: Debug
   after_build:
   - cd build
