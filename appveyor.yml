@@ -40,5 +40,5 @@ for:
   configuration: Debug
   after_build:
   - cd build
-  - OpenCppCoverage --sources src --sources tests --export_type cobertura:coverage.xml --modules "*.exe" --cover_children - %configuration%/illuminate.exe -C %configuration% --output-on-failure
+  - OpenCppCoverage.exe --sources src --sources tests --export_type cobertura:coverage.xml --modules "*.exe" --cover_children -- %configuration%/illuminate.exe -C %configuration% --output-on-failure
   - codecov -f coverage.xml --root %APPVEYOR_BUILD_FOLDER%
