@@ -1,5 +1,11 @@
 version: 1.0.{build}
 
+environment:
+  coverity_token:
+    secure: b678Xt/k3QTlZPnJUI9IIuiWlG/Xbj/4RXJIHKf5Crg=
+  coverity_email:
+    secure: WrY/mxjEAqdbR41Nekols352OwgNL4ZhbsDOkuJdcTQ=
+
 image:
 - Visual Studio 2019
 
@@ -12,19 +18,20 @@ install:
 - set PATH=C:\Program Files\OpenCppCoverage;%PATH%
 
 before_build:
-- cmd:
-    cmake -S . -B build -DBUILD_WITH_TEST=ON
+- cmake -S . -B build -DBUILD_WITH_TEST=ON
 
-build:
-  project: build\illuminate.sln
-  verbosity: normal
-
-for:
--
-  matrix:
-    only:
-    - configuration: Debug
-  after_build:
-  - cd build
-  - OpenCppCoverage.exe --sources src --sources tests --export_type cobertura:coverage.xml --modules "*.exe" --cover_children -- %configuration%/illuminate.exe -C %configuration% --output-on-failure
-  - codecov -f coverage.xml --root %APPVEYOR_BUILD_FOLDER%
+build_script:
+- IF %APPVEYOR_REPO_BRANCH%==coverity_scan (
+    IF %configuration%==Debug (
+      cov-build --dir cov-int cmake --build build --config %configuration%
+      7z a cov-int cov-int.zip
+      curl --form token=%coverity_token% --form email=%coverity_email% --form file=@cov-int.zip --form version="%APPVEYOR_BUILD_VERSION%" --form description="%APPVEYOR_BUILD_VERSION%" https://scan.coverity.com/builds?project=%APPVEYOR_REPO_NAME%
+    )
+  ) ELSE (
+    cmake --build build --config %configuration%
+    IF %configuration%==Debug (
+      cd build
+      OpenCppCoverage --sources src --sources tests --export_type cobertura:coverage.xml --modules "*.exe" --cover_children - %configuration%/illuminate.exe -C %configuration% --output-on-failure
+      codecov -f coverage.xml --root %APPVEYOR_BUILD_FOLDER%
+    )
+  )
