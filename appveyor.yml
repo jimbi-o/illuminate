@@ -27,7 +27,7 @@ for:
   configuration: Debug
   build_script:
   - cov-build --dir cov-int cmake --build build --config %configuration%
-  - 7z a cov-int cov-int.zip
+  - 7z a cov-int.zip cov-int
   - curl --form token=%coverity_token% --form email=%coverity_email% --form file=@cov-int.zip --form version="%APPVEYOR_BUILD_VERSION%" --form description="%APPVEYOR_BUILD_VERSION%" https://scan.coverity.com/builds?project=%APPVEYOR_REPO_NAME%
 -
   matrix:
