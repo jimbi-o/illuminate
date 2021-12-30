@@ -8,6 +8,12 @@ project(illuminate
 include(cmake/CPM.cmake)
 CPMAddPackage("gh:onqtam/doctest#2.4.6")
 CPMAddPackage("gh:gabime/spdlog@1.9.2")
+CPMAddPackage(
+  NAME dxc
+  URL https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.6.2112/dxc_2021_12_08.zip
+  VERSION v1.6.2112
+  DOWNLOAD_ONLY yes
+)
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -27,6 +33,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM INTERFACE spdlog)
 set_target_properties(spdlog PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE spdlog::spdlog)
 
+
 target_compile_features(${CMAKE_PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>) # parallel build in MSVC
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
@@ -35,7 +42,8 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 target_include_directories(${CMAKE_PROJECT_NAME}
-  PUBLIC
+  PRIVATE
   "include"
+  "${dxc_SOURCE_DIR}/inc"
 )
 add_subdirectory(src)
