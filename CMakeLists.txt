@@ -28,11 +28,11 @@ option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OF
 if (NOT LIB_MODE AND CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   add_executable(${CMAKE_PROJECT_NAME})
   if (BUILD_WITH_TEST)
-	target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BUILD_WITH_TEST DOCTEST_CONFIG_SUPER_FAST_ASSERTS)
-	target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM PUBLIC "${doctest_SOURCE_DIR}")
-	add_subdirectory(tests)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BUILD_WITH_TEST DOCTEST_CONFIG_SUPER_FAST_ASSERTS)
+    target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM PUBLIC "${doctest_SOURCE_DIR}")
+    add_subdirectory(tests)
   else()
-	add_subdirectory(app)
+    add_subdirectory(app)
   endif()
 else()
   add_library(${CMAKE_PROJECT_NAME})
@@ -57,6 +57,12 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 )
 add_subdirectory(src)
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/d3d12")
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll" "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  "${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll"
+  "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.pdb>"
+  "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll>"
+  "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.pdb>"
+  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
