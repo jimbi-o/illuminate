@@ -5,6 +5,8 @@ project(illuminate
   LANGUAGES CXX
 )
 
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT illuminate)
+
 include(cmake/CPM.cmake)
 CPMAddPackage("gh:onqtam/doctest#2.4.6")
 CPMAddPackage("gh:gabime/spdlog@1.9.2")
@@ -12,6 +14,12 @@ CPMAddPackage(
   NAME dxc
   URL https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.6.2112/dxc_2021_12_08.zip
   VERSION v1.6.2112
+  DOWNLOAD_ONLY yes
+)
+CPMAddPackage(
+  NAME d3d12
+  URL https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.700.10-preview
+  VERSION v1.700.10-preview
   DOWNLOAD_ONLY yes
 )
 
@@ -45,5 +53,10 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   PRIVATE
   "include"
   "${dxc_SOURCE_DIR}/inc"
+  "${d3d12_SOURCE_DIR}/build/native/include"
 )
 add_subdirectory(src)
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/d3d12")
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll" "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
