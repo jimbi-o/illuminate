@@ -1,5 +1,4 @@
 target_sources(${CMAKE_PROJECT_NAME}
   PRIVATE
-  "dummy.cpp"
+  "d3d12_core_dll_version.cpp"
   )
-add_subdirectory(d3d12)
