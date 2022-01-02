@@ -37,6 +37,7 @@ for:
   - choco install opencppcoverage codecov
   - set PATH=C:\Program Files\OpenCppCoverage;%PATH%
   after_build:
+  - reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
   - cd build
   - OpenCppCoverage.exe --sources src --sources tests --export_type cobertura:coverage.xml --modules "*.exe" --cover_children -- %configuration%/illuminate.exe -C %configuration% --output-on-failure
   - codecov -f coverage.xml --root %APPVEYOR_BUILD_FOLDER%
