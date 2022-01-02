@@ -39,7 +39,9 @@ else()
 endif()
 target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM INTERFACE spdlog)
 set_target_properties(spdlog PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE spdlog::spdlog)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
+  spdlog::spdlog
+  $<$<CONFIG:Debug>:dxguid.lib>)
 
 
 target_compile_features(${CMAKE_PROJECT_NAME} PUBLIC cxx_std_20)
