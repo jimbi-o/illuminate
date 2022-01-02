@@ -1,5 +1,6 @@
-#ifndef ILLUMINATE_HEADER_COMMON_H
-#define ILLUMINATE_HEADER_COMMON_H
+#ifndef ILLUMINATE_D3D12_HEADER_COMMON_H
+#define ILLUMINATE_D3D12_HEADER_COMMON_H
+#include "../header_common.h"
 #include <dxgi1_6.h>
 #include <d3d12.h>
 namespace illuminate {

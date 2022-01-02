@@ -4,7 +4,8 @@
 namespace illuminate {
 class DxgiCore {
  public:
-  bool Init();
+  enum class AdapterFlag : uint8_t { kHighPerformance, kWarp, };
+  bool Init(const AdapterFlag& adapter_flag = AdapterFlag::kHighPerformance);
   void Term();
   DxgiFactory* GetFactory() { return factory_; }
   DxgiAdapter* GetAdapter() { return adapter_; }
