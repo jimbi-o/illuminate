@@ -2,6 +2,7 @@
 #define ILLUMINATE_MEMORY_ALLOCATION_H
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 namespace illuminate {
 constexpr inline auto AlignAddress(const std::uintptr_t addr, const size_t align/*power of 2*/) {
   const auto mask = align - 1;

@@ -1,6 +1,4 @@
 #include "illuminate/memory/memory_allocation.h"
-#include "src_header_common.h"
-#include <spdlog/spdlog.h>
 #include "doctest/doctest.h"
 TEST_CASE("LinearAllocator") { // NOLINT
   using namespace illuminate; // NOLINT
