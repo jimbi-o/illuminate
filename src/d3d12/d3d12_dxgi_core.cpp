@@ -1,5 +1,5 @@
 #include "d3d12_dxgi_core.h"
-#include "d3d12_src_header_common.h"
+#include "d3d12_src_common.h"
 #include "../win32_dll_util_macro.h"
 #ifndef NDEBUG
 #include "dxgidebug.h"
