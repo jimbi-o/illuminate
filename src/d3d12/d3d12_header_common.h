@@ -9,6 +9,7 @@ using DxgiAdapter = IDXGIAdapter4;
 using DxgiSwapchain = IDXGISwapChain4;
 using D3d12Device = ID3D12Device10;
 using D3d12CommandQueue = ID3D12CommandQueue;
+using D3d12Fence = ID3D12Fence1;
 using D3d12CommandList = ID3D12GraphicsCommandList7;
 }
 #endif

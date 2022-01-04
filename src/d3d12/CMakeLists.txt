@@ -7,4 +7,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_device.cpp
 #  d3d12_command_queue.h
 #  d3d12_command_queue.cpp
+  d3d12_memory_allocators.h
+  d3d12_memory_allocators.cpp
   )
