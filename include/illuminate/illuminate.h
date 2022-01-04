@@ -1,5 +1,4 @@
 #ifndef ILLUMINATE_H
 #define ILLUMINATE_H
-namespace illuminate {
-}
+#include "memory/memory_allocation.h"
 #endif
