@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <memory>
 namespace illuminate {
+static const size_t kDefaultAlignmentSize = 8;
 constexpr inline auto AlignAddress(const std::uintptr_t addr, const size_t align/*power of 2*/) {
   const auto mask = align - 1;
   return (addr + mask) & ~mask;
@@ -15,7 +16,7 @@ class LinearAllocator {
   ~LinearAllocator() {}
   LinearAllocator(const LinearAllocator&) = delete;
   LinearAllocator& operator=(const LinearAllocator&) = delete;
-  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = 8) {
+  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
     auto addr_aligned = AlignAddress(head_ + offset_in_byte_, alignment_in_bytes);
     offset_in_byte_ = addr_aligned - head_ + bytes;
     if (offset_in_byte_ > size_in_byte_) return nullptr;
@@ -36,7 +37,7 @@ class DoubleBufferedAllocator {
   ~DoubleBufferedAllocator() {}
   DoubleBufferedAllocator(const DoubleBufferedAllocator&) = delete;
   DoubleBufferedAllocator& operator=(const DoubleBufferedAllocator&) = delete;
-  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = 8) {
+  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
     auto addr_aligned = AlignAddress(head_[head_index_] + offset_in_byte_, alignment_in_bytes);
     offset_in_byte_ = addr_aligned - head_[head_index_] + bytes;
     if (offset_in_byte_ > size_in_byte_) return nullptr;
@@ -59,7 +60,7 @@ class StackAllocator {
   ~StackAllocator() {}
   StackAllocator(const StackAllocator&) = delete;
   StackAllocator& operator=(const StackAllocator&) = delete;
-  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = 8) {
+  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
     auto addr_aligned = AlignAddress(head_ + offset_in_byte_, alignment_in_bytes);
     offset_in_byte_ = addr_aligned - head_ + bytes;
     if (offset_in_byte_ > size_in_byte_) return nullptr;
@@ -82,19 +83,19 @@ class MemoryAllocationJanitor {
   virtual ~MemoryAllocationJanitor() {
     allocator_->ResetToMarker(marker_);
   }
-  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = 8) { return allocator_->Allocate(bytes, alignment_in_bytes); }
+  inline void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) { return allocator_->Allocate(bytes, alignment_in_bytes); }
   constexpr auto GetMarker() const { return marker_; }
  private:
   StackAllocator* allocator_{};
   std::uintptr_t marker_{};
 };
 template <typename T, typename A>
-auto Allocate(A* allocator) {
-  return new(allocator->Allocate(sizeof(T*))) T;
+auto Allocate(A* allocator, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  return new(allocator->Allocate(sizeof(T*), alignment_in_bytes)) T;
 }
 template <typename T, typename A>
-auto AllocateArray(A* allocator, const uint32_t len) {
-  return new(allocator->Allocate(sizeof(T) * len)) T[len];
+auto AllocateArray(A* allocator, const uint32_t len, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  return new(allocator->Allocate(sizeof(T) * len, alignment_in_bytes)) T[len];
 }
 }
 #endif
