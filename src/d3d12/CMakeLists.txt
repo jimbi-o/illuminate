@@ -9,4 +9,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_command_queue.cpp
   d3d12_memory_allocators.h
   d3d12_memory_allocators.cpp
+  d3d12_win32_window.h
+  d3d12_win32_window.cpp
   )
