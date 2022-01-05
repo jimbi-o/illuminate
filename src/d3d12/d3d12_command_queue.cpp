@@ -107,7 +107,7 @@ bool CommandQueueSignals::RegisterWaitOnCommandQueue(const uint32_t producer_que
 bool CommandQueueSignals::WaitOnCpu(D3d12Device* const device, const uint64_t* signal_val_list) {
   uint32_t wait_queue_num = 0;
   auto allocator = GetTemporalMemoryAllocator();
-  auto wait_queue_index = AllocateArray<uint32_t>(allocator, command_queue_num_);
+  auto wait_queue_index = AllocateArray<uint32_t>(&allocator, command_queue_num_);
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     auto comp_val = fence_[i]->GetCompletedValue();
     if (comp_val >= signal_val_list[i]) {
@@ -125,8 +125,8 @@ bool CommandQueueSignals::WaitOnCpu(D3d12Device* const device, const uint64_t* s
       return false;
     }
   } else {
-    auto waiting_queue_fences = AllocateArray<ID3D12Fence*>(allocator, wait_queue_num);
-    auto waiting_signals = AllocateArray<uint64_t>(allocator, wait_queue_num);
+    auto waiting_queue_fences = AllocateArray<ID3D12Fence*>(&allocator, wait_queue_num);
+    auto waiting_signals = AllocateArray<uint64_t>(&allocator, wait_queue_num);
     for (uint32_t i = 0; i < wait_queue_num; i++) {
       waiting_queue_fences[i] = fence_[wait_queue_index[i]];
       waiting_signals[i] = signal_val_list[wait_queue_index[i]];
@@ -150,7 +150,7 @@ bool CommandQueueSignals::WaitOnCpu(D3d12Device* const device, const uint64_t* s
 }
 bool CommandQueueSignals::WaitAll(D3d12Device* const device) {
   auto allocator = GetTemporalMemoryAllocator();
-  auto signal_val_list = AllocateArray<uint64_t>(allocator, command_queue_num_);
+  auto signal_val_list = AllocateArray<uint64_t>(&allocator, command_queue_num_);
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     signal_val_list[i] = SucceedSignal(i);
   }
@@ -204,7 +204,7 @@ TEST_CASE("class CommandQueueList") { // NOLINT
   command_queue_list.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator.Reset();
+  gSystemMemoryAllocator->Reset();
 }
 TEST_CASE("class CommandQueueSignals") { // NOLINT
   using namespace illuminate; // NOLINT
@@ -243,6 +243,6 @@ TEST_CASE("class CommandQueueSignals") { // NOLINT
   command_queue_signals.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator.Reset();
+  gSystemMemoryAllocator->Reset();
 }
 #endif
