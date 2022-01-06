@@ -69,17 +69,18 @@ auto GetJson() {
 }
 struct RenderGraph {
   uint32_t buffer_num;
-  uint32_t frame_loop_num;
 };
 auto GetRenderGraph() {
-  return GetJson<RenderGraph>();
+  auto json = GetJson();
+  return RenderGraph{
+    .buffer_num = json["buffer_num"],
+  };
 }
 } // anonymous namespace
 TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
   auto render_graph = GetRenderGraph();
-  CHECK_EQ(render_graph.buffer_num, 2);
   const uint32_t swapchain_buffer_num = render_graph.buffer_num + 1;
   DxgiCore dxgi_core;
   CHECK_UNARY(dxgi_core.Init()); // NOLINT
