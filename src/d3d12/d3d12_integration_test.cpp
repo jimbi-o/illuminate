@@ -74,6 +74,7 @@ struct RenderGraph {
   char* window_title{nullptr};
   uint32_t window_width{0};
   uint32_t window_height{0};
+  uint32_t command_queue_num{0};
 };
 void to_json(nlohmann::json& j, const RenderGraph& r) {
   j = nlohmann::json{
@@ -95,6 +96,8 @@ void from_json(const nlohmann::json& j, RenderGraph& r) {
   strcpy_s(r.window_title, window_title_len, window_title.data());
   j.at("window").at("width").get_to(r.window_width);
   j.at("window").at("height").get_to(r.window_height);
+  auto& command_queues = j.at("command_queue");
+  r.command_queue_num = static_cast<uint32_t>(command_queues.size());
 }
 RenderGraph GetRenderGraph() {
   return GetJson().get<RenderGraph>();
