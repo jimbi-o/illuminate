@@ -14,7 +14,7 @@ auto GetJson() {
   return R"(
 {
   "buffer_num": 2,
-  "frame_loop_num": 20,
+  "frame_loop_num": 5,
   "window": {
     "title": "integration test",
     "width": 160,
@@ -69,12 +69,20 @@ auto GetJson() {
 }
 struct RenderGraph {
   uint32_t buffer_num;
+  uint32_t frame_loop_num;
 };
-auto GetRenderGraph() {
-  auto json = GetJson();
-  return RenderGraph{
-    .buffer_num = json["buffer_num"],
+void to_json(nlohmann::json& j, const RenderGraph& r) {
+  j = nlohmann::json{
+    {"buffer_num", r.buffer_num},
+    {"frame_loop_num", r.frame_loop_num}
   };
+}
+void from_json(const nlohmann::json& j, RenderGraph& r) {
+  j.at("buffer_num").get_to(r.buffer_num);
+  j.at("frame_loop_num").get_to(r.frame_loop_num);
+}
+RenderGraph GetRenderGraph() {
+  return GetJson().get<RenderGraph>();
 }
 } // anonymous namespace
 TEST_CASE("d3d12 integration test") { // NOLINT
@@ -105,7 +113,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       frame_signals[i][j] = 0;
     }
   }
-  for (uint32_t i = 0; i < frame_num; i++) {
+  for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     const auto frame_index = i % render_graph.buffer_num;
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     swapchain.UpdateBackBufferIndex();
