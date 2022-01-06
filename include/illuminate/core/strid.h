@@ -1,5 +1,6 @@
 #ifndef ILLUMINATE_CORE_STRID_H
 #define ILLUMINATE_CORE_STRID_H
+#include <type_traits>
 namespace illuminate {
 using StrHash = uint32_t;
 static const StrHash kStrHashPrime = 31;

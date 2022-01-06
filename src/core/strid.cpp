@@ -1,4 +1,6 @@
 #include "illuminate/core/strid.h"
+#include <cstring>
+#include <string>
 namespace illuminate {
 StrHash CalcStrHash(const char* const str, const StrHash prime) {
   if (str == nullptr) { return 0U; }
@@ -35,9 +37,9 @@ TEST_CASE("strhash") {
   StrId sid2("str2");
   StrId sid3("str3");
 #ifdef BUILD_WITH_TEST
-  CHECK_EQ(std::string_view("str"), std::string_view(sid.GetDebugString()));
-  CHECK_EQ(std::string_view("str2"), std::string_view(sid2.GetDebugString()));
-  CHECK_EQ(std::string_view("str3"), std::string_view(sid3.GetDebugString()));
+  CHECK_EQ(std::string("str"), std::string(sid.GetDebugString()));
+  CHECK_EQ(std::string("str2"), std::string(sid2.GetDebugString()));
+  CHECK_EQ(std::string("str3"), std::string(sid3.GetDebugString()));
 #endif
   auto a = CalcStrHash("a");
   switch (a) {

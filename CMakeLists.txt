@@ -69,6 +69,10 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
   <cstdint>
+  <type_traits>
+  <cstring>
+  <string>
+  <string_view>
   <dxgi1_6.h>
   "${dxc_SOURCE_DIR}/inc/d3d12shader.h"
   "${dxc_SOURCE_DIR}/inc/dxcapi.h"
