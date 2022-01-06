@@ -79,11 +79,14 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
 add_subdirectory(src)
 
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
+)
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
   "${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll"
   "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.pdb>"
   "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll>"
   "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.pdb>"
-  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
+  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
+)

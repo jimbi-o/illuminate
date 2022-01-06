@@ -9,6 +9,68 @@ namespace illuminate {
 #include "d3d12_dxgi_core.h"
 #include "d3d12_swapchain.h"
 #include "d3d12_win32_window.h"
+namespace {
+auto GetJson() {
+  return R"(
+{
+  "buffer_num": 2,
+  "frame_loop_num": 20,
+  "window": {
+    "title": "integration test",
+    "width": 160,
+    "height" : 90
+  },
+  "command_queue": [
+    {
+      "name": "queue_graphics",
+      "type": "3d",
+      "priority" : "normal"
+    }
+  ],
+  "swapchain": {
+    "command_queue": "queue_graphics",
+    "format": "R8G8B8A8_UNORM"
+  },
+  "render_pass": [
+    {
+      "name": "output to swapchain",
+      "command_queue": "queue_graphics",
+      "buffers": [
+        {
+          "name": "swapchain",
+          "state": "rtv"
+        }
+      ],
+      "pass_vars": {
+        "clear_color": [0, 1, 0, 1]
+      },
+      "prepass_barrier": [
+        {
+          "buffer_name": "swapchain",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": "present",
+          "state_after": "rtv"
+        }
+      ],
+      "postpass_barrier": [
+        {
+          "buffer_name": "swapchain",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": "rtv",
+          "state_after": "present"
+        }
+      ]
+    }
+  ]
+}
+)"_json;
+}
+} // anonymous namespace
+TEST_CASE("load json") { // NOLINT
+  auto jason = GetJson();
+}
 TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   const uint32_t buffer_num = 2;
