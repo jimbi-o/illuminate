@@ -67,14 +67,21 @@ auto GetJson() {
 }
 )"_json;
 }
-} // anonymous namespace
-TEST_CASE("load json") { // NOLINT
-  auto jason = GetJson();
+struct RenderGraph {
+  uint32_t buffer_num;
+};
+auto GetRenderGraph() {
+  auto json = GetJson();
+  return RenderGraph{
+    .buffer_num = json["buffer_num"],
+  };
 }
+} // anonymous namespace
 TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
-  const uint32_t buffer_num = 2;
-  const uint32_t swapchain_buffer_num = buffer_num + 1;
+  auto allocator = GetTemporalMemoryAllocator();
+  auto render_graph = GetRenderGraph();
+  const uint32_t swapchain_buffer_num = render_graph.buffer_num + 1;
   DxgiCore dxgi_core;
   CHECK_UNARY(dxgi_core.Init()); // NOLINT
   Device device;
@@ -91,15 +98,15 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_queue_list.Get(command_queue_direct_index), device.Get(), window.GetHwnd(), DXGI_FORMAT_R8G8B8A8_UNORM, swapchain_buffer_num, swapchain_buffer_num - 1, DXGI_USAGE_RENDER_TARGET_OUTPUT)); // NOLINT
   const uint32_t frame_num = 20;
-  auto frame_signals = AllocateArray<uint64_t*>(gSystemMemoryAllocator, buffer_num);
-  for (uint32_t i = 0; i < buffer_num; i++) {
-    frame_signals[i] = AllocateArray<uint64_t>(gSystemMemoryAllocator, command_queue_num);
+  auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.buffer_num);
+  for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
+    frame_signals[i] = AllocateArray<uint64_t>(&allocator, command_queue_num);
     for (uint32_t j = 0; j < command_queue_num; j++) {
       frame_signals[i][j] = 0;
     }
   }
   for (uint32_t i = 0; i < frame_num; i++) {
-    const auto frame_index = i % buffer_num;
+    const auto frame_index = i % render_graph.buffer_num;
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     swapchain.UpdateBackBufferIndex();
 #if 0
