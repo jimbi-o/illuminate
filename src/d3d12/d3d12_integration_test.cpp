@@ -9,6 +9,7 @@ namespace illuminate {
 #include "d3d12_dxgi_core.h"
 #include "d3d12_swapchain.h"
 #include "d3d12_win32_window.h"
+namespace illuminate {
 namespace {
 auto GetJson() {
   return R"(
@@ -17,8 +18,8 @@ auto GetJson() {
   "frame_loop_num": 5,
   "window": {
     "title": "integration test",
-    "width": 160,
-    "height" : 90
+    "width": 500,
+    "height" : 300
   },
   "command_queue": [
     {
@@ -68,23 +69,38 @@ auto GetJson() {
 )"_json;
 }
 struct RenderGraph {
-  uint32_t buffer_num;
-  uint32_t frame_loop_num;
+  uint32_t buffer_num{0};
+  uint32_t frame_loop_num{0};
+  char* window_title{nullptr};
+  uint32_t window_width{0};
+  uint32_t window_height{0};
 };
 void to_json(nlohmann::json& j, const RenderGraph& r) {
   j = nlohmann::json{
     {"buffer_num", r.buffer_num},
-    {"frame_loop_num", r.frame_loop_num}
+    {"frame_loop_num", r.frame_loop_num},
+  };
+  j["window"] = nlohmann::json{
+    {"title", r.window_title},
+    {"width", r.window_width},
+    {"height", r.window_height},
   };
 }
 void from_json(const nlohmann::json& j, RenderGraph& r) {
   j.at("buffer_num").get_to(r.buffer_num);
   j.at("frame_loop_num").get_to(r.frame_loop_num);
+  auto window_title = j.at("window").at("title").get<std::string_view>();
+  auto window_title_len = static_cast<uint32_t>(window_title.size()) + 1;
+  r.window_title = AllocateArray<char>(gSystemMemoryAllocator, window_title_len);
+  strcpy_s(r.window_title, window_title_len, window_title.data());
+  j.at("window").at("width").get_to(r.window_width);
+  j.at("window").at("height").get_to(r.window_height);
 }
 RenderGraph GetRenderGraph() {
   return GetJson().get<RenderGraph>();
 }
 } // anonymous namespace
+} // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
@@ -95,7 +111,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   Device device;
   CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
   Window window;
-  CHECK_UNARY(window.Init("rtv clear test", 160, 90)); // NOLINT
+  CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height)); // NOLINT
   const uint32_t command_queue_num = 1;
   auto raw_command_queue_list = CreateCommandQueue(device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
   const uint32_t command_queue_direct_index = 0;
