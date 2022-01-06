@@ -5,6 +5,7 @@ namespace illuminate {
 #include "doctest/doctest.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_device.h"
+#include <nlohmann/json.hpp>
 #include "d3d12_dxgi_core.h"
 #include "d3d12_swapchain.h"
 #include "d3d12_win32_window.h"
