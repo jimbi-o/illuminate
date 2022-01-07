@@ -133,8 +133,9 @@ auto GetD3d12ResourceState(const nlohmann::json& j, const char* const name) {
   }
   return state;
 }
-auto GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num) {
-  auto barrier_list = AllocateArray<Barrier>(gSystemMemoryAllocator, barrier_num);
+template <typename A>
+auto GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, A* allocator) {
+  auto barrier_list = AllocateArray<Barrier>(allocator, barrier_num);
   for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {
     auto& dst_barrier = barrier_list[barrier_index];
     auto& src_barrier = j[barrier_index];
@@ -187,14 +188,15 @@ auto GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num) {
   }
   return barrier_list;
 }
-void from_json(const nlohmann::json& j, RenderGraph& r) {
+template <typename A>
+void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
   j.at("buffer_num").get_to(r.buffer_num);
   j.at("frame_loop_num").get_to(r.frame_loop_num);
   {
     auto& window = j.at("window");
     auto window_title = GetStringView(window, "title");
     auto window_title_len = static_cast<uint32_t>(window_title.size()) + 1;
-    r.window_title = AllocateArray<char>(gSystemMemoryAllocator, window_title_len);
+    r.window_title = AllocateArray<char>(allocator, window_title_len);
     strcpy_s(r.window_title, window_title_len, window_title.data());
     window.at("width").get_to(r.window_width);
     window.at("height").get_to(r.window_height);
@@ -202,8 +204,8 @@ void from_json(const nlohmann::json& j, RenderGraph& r) {
   {
     auto& command_queues = j.at("command_queue");
     r.command_queue_num = static_cast<uint32_t>(command_queues.size());
-    r.command_queue_name = AllocateArray<StrHash>(gSystemMemoryAllocator, r.command_queue_num);
-    r.command_queue_type = AllocateArray<D3D12_COMMAND_LIST_TYPE>(gSystemMemoryAllocator, r.command_queue_num);
+    r.command_queue_name = AllocateArray<StrHash>(allocator, r.command_queue_num);
+    r.command_queue_type = AllocateArray<D3D12_COMMAND_LIST_TYPE>(allocator, r.command_queue_num);
     for (uint32_t i = 0; i < r.command_queue_num; i++) {
       r.command_queue_name[i] = CalcEntityStrHash(command_queues[i], "name");
       auto command_queue_type_str = GetStringView(command_queues[i], "type");
@@ -250,7 +252,7 @@ void from_json(const nlohmann::json& j, RenderGraph& r) {
   {
     auto& render_pass_list = j.at("render_pass");
     r.render_pass_num = static_cast<uint32_t>(render_pass_list.size());
-    r.render_pass_list = AllocateArray<RenderPass>(gSystemMemoryAllocator, r.render_pass_num);
+    r.render_pass_list = AllocateArray<RenderPass>(allocator, r.render_pass_num);
     for (uint32_t i = 0; i < r.render_pass_num; i++) {
       auto& dst_pass = r.render_pass_list[i];
       auto& src_pass = render_pass_list[i];
@@ -259,7 +261,7 @@ void from_json(const nlohmann::json& j, RenderGraph& r) {
       {
         auto& buffers = src_pass.at("buffers");
         dst_pass.buffer_num = static_cast<uint32_t>(buffers.size());
-        dst_pass.buffers = AllocateArray<RenderPassBuffer>(gSystemMemoryAllocator, dst_pass.buffer_num);
+        dst_pass.buffers = AllocateArray<RenderPassBuffer>(allocator, dst_pass.buffer_num);
         for (uint32_t buffer_index = 0; buffer_index < dst_pass.buffer_num; buffer_index++) {
           auto& dst_buffer = dst_pass.buffers[buffer_index];
           auto& src_buffer = buffers[buffer_index];
@@ -271,35 +273,26 @@ void from_json(const nlohmann::json& j, RenderGraph& r) {
       {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
         dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());
-        dst_pass.prepass_barrier = GetBarrierList(prepass_barrier, dst_pass.prepass_barrier_num);
+        dst_pass.prepass_barrier = GetBarrierList(prepass_barrier, dst_pass.prepass_barrier_num, allocator);
         auto& postpass_barrier = src_pass.at("postpass_barrier");
         dst_pass.postpass_barrier_num = static_cast<uint32_t>(postpass_barrier.size());
-        dst_pass.postpass_barrier = GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num);
+        dst_pass.postpass_barrier = GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num, allocator);
       } // barriers
     } // pass
   } // pass_list
 }
-void to_json(nlohmann::json& j, const RenderGraph& r) {
-  j = nlohmann::json{
-    {"buffer_num", r.buffer_num},
-    {"frame_loop_num", r.frame_loop_num},
-  };
-  j["window"] = nlohmann::json{
-    {"title", r.window_title},
-    {"width", r.window_width},
-    {"height", r.window_height},
-  };
-  // TODO
-}
-RenderGraph GetRenderGraph() {
-  return GetJson().get<RenderGraph>();
+template <typename A>
+RenderGraph GetRenderGraph(A* allocator) {
+  RenderGraph graph;
+  SetRenderGraph(GetJson(), allocator, graph);
+  return graph;
 }
 } // anonymous namespace
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
-  auto render_graph = GetRenderGraph();
+  auto render_graph = GetRenderGraph(&allocator);
   const uint32_t swapchain_buffer_num = render_graph.buffer_num + 1;
   DxgiCore dxgi_core;
   CHECK_UNARY(dxgi_core.Init()); // NOLINT
@@ -324,6 +317,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       frame_signals[i][j] = 0;
     }
   }
+  uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     auto used_command_queue = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
@@ -361,6 +355,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       frame_signals[frame_index][j] = command_queue_signals.SucceedSignal(j);
     }
     swapchain.Present();
+    tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
   }
   command_queue_signals.WaitAll(device.Get());
   swapchain.Term();
@@ -369,6 +364,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   window.Term();
   device.Term();
   dxgi_core.Term();
+  loginfo("memory global:{} temp:{}", gSystemMemoryAllocator->GetOffset(), tmp_memory_max_offset);
   gSystemMemoryAllocator->Reset();
 }
 #endif
