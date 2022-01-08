@@ -11,6 +11,15 @@ namespace illuminate {
 #include "d3d12_swapchain.h"
 #include "d3d12_win32_window.h"
 namespace illuminate {
+static const uint32_t kCommandQueueTypeNum = 3;
+constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
+  switch (type) {
+    case D3D12_COMMAND_LIST_TYPE_DIRECT:  { return 0; }
+    case D3D12_COMMAND_LIST_TYPE_COMPUTE: { return 1; }
+    case D3D12_COMMAND_LIST_TYPE_COPY:    { return 2; }
+    default: { return 0; }
+  }
+}
 namespace {
 auto GetJson() {
   return R"(
@@ -26,9 +35,13 @@ auto GetJson() {
     {
       "name": "queue_graphics",
       "type": "3d",
-      "priority" : "normal"
+      "priority": "normal",
+      "command_list_num": 1
     }
   ],
+  "command_allocator": {
+    "direct": 1
+  },
   "swapchain": {
     "command_queue": "queue_graphics",
     "format": "R8G8B8A8_UNORM",
@@ -102,6 +115,8 @@ struct RenderGraph {
   StrHash* command_queue_name{nullptr};
   D3D12_COMMAND_LIST_TYPE* command_queue_type{nullptr};
   D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority{nullptr};
+  uint32_t* command_list_num_per_queue{nullptr};
+  uint32_t command_allocator_num_per_queue_type[kCommandQueueTypeNum]{};
   uint32_t swapchain_command_queue_index{0};
   DXGI_FORMAT swapchain_format{};
   DXGI_USAGE swapchain_usage{};
@@ -208,6 +223,7 @@ void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
     r.command_queue_name = AllocateArray<StrHash>(allocator, r.command_queue_num);
     r.command_queue_type = AllocateArray<D3D12_COMMAND_LIST_TYPE>(allocator, r.command_queue_num);
     r.command_queue_priority = AllocateArray<D3D12_COMMAND_QUEUE_PRIORITY>(allocator, r.command_queue_num);
+    r.command_list_num_per_queue = AllocateArray<uint32_t>(allocator, r.command_queue_num);
     for (uint32_t i = 0; i < r.command_queue_num; i++) {
       r.command_queue_name[i] = CalcEntityStrHash(command_queues[i], "name");
       auto command_queue_type_str = GetStringView(command_queues[i], "type");
@@ -226,7 +242,14 @@ void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
       } else {
         r.command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
       }
+      r.command_list_num_per_queue[i] = command_queues[i].at("command_list_num");
     }
+  }
+  {
+    auto& allocators = j.at("command_allocator");
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = allocators.contains("direct") ? allocators.at("direct").get<uint32_t>() : 0;
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = allocators.contains("compute") ? allocators.at("compute").get<uint32_t>() : 0;
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = allocators.contains("copy") ? allocators.at("copy").get<uint32_t>() : 0;
   }
   {
     auto& swapchain = j.at("swapchain");
@@ -313,18 +336,9 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   command_list->ResourceBarrier(barrier_num, barriers);
 }
 } // anonymous namespace
-constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
-  switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:  { return 0; }
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE: { return 1; }
-    case D3D12_COMMAND_LIST_TYPE_COPY:    { return 2; }
-    default: { return 0; }
-  }
-}
-static const uint32_t kCommandQueueTypeNum = 3;
 class CommandAllocatorPool {
  public:
-  void Init(const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type);
+  void Init(const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type);
   void Term();
   void SucceedFrame(); // reset allocators
   D3d12CommandAllocator* RetainCommandAllocator(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
@@ -340,7 +354,7 @@ class CommandAllocatorPool {
 };
 class CommandListPool {
  public:
-  void Init(const uint32_t* command_list_num_per_queue_type, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type);
+  void Init(const uint32_t* command_list_num_per_queue_type, const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type);
   void Term();
   void SucceedFrame() { command_allocator_pool_.SucceedFrame(); }
   D3d12CommandList* RetainCommandList(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
@@ -352,7 +366,7 @@ class CommandListPool {
 };
 class CommandListInUse {
  public:
-  void Init(const uint32_t command_queue_num, const uint32_t max_command_list_num_per_queue);
+  void Init(const uint32_t command_queue_num, const uint32_t* command_list_num_per_queue);
   void Term();
   void PushCommandList(const uint32_t command_queue_index, D3d12CommandList* command_list);
   void FreePushedCommandList(const uint32_t command_queue_index);
@@ -360,13 +374,13 @@ class CommandListInUse {
   constexpr auto GetPushedCommandList(const uint32_t command_queue_index) const { return pushed_command_list_[command_queue_index]; }
  private:
   uint32_t command_queue_num_{0};
-  uint32_t max_command_list_num_per_queue_{0};
+  uint32_t* command_list_num_per_queue_{nullptr};
   uint32_t* pushed_command_list_num_{nullptr};
   D3d12CommandList*** pushed_command_list_{nullptr};
 };
 class CommandListSet {
  public:
-  bool Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type);
+  bool Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t* command_list_num_per_queue, const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type);
   void Term();
   constexpr auto GetCommandQueueList() { return command_queue_list_.GetList(); }
   constexpr auto GetCommandQueue(const uint32_t command_queue_index) { return command_queue_list_.Get(command_queue_index); }
@@ -379,7 +393,7 @@ class CommandListSet {
   CommandListInUse command_list_in_use_;
   D3D12_COMMAND_LIST_TYPE* command_queue_type_{nullptr};
 };
-void CommandAllocatorPool::Init(const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type) {
+void CommandAllocatorPool::Init(const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type) {
   allocator_num_per_frame_ = 0;
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     allocator_pool_size_[i] = command_allocator_num_per_queue_type[i];
@@ -488,7 +502,7 @@ D3d12CommandAllocator* CommandAllocatorPool::RetainCommandAllocator(D3d12Device*
   used_allocator_num_per_frame_[frame_index_]++;
   return allocator;
 }
-void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type) {
+void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type, const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type) {
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     command_list_num_per_queue_type_[i] = command_list_num_per_queue_type[i];
     if (command_list_num_per_queue_type_[i] > 0) {
@@ -566,15 +580,16 @@ void CommandListPool::ReturnCommandList(const D3D12_COMMAND_LIST_TYPE type, cons
     }
   }
 }
-void CommandListInUse::Init(const uint32_t command_queue_num, const uint32_t max_command_list_num_per_queue) {
+void CommandListInUse::Init(const uint32_t command_queue_num, const uint32_t* command_list_num_per_queue) {
   command_queue_num_ =  command_queue_num;
-  max_command_list_num_per_queue_ = max_command_list_num_per_queue;
+  command_list_num_per_queue_ = AllocateArray<uint32_t>(gSystemMemoryAllocator, command_queue_num_);
   pushed_command_list_num_ = AllocateArray<uint32_t>(gSystemMemoryAllocator, command_queue_num_);
   pushed_command_list_ = AllocateArray<D3d12CommandList**>(gSystemMemoryAllocator, command_queue_num_);
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     pushed_command_list_num_[i] = 0;
-    pushed_command_list_[i] = AllocateArray<D3d12CommandList*>(gSystemMemoryAllocator, max_command_list_num_per_queue_);
-    for (uint32_t j = 0; j < max_command_list_num_per_queue_; j++) {
+    command_list_num_per_queue_[i] = command_list_num_per_queue[i];
+    pushed_command_list_[i] = AllocateArray<D3d12CommandList*>(gSystemMemoryAllocator, command_list_num_per_queue_[i]);
+    for (uint32_t j = 0; j < command_list_num_per_queue_[i]; j++) {
       pushed_command_list_[i][j] = nullptr;
     }
   }
@@ -584,7 +599,7 @@ void CommandListInUse::Term() {
     if (pushed_command_list_num_[i] != 0) {
       logwarn("CommandListInUse left. {} {}", i, pushed_command_list_num_[i]);
     }
-    for (uint32_t j = 0; j < max_command_list_num_per_queue_; j++) {
+    for (uint32_t j = 0; j < command_list_num_per_queue_[i]; j++) {
       if (pushed_command_list_[i][j] != nullptr) {
         logwarn("CommandListInUse ptr left. {} {}", i, j);
         auto val = pushed_command_list_[i][j]->Release();
@@ -605,7 +620,7 @@ void CommandListInUse::FreePushedCommandList(const uint32_t command_queue_index)
   }
   pushed_command_list_num_[command_queue_index] = 0;
 }
-bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type) {
+bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t* command_list_num_per_queue, const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type) {
   auto allocator = GetTemporalMemoryAllocator();
   auto command_list_num_per_queue_type = AllocateArray<uint32_t>(&allocator, kCommandQueueTypeNum);
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
@@ -615,7 +630,7 @@ bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num,
   command_queue_type_ = AllocateArray<D3D12_COMMAND_LIST_TYPE>(gSystemMemoryAllocator, command_queue_num);
   for (uint32_t i = 0; i < command_queue_num; i++) {
     command_queue_type_[i] = command_queue_type[i];
-    command_list_num_per_queue_type[GetCommandQueueTypeIndex(command_queue_type_[i])] += max_command_list_num_per_queue;
+    command_list_num_per_queue_type[GetCommandQueueTypeIndex(command_queue_type_[i])] += command_list_num_per_queue[i];
     raw_command_queue_list[i] = CreateCommandQueue(device, command_queue_type_[i], command_queue_priority[i]);
     if (raw_command_queue_list[i] == nullptr) {
       for (uint32_t j = 0; j < i; j++) {
@@ -627,7 +642,7 @@ bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num,
   }
   command_queue_list_.Init(command_queue_num, raw_command_queue_list);
   command_list_pool_.Init(command_list_num_per_queue_type, frame_buffer_num, command_allocator_num_per_queue_type);
-  command_list_in_use_.Init(command_queue_num, max_command_list_num_per_queue);
+  command_list_in_use_.Init(command_queue_num, command_list_num_per_queue);
   return true;
 }
 void CommandListSet::Term() {
@@ -666,15 +681,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   Window window;
   CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height)); // NOLINT
   CommandListSet command_list_set;
-  {
-    const uint32_t max_command_list_num_per_queue = 8;
-    auto tmp_allocator = GetTemporalMemoryAllocator();
-    auto command_allocator_num_per_queue_type = AllocateArray<uint32_t>(&tmp_allocator, kCommandQueueTypeNum); // TODO calc from render graph
-    command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = 1;
-    command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = 1;
-    command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = 1;
-    CHECK_UNARY(command_list_set.Init(device.Get(), render_graph.command_queue_num, render_graph.command_queue_type, render_graph.command_queue_priority, max_command_list_num_per_queue, render_graph.frame_buffer_num, command_allocator_num_per_queue_type));
-  }
+  CHECK_UNARY(command_list_set.Init(device.Get(),
+                                    render_graph.command_queue_num,
+                                    render_graph.command_queue_type,
+                                    render_graph.command_queue_priority,
+                                    render_graph.command_list_num_per_queue,
+                                    render_graph.frame_buffer_num,
+                                    render_graph.command_allocator_num_per_queue_type));
   CommandQueueSignals command_queue_signals;
   command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
   Swapchain swapchain;
