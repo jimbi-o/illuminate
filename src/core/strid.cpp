@@ -10,37 +10,12 @@ StrHash CalcStrHash(const char* const str, const StrHash prime) {
   }
   return hash;
 }
-#ifdef BUILD_WITH_TEST
-static const uint32_t debug_string_buffer_size_in_bytes{1024};
-static char debug_string_buffer[debug_string_buffer_size_in_bytes];
-static uint32_t debug_string_index{0};
-const char* RegisterDebugString(const char* debug_str) {
-  const auto len = static_cast<uint32_t>(strlen(debug_str)) + 1;
-  if (debug_string_index + len >= debug_string_buffer_size_in_bytes) { debug_string_index = 0; }
-  auto dst = &debug_string_buffer[debug_string_index];
-  strcpy_s(dst, len, debug_str);
-  debug_string_index += len;
-  return dst;
-}
-StrId::StrId(const char* str) : hash_(CalcStrHash(str, kStrHashPrime)) {
-  debug_string_hash_map_.Insert(hash_, str);
-}
-StrId::HashMap StrId::debug_string_hash_map_;
-#endif
 } // namespace illuminate
 #include "doctest/doctest.h"
 TEST_CASE("strhash") {
   using namespace illuminate;
   auto hash = CalcStrHash("str", kStrHashPrime);
   CHECK_NE(hash, 0);
-  StrId sid("str");
-  StrId sid2("str2");
-  StrId sid3("str3");
-#ifdef BUILD_WITH_TEST
-  CHECK_EQ(std::string("str"), std::string(sid.GetDebugString()));
-  CHECK_EQ(std::string("str2"), std::string(sid2.GetDebugString()));
-  CHECK_EQ(std::string("str3"), std::string(sid3.GetDebugString()));
-#endif
   auto a = CalcStrHash("a");
   switch (a) {
     case SID("a"):

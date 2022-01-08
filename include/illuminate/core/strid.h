@@ -11,43 +11,6 @@ constexpr inline StrHash CompileTimeStrHash(const char (&str)[N], const StrHash 
   return (len <= 1) ? static_cast<std::make_unsigned_t<char>>(str[0]) : (prime * CompileTimeStrHash(str, prime, len-1) + static_cast<std::make_unsigned_t<char>>(str[len-1]));
 }
 StrHash CalcStrHash(const char* const str, const StrHash prime = kStrHashPrime);
-#ifdef BUILD_WITH_TEST
-const char* RegisterDebugString(const char* debug_str);
-#endif
-class StrId {
- public:
-#ifdef BUILD_WITH_TEST
-  StrId(const char* str);
-#else
-  template <size_t N>
-  constexpr explicit StrId(const char (&str)[N])
-      : hash_(CompileTimeStrHash(str))
-  {}
-#endif
-#ifdef BUILD_WITH_TEST
-  constexpr const char* GetDebugString() const { return debug_string_hash_map_.Get(hash_); }
-#endif
- private:
-#ifdef BUILD_WITH_TEST
-  class HashMap {
-   public:
-    void Insert(const StrHash& hash, const char* str) {
-      auto index = hash % kEntityNum;
-      if (table_[index] == nullptr) {
-        table_[index] = RegisterDebugString(str);
-      }
-    }
-    constexpr const char* Get(const StrHash& hash) const {
-      return table_[hash % kEntityNum];
-    }
-   private:
-    static const uint32_t kEntityNum = 256;
-    const char* table_[kEntityNum]{};
-  };
-  static HashMap debug_string_hash_map_;
-#endif
-  StrHash hash_;
-};
 }
 #define SID CompileTimeStrHash
 #endif
