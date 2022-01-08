@@ -332,7 +332,7 @@ class CommandAllocatorPool {
 };
 class CommandListPool {
  public:
-  void Init(const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t max_command_list_num_per_queue);
+  void Init(const uint32_t* command_list_num_per_queue_type);
   void Term();
   void SucceedFrame() { command_allocator_pool_.SucceedFrame(); }
   D3d12CommandList* RetainCommandList(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
@@ -376,17 +376,26 @@ void CommandAllocatorPool::Init() {
 void CommandAllocatorPool::Term() {
 }
 void CommandAllocatorPool::SucceedFrame() {
+  // reset allocator in use
 }
-D3d12CommandAllocator* CommandAllocatorPool::RetainCommandAllocator(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE) {
-  return nullptr;
-}
-void CommandListPool::Init(const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t max_command_list_num_per_queue) {
-  for (uint32_t i = 0; i < command_queue_num; i++) {
-    command_list_num_per_queue_type_[GetCommandQueueTypeIndex(command_queue_type[i])] += max_command_list_num_per_queue;
+D3d12CommandAllocator* CommandAllocatorPool::RetainCommandAllocator(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE type) {
+  D3d12CommandAllocator* allocator{};
+  auto hr = device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
+  if (FAILED(hr)) {
+    logerror("CreateCommandAllocator failed. {} {}", hr, type);
+    assert(false && "CreateCommandAllocator failed.");
+    return nullptr;
   }
+  return allocator;
+}
+void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type) {
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
+    command_list_num_per_queue_type_[i] = command_list_num_per_queue_type[i];
     if (command_list_num_per_queue_type_[i] > 0) {
       command_list_pool_[i] = AllocateArray<D3d12CommandList*>(gSystemMemoryAllocator, command_list_num_per_queue_type_[i]);
+      for (uint32_t j = 0; j < command_list_num_per_queue_type_[i]; j++) {
+        command_list_pool_[i][j] = nullptr;
+      }
     } else {
       command_list_pool_[i] = nullptr;
     }
@@ -493,9 +502,16 @@ void CommandListInUse::FreePushedCommandList(const uint32_t command_queue_index)
 }
 bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue) {
   auto allocator = GetTemporalMemoryAllocator();
+  auto command_list_num_per_queue_type = AllocateArray<uint32_t>(&allocator, kCommandQueueTypeNum);
+  for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
+    command_list_num_per_queue_type[i] = 0;
+  }
   auto raw_command_queue_list = AllocateArray<D3d12CommandQueue*>(&allocator, command_queue_num);
+  command_queue_type_ = AllocateArray<D3D12_COMMAND_LIST_TYPE>(gSystemMemoryAllocator, command_queue_num);
   for (uint32_t i = 0; i < command_queue_num; i++) {
-    raw_command_queue_list[i] = CreateCommandQueue(device, command_queue_type[i], command_queue_priority[i]);
+    command_queue_type_[i] = command_queue_type[i];
+    command_list_num_per_queue_type[GetCommandQueueTypeIndex(command_queue_type_[i])] += max_command_list_num_per_queue;
+    raw_command_queue_list[i] = CreateCommandQueue(device, command_queue_type_[i], command_queue_priority[i]);
     if (raw_command_queue_list[i] == nullptr) {
       for (uint32_t j = 0; j < i; j++) {
         raw_command_queue_list[j]->Release();
@@ -505,7 +521,7 @@ bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num,
     }
   }
   command_queue_list_.Init(command_queue_num, raw_command_queue_list);
-  command_list_pool_.Init(command_queue_num, command_queue_type, max_command_list_num_per_queue);
+  command_list_pool_.Init(command_list_num_per_queue_type);
   command_list_in_use_.Init(command_queue_num, max_command_list_num_per_queue);
   return true;
 }
@@ -520,8 +536,16 @@ D3d12CommandList* CommandListSet::GetCommandList(D3d12Device* device, const uint
   return command_list;
 }
 void CommandListSet::ExecuteCommandList(const uint32_t command_queue_index) {
-  command_queue_list_.Get(command_queue_index)->ExecuteCommandLists(command_list_in_use_.GetPushedCommandListNum(command_queue_index), reinterpret_cast<ID3D12CommandList**>(command_list_in_use_.GetPushedCommandList(command_queue_index)));
-  command_list_pool_.ReturnCommandList(command_queue_type_[command_queue_index], command_list_in_use_.GetPushedCommandListNum(command_queue_index), command_list_in_use_.GetPushedCommandList(command_queue_index));
+  const auto num = command_list_in_use_.GetPushedCommandListNum(command_queue_index);
+  auto list = command_list_in_use_.GetPushedCommandList(command_queue_index);
+  for (uint32_t i = 0; i < num; i++) {
+    auto hr = list[i]->Close();
+    if (FAILED(hr)) {
+      logwarn("failed to close command list. {} {}", hr, i);
+    }
+  }
+  command_queue_list_.Get(command_queue_index)->ExecuteCommandLists(num, reinterpret_cast<ID3D12CommandList**>(list));
+  command_list_pool_.ReturnCommandList(command_queue_type_[command_queue_index], num, list);
   command_list_in_use_.FreePushedCommandList(command_queue_index);
 }
 } // namespace illuminate
