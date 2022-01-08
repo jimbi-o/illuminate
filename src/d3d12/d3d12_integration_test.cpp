@@ -15,7 +15,7 @@ namespace {
 auto GetJson() {
   return R"(
 {
-  "buffer_num": 2,
+  "frame_buffer_num": 2,
   "frame_loop_num": 5,
   "window": {
     "title": "integration test",
@@ -93,7 +93,7 @@ struct RenderPass {
   Barrier* postpass_barrier{nullptr};
 };
 struct RenderGraph {
-  uint32_t buffer_num{0};
+  uint32_t frame_buffer_num{0};
   uint32_t frame_loop_num{0};
   char* window_title{nullptr};
   uint32_t window_width{0};
@@ -191,7 +191,7 @@ auto GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, A* allo
 }
 template <typename A>
 void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
-  j.at("buffer_num").get_to(r.buffer_num);
+  j.at("frame_buffer_num").get_to(r.frame_buffer_num);
   j.at("frame_loop_num").get_to(r.frame_loop_num);
   {
     auto& window = j.at("window");
@@ -324,15 +324,23 @@ constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
 static const uint32_t kCommandQueueTypeNum = 3;
 class CommandAllocatorPool {
  public:
-  void Init();
+  void Init(const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type);
   void Term();
   void SucceedFrame(); // reset allocators
   D3d12CommandAllocator* RetainCommandAllocator(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
  private:
+  uint32_t allocator_pool_size_[kCommandQueueTypeNum]{};
+  D3d12CommandAllocator** allocator_pool_[kCommandQueueTypeNum]{};
+  uint32_t allocator_num_per_frame_{0};
+  uint32_t frame_buffer_num_{0};
+  uint32_t frame_index_{0};
+  uint32_t* used_allocator_num_per_frame_{nullptr};
+  D3d12CommandAllocator*** allocator_in_use_{nullptr};
+  D3D12_COMMAND_LIST_TYPE** allocator_type_in_use_{nullptr};
 };
 class CommandListPool {
  public:
-  void Init(const uint32_t* command_list_num_per_queue_type);
+  void Init(const uint32_t* command_list_num_per_queue_type, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type);
   void Term();
   void SucceedFrame() { command_allocator_pool_.SucceedFrame(); }
   D3d12CommandList* RetainCommandList(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
@@ -358,7 +366,7 @@ class CommandListInUse {
 };
 class CommandListSet {
  public:
-  bool Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue);
+  bool Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type);
   void Term();
   constexpr auto GetCommandQueueList() { return command_queue_list_.GetList(); }
   constexpr auto GetCommandQueue(const uint32_t command_queue_index) { return command_queue_list_.Get(command_queue_index); }
@@ -371,24 +379,116 @@ class CommandListSet {
   CommandListInUse command_list_in_use_;
   D3D12_COMMAND_LIST_TYPE* command_queue_type_{nullptr};
 };
-void CommandAllocatorPool::Init() {
+void CommandAllocatorPool::Init(const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type) {
+  allocator_num_per_frame_ = 0;
+  for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
+    allocator_pool_size_[i] = command_allocator_num_per_queue_type[i];
+    allocator_pool_[i] = AllocateArray<D3d12CommandAllocator*>(gSystemMemoryAllocator, allocator_pool_size_[i]);
+    for (uint32_t j = 0; j < allocator_pool_size_[i]; j++) {
+      allocator_pool_[i][j] = nullptr;
+    }
+    allocator_num_per_frame_ += allocator_pool_size_[i];
+  }
+  frame_buffer_num_ = frame_buffer_num;
+  frame_index_ = 0;
+  used_allocator_num_per_frame_ = AllocateArray<uint32_t>(gSystemMemoryAllocator, frame_buffer_num_);
+  allocator_in_use_ = AllocateArray<D3d12CommandAllocator**>(gSystemMemoryAllocator, frame_buffer_num_);
+  allocator_type_in_use_ = AllocateArray<D3D12_COMMAND_LIST_TYPE*>(gSystemMemoryAllocator, frame_buffer_num_);
+  for (uint32_t i = 0; i < frame_buffer_num_; i++) {
+    used_allocator_num_per_frame_[i] = 0;
+    allocator_in_use_[i] = AllocateArray<D3d12CommandAllocator*>(gSystemMemoryAllocator, allocator_num_per_frame_);
+    allocator_type_in_use_[i] = AllocateArray<D3D12_COMMAND_LIST_TYPE>(gSystemMemoryAllocator, allocator_num_per_frame_);
+    for (uint32_t j = 0; j < allocator_num_per_frame_; j++) {
+      allocator_in_use_[i][j] = nullptr;
+    }
+  }
 }
 void CommandAllocatorPool::Term() {
+  for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
+    for (uint32_t j = 0; j < allocator_pool_size_[i]; j++) {
+      if (allocator_pool_[i][j] != nullptr) {
+        auto refval = allocator_pool_[i][j]->Release();
+        if (refval != 0) {
+          logwarn("allocator_pool_[{}][{}] still referenced.", i, j);
+        }
+        allocator_pool_[i][j] = nullptr;
+      }
+    }
+  }
+  for (uint32_t i = 0; i < frame_buffer_num_; i++) {
+    if (used_allocator_num_per_frame_[i] != 0) {
+      logwarn("allocator_in_use_[{}] exists on Term.", i);
+    }
+    for (uint32_t j = 0; j < used_allocator_num_per_frame_[i]; j++) {
+      auto refval = allocator_in_use_[i][j]->Release();
+      if (refval != 0) {
+        logwarn("allocator_in_use_[{}][{}] still referenced.", i, j);
+      }
+    }
+    used_allocator_num_per_frame_[i] = 0;
+  }
 }
 void CommandAllocatorPool::SucceedFrame() {
-  // reset allocator in use
+  frame_index_++;
+  if (frame_index_ >= frame_buffer_num_) { frame_index_ = 0; }
+  for (uint32_t i = 0; i < used_allocator_num_per_frame_[frame_index_]; i++) {
+    auto hr = allocator_in_use_[frame_index_][i]->Reset();
+    if (FAILED(hr)) {
+      logerror("command allocator reset failed. {} {} {}", hr, frame_index_, i);
+      assert(false && "command allocator reset failed");
+      auto refval = allocator_in_use_[frame_index_][i]->Release();
+      if (refval != 0) {
+        logwarn("allocator_in_use_[{}][{}] still referenced(1). {}", frame_index_, i, refval);
+      }
+      continue;
+    }
+    auto type_index = GetCommandQueueTypeIndex(allocator_type_in_use_[frame_index_][i]);
+    bool pooled = false;
+    for (uint32_t j = 0; j < allocator_pool_size_[type_index]; j++) {
+      if (allocator_pool_[type_index][j] == nullptr) {
+        allocator_pool_[type_index][j] = allocator_in_use_[frame_index_][i];
+        pooled = true;
+        break;
+      }
+    }
+    if (!pooled) {
+      logwarn("command allocator exceeded pool size. {} {} {} {}", frame_index_, i, type_index, allocator_pool_size_[type_index]);
+      auto refval = allocator_in_use_[frame_index_][i]->Release();
+      if (refval != 0) {
+        logwarn("allocator_in_use_[{}][{}] still referenced(2). {}", frame_index_, i, refval);
+      }
+    }
+  }
+  used_allocator_num_per_frame_[frame_index_] = 0;
 }
 D3d12CommandAllocator* CommandAllocatorPool::RetainCommandAllocator(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE type) {
-  D3d12CommandAllocator* allocator{};
-  auto hr = device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
-  if (FAILED(hr)) {
-    logerror("CreateCommandAllocator failed. {} {}", hr, type);
-    assert(false && "CreateCommandAllocator failed.");
-    return nullptr;
+  if (used_allocator_num_per_frame_[frame_index_] >= allocator_num_per_frame_) {
+    logerror("used command allocator exceeds pool size. {} {} {} {}", allocator_num_per_frame_, used_allocator_num_per_frame_[frame_index_], frame_index_, type);
+    assert(false);
   }
+  D3d12CommandAllocator* allocator{nullptr};
+  auto type_index = GetCommandQueueTypeIndex(type);
+  for (uint32_t j = 0; j < allocator_pool_size_[type_index]; j++) {
+    if (allocator_pool_[type_index][j] != nullptr) {
+      allocator = allocator_pool_[type_index][j];
+      allocator_pool_[type_index][j] = nullptr;
+      break;
+    }
+  }
+  if (allocator == nullptr) {
+    auto hr = device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
+    if (FAILED(hr)) {
+      logerror("CreateCommandAllocator failed. {} {}", hr, type);
+      assert(false && "CreateCommandAllocator failed.");
+      return nullptr;
+    }
+  }
+  allocator_in_use_[frame_index_][used_allocator_num_per_frame_[frame_index_]] = allocator;
+  allocator_type_in_use_[frame_index_][used_allocator_num_per_frame_[frame_index_]] = type;
+  used_allocator_num_per_frame_[frame_index_]++;
   return allocator;
 }
-void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type) {
+void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type) {
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     command_list_num_per_queue_type_[i] = command_list_num_per_queue_type[i];
     if (command_list_num_per_queue_type_[i] > 0) {
@@ -400,7 +500,7 @@ void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type) {
       command_list_pool_[i] = nullptr;
     }
   }
-  command_allocator_pool_.Init();
+  command_allocator_pool_.Init(frame_buffer_num, command_allocator_num_per_queue_type);
 }
 void CommandListPool::Term() {
   command_allocator_pool_.Term();
@@ -425,12 +525,14 @@ D3d12CommandList* CommandListPool::RetainCommandList(D3d12Device* device, const 
       logwarn("command_list->Reset in pool failed. {} {} {}", hr, type, i);
       continue;
     }
+    command_list_pool_[type_index][i] = nullptr;
     return command_list;
   }
   D3d12CommandList* command_list{nullptr};
   auto hr = device->CreateCommandList1(0/*multi-GPU*/, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&command_list));
   if (FAILED(hr)) {
     logerror("device->CreateCommandList1 failed. {} {}", hr, type);
+    assert(false && "device->CreateCommandList1 failed");
     return nullptr;
   }
   hr = command_list->Reset(command_allocator_pool_.RetainCommandAllocator(device, type), nullptr);
@@ -440,6 +542,8 @@ D3d12CommandList* CommandListPool::RetainCommandList(D3d12Device* device, const 
     if (val != 0) {
       logwarn("command_list reference left. {} {}", type, val);
     }
+    assert(false && "command_list->Reset on creation failed");
+    return nullptr;
   }
   return command_list;
 }
@@ -450,6 +554,7 @@ void CommandListPool::ReturnCommandList(const D3D12_COMMAND_LIST_TYPE type, cons
     if (command_list_pool_[type_index][i] != nullptr) { continue; }
     command_list_pool_[type_index][i] = list[processed_num];
     processed_num++;
+    if (processed_num >= num) { break; }
   }
   if (processed_num != num) {
     logwarn("ReturnCommandList exceeded pool size {} {} {} {}", type, command_list_num_per_queue_type_[type_index], processed_num, num);
@@ -500,7 +605,7 @@ void CommandListInUse::FreePushedCommandList(const uint32_t command_queue_index)
   }
   pushed_command_list_num_[command_queue_index] = 0;
 }
-bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue) {
+bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue, const uint32_t frame_buffer_num, uint32_t* command_allocator_num_per_queue_type) {
   auto allocator = GetTemporalMemoryAllocator();
   auto command_list_num_per_queue_type = AllocateArray<uint32_t>(&allocator, kCommandQueueTypeNum);
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
@@ -521,7 +626,7 @@ bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num,
     }
   }
   command_queue_list_.Init(command_queue_num, raw_command_queue_list);
-  command_list_pool_.Init(command_list_num_per_queue_type);
+  command_list_pool_.Init(command_list_num_per_queue_type, frame_buffer_num, command_allocator_num_per_queue_type);
   command_list_in_use_.Init(command_queue_num, max_command_list_num_per_queue);
   return true;
 }
@@ -553,7 +658,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
   auto render_graph = GetRenderGraph(&allocator);
-  const uint32_t swapchain_buffer_num = render_graph.buffer_num + 1;
+  const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;
   CHECK_UNARY(dxgi_core.Init()); // NOLINT
   Device device;
@@ -561,14 +666,21 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   Window window;
   CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height)); // NOLINT
   CommandListSet command_list_set;
-  const uint32_t max_command_list_num_per_queue = 8;
-  CHECK_UNARY(command_list_set.Init(device.Get(), render_graph.command_queue_num, render_graph.command_queue_type, render_graph.command_queue_priority, max_command_list_num_per_queue));
+  {
+    const uint32_t max_command_list_num_per_queue = 8;
+    auto tmp_allocator = GetTemporalMemoryAllocator();
+    auto command_allocator_num_per_queue_type = AllocateArray<uint32_t>(&tmp_allocator, kCommandQueueTypeNum); // TODO calc from render graph
+    command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = 1;
+    command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = 1;
+    command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = 1;
+    CHECK_UNARY(command_list_set.Init(device.Get(), render_graph.command_queue_num, render_graph.command_queue_type, render_graph.command_queue_priority, max_command_list_num_per_queue, render_graph.frame_buffer_num, command_allocator_num_per_queue_type));
+  }
   CommandQueueSignals command_queue_signals;
   command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
   Swapchain swapchain;
-  CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.buffer_num, render_graph.swapchain_usage)); // NOLINT
-  auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.buffer_num);
-  for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
+  CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
+  auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
+  for (uint32_t i = 0; i < render_graph.frame_buffer_num; i++) {
     frame_signals[i] = AllocateArray<uint64_t>(&allocator, render_graph.command_queue_num);
     for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
       frame_signals[i][j] = 0;
@@ -581,7 +693,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
       used_command_queue[j] = false;
     }
-    const auto frame_index = i % render_graph.buffer_num;
+    const auto frame_index = i % render_graph.frame_buffer_num;
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
