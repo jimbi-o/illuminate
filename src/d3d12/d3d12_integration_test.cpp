@@ -313,6 +313,15 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   command_list->ResourceBarrier(barrier_num, barriers);
 }
 } // anonymous namespace
+constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
+  switch (type) {
+    case D3D12_COMMAND_LIST_TYPE_DIRECT:  { return 0; }
+    case D3D12_COMMAND_LIST_TYPE_COMPUTE: { return 1; }
+    case D3D12_COMMAND_LIST_TYPE_COPY:    { return 2; }
+    default: { return 0; }
+  }
+}
+static const uint32_t kCommandQueueTypeNum = 3;
 class CommandAllocatorPool {
  public:
   void Init();
@@ -329,17 +338,8 @@ class CommandListPool {
   D3d12CommandList* RetainCommandList(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
   void ReturnCommandList(const D3D12_COMMAND_LIST_TYPE, const uint32_t num, D3d12CommandList**);
  private:
-  constexpr static auto GetTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
-    switch (type) {
-      case D3D12_COMMAND_LIST_TYPE_DIRECT:  { return 0; }
-      case D3D12_COMMAND_LIST_TYPE_COMPUTE: { return 1; }
-      case D3D12_COMMAND_LIST_TYPE_COPY:    { return 2; }
-      default: { return 0; }
-    }
-  }
-  static const uint32_t kCommandListTypeNum = 3;
-  uint32_t command_list_num_per_queue_type_[kCommandListTypeNum]{};
-  D3d12CommandList** command_list_pool_[kCommandListTypeNum]{};
+  uint32_t command_list_num_per_queue_type_[kCommandQueueTypeNum]{};
+  D3d12CommandList** command_list_pool_[kCommandQueueTypeNum]{};
   CommandAllocatorPool command_allocator_pool_;
 };
 class CommandListInUse {
@@ -371,11 +371,20 @@ class CommandListSet {
   CommandListInUse command_list_in_use_;
   D3D12_COMMAND_LIST_TYPE* command_queue_type_{nullptr};
 };
+void CommandAllocatorPool::Init() {
+}
+void CommandAllocatorPool::Term() {
+}
+void CommandAllocatorPool::SucceedFrame() {
+}
+D3d12CommandAllocator* CommandAllocatorPool::RetainCommandAllocator(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE) {
+  return nullptr;
+}
 void CommandListPool::Init(const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t max_command_list_num_per_queue) {
   for (uint32_t i = 0; i < command_queue_num; i++) {
-    command_list_num_per_queue_type_[GetTypeIndex(command_queue_type[i])] += max_command_list_num_per_queue;
+    command_list_num_per_queue_type_[GetCommandQueueTypeIndex(command_queue_type[i])] += max_command_list_num_per_queue;
   }
-  for (uint32_t i = 0; i < kCommandListTypeNum; i++) {
+  for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     if (command_list_num_per_queue_type_[i] > 0) {
       command_list_pool_[i] = AllocateArray<D3d12CommandList*>(gSystemMemoryAllocator, command_list_num_per_queue_type_[i]);
     } else {
@@ -386,7 +395,7 @@ void CommandListPool::Init(const uint32_t command_queue_num, const D3D12_COMMAND
 }
 void CommandListPool::Term() {
   command_allocator_pool_.Term();
-  for (uint32_t i = 0; i < kCommandListTypeNum; i++) {
+  for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     for (uint32_t j = 0; j < command_list_num_per_queue_type_[i]; j++) {
       if (command_list_pool_[i][j]) {
         auto val = command_list_pool_[i][j]->Release();
@@ -398,7 +407,7 @@ void CommandListPool::Term() {
   }
 }
 D3d12CommandList* CommandListPool::RetainCommandList(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE type) {
-  auto type_index = GetTypeIndex(type);
+  auto type_index = GetCommandQueueTypeIndex(type);
   for (uint32_t i = 0; i < command_list_num_per_queue_type_[type_index]; i++) {
     if (command_list_pool_[type_index][i] == nullptr) { continue; }
     auto command_list = command_list_pool_[type_index][i];
@@ -426,7 +435,7 @@ D3d12CommandList* CommandListPool::RetainCommandList(D3d12Device* device, const 
   return command_list;
 }
 void CommandListPool::ReturnCommandList(const D3D12_COMMAND_LIST_TYPE type, const uint32_t num, D3d12CommandList** list) {
-  auto type_index = GetTypeIndex(type);
+  auto type_index = GetCommandQueueTypeIndex(type);
   uint32_t processed_num = 0;
   for (uint32_t i = 0; i < command_list_num_per_queue_type_[type_index]; i++) {
     if (command_list_pool_[type_index][i] != nullptr) { continue; }
