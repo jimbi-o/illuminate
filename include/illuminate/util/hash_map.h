@@ -5,7 +5,7 @@ namespace illuminate {
 template <typename T, typename A>
 class HashMap {
  public:
-  static const uint32_t kDefaultTableSize = 128;
+  static const uint32_t kDefaultTableSize = 32;
   HashMap(A* allocator, const uint32_t table_size = kDefaultTableSize)
       : allocator_(allocator)
       , table_size_(table_size)

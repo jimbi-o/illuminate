@@ -1,5 +1,6 @@
 #include "d3d12_src_common.h"
 #include "illuminate/core/strid.h"
+#include "illuminate/util/hash_map.h"
 namespace illuminate {
 }
 #ifdef BUILD_WITH_TEST
@@ -668,10 +669,20 @@ void CommandListSet::ExecuteCommandList(const uint32_t command_queue_index) {
   command_list_pool_.ReturnCommandList(command_queue_type_[command_queue_index], num, list);
   command_list_in_use_.FreePushedCommandList(command_queue_index);
 }
+namespace {
+typedef void (*RenderPassFunction)(D3d12CommandList*, const D3D12_CPU_DESCRIPTOR_HANDLE*);
+void ClearRtv(D3d12CommandList* command_list, const D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
+  // TODO use pass name & pass vars in render_graph
+  const FLOAT clear_color[4] = {0.0f,1.0f,1.0f,1.0f};
+  command_list->ClearRenderTargetView(*rtv, clear_color, 0, nullptr);
+}
+} // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
+  HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(&allocator);
+  CHECK(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
   auto render_graph = GetRenderGraph(&allocator);
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;
@@ -715,11 +726,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
       auto resource = swapchain.GetResource(); // TODO
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, &resource);
-      {
-        // TODO use pass name & pass vars in render_graph
-        const FLOAT clear_color[4] = {0.0f,1.0f,1.0f,1.0f};
-        command_list->ClearRenderTargetView(swapchain.GetRtvHandle(), clear_color, 0, nullptr);
-      }
+      auto rtv = swapchain.GetRtvHandle(); // TODO
+      (*render_pass_functions.Get(render_pass.name))(command_list, &rtv);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, &resource);
       used_command_queue[render_pass.command_queue_index] = true;
       command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO
