@@ -101,6 +101,7 @@ struct RenderGraph {
   uint32_t command_queue_num{0};
   StrHash* command_queue_name{nullptr};
   D3D12_COMMAND_LIST_TYPE* command_queue_type{nullptr};
+  D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority{nullptr};
   uint32_t swapchain_command_queue_index{0};
   DXGI_FORMAT swapchain_format{};
   DXGI_USAGE swapchain_usage{};
@@ -206,6 +207,7 @@ void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
     r.command_queue_num = static_cast<uint32_t>(command_queues.size());
     r.command_queue_name = AllocateArray<StrHash>(allocator, r.command_queue_num);
     r.command_queue_type = AllocateArray<D3D12_COMMAND_LIST_TYPE>(allocator, r.command_queue_num);
+    r.command_queue_priority = AllocateArray<D3D12_COMMAND_QUEUE_PRIORITY>(allocator, r.command_queue_num);
     for (uint32_t i = 0; i < r.command_queue_num; i++) {
       r.command_queue_name[i] = CalcEntityStrHash(command_queues[i], "name");
       auto command_queue_type_str = GetStringView(command_queues[i], "type");
@@ -215,6 +217,14 @@ void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
         r.command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_COPY;
       } else {
         r.command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_DIRECT;
+      }
+      auto command_queue_priority_str = GetStringView(command_queues[i], "priority");
+      if (command_queue_priority_str.compare("high") == 0) {
+        r.command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_HIGH;
+      } else if (command_queue_priority_str.compare("global realtime") == 0) {
+        r.command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME;
+      } else {
+        r.command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
       }
     }
   }
@@ -348,7 +358,7 @@ class CommandListInUse {
 };
 class CommandListSet {
  public:
-  bool Init(D3d12Device* device, const uint32_t command_queue_num, D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t max_command_list_num_per_queue);
+  bool Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue);
   void Term();
   constexpr auto GetCommandQueueList() { return command_queue_list_.GetList(); }
   constexpr auto GetCommandQueue(const uint32_t command_queue_index) { return command_queue_list_.Get(command_queue_index); }
@@ -472,11 +482,11 @@ void CommandListInUse::FreePushedCommandList(const uint32_t command_queue_index)
   }
   pushed_command_list_num_[command_queue_index] = 0;
 }
-bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t max_command_list_num_per_queue) {
+bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t max_command_list_num_per_queue) {
   auto allocator = GetTemporalMemoryAllocator();
   auto raw_command_queue_list = AllocateArray<D3d12CommandQueue*>(&allocator, command_queue_num);
   for (uint32_t i = 0; i < command_queue_num; i++) {
-    raw_command_queue_list[i] = CreateCommandQueue(device, command_queue_type[i]);
+    raw_command_queue_list[i] = CreateCommandQueue(device, command_queue_type[i], command_queue_priority[i]);
     if (raw_command_queue_list[i] == nullptr) {
       for (uint32_t j = 0; j < i; j++) {
         raw_command_queue_list[j]->Release();
@@ -519,7 +529,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height)); // NOLINT
   CommandListSet command_list_set;
   const uint32_t max_command_list_num_per_queue = 8;
-  CHECK_UNARY(command_list_set.Init(device.Get(), render_graph.command_queue_num, render_graph.command_queue_type, max_command_list_num_per_queue));
+  CHECK_UNARY(command_list_set.Init(device.Get(), render_graph.command_queue_num, render_graph.command_queue_type, render_graph.command_queue_priority, max_command_list_num_per_queue));
   CommandQueueSignals command_queue_signals;
   command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
   Swapchain swapchain;
