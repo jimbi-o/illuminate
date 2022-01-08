@@ -84,6 +84,7 @@ auto GetJson() {
 }
 )"_json;
 }
+typedef void (*RenderPassVarParseFunction)(const nlohmann::json&, void*);
 struct RenderPassBuffer {
   StrHash buffer_name{};
   D3D12_RESOURCE_STATES state{};
@@ -205,8 +206,9 @@ auto GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, A* allo
   }
   return barrier_list;
 }
-template <typename A>
-void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
+template <typename A1, typename A2, typename A3>
+RenderGraph ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator) {
+  RenderGraph r{};
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
   j.at("frame_loop_num").get_to(r.frame_loop_num);
   {
@@ -303,7 +305,10 @@ void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
           dst_buffer.state = GetD3d12ResourceState(src_buffer, "state");
         }
       } // buffers
-      dst_pass.pass_vars = nullptr; // TODO
+      if (pass_var_func.Get(dst_pass.name) != nullptr && src_pass.contains("pass_vars")) {
+        dst_pass.pass_vars = allocator->Allocate(pass_var_size.Get(dst_pass.name));
+        (*pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars);
+      }
       {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
         dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());
@@ -314,12 +319,11 @@ void SetRenderGraph(const nlohmann::json& j, A* allocator, RenderGraph& r) {
       } // barriers
     } // pass
   } // pass_list
+  return r;
 }
-template <typename A>
-RenderGraph GetRenderGraph(A* allocator) {
-  RenderGraph graph;
-  SetRenderGraph(GetJson(), allocator, graph);
-  return graph;
+template <typename A1, typename A2, typename A3>
+RenderGraph GetRenderGraph(const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator) {
+  return ParseRenderGraphJson(GetJson(), pass_var_size, pass_var_func, allocator);
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
   auto allocator = GetTemporalMemoryAllocator();
@@ -670,11 +674,16 @@ void CommandListSet::ExecuteCommandList(const uint32_t command_queue_index) {
   command_list_in_use_.FreePushedCommandList(command_queue_index);
 }
 namespace {
-typedef void (*RenderPassFunction)(D3d12CommandList*, const D3D12_CPU_DESCRIPTOR_HANDLE*);
-void ClearRtv(D3d12CommandList* command_list, const D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
-  // TODO use pass name & pass vars in render_graph
-  const FLOAT clear_color[4] = {0.0f,1.0f,1.0f,1.0f};
-  command_list->ClearRenderTargetView(*rtv, clear_color, 0, nullptr);
+typedef void (*RenderPassFunction)(D3d12CommandList*, const void*, const D3D12_CPU_DESCRIPTOR_HANDLE*);
+void ClearRtv(D3d12CommandList* command_list, const void* pass_vars, const D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
+  command_list->ClearRenderTargetView(*rtv, static_cast<const FLOAT*>(pass_vars), 0, nullptr);
+}
+void ParsePassParamClearRtv(const nlohmann::json& j, void* dst) {
+  auto src_color = j.at("clear_color");
+  auto dst_color = reinterpret_cast<FLOAT*>(dst);
+  for (uint32_t i = 0; i < 4; i++) {
+    dst_color[i] = src_color[i];
+  }
 }
 } // namespace anonymous
 } // namespace illuminate
@@ -682,8 +691,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
   HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(&allocator);
+  HashMap<uint32_t, MemoryAllocationJanitor> render_pass_var_size(&allocator);
+  HashMap<RenderPassVarParseFunction, MemoryAllocationJanitor> render_pass_var_parse_functions(&allocator);
   CHECK(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
-  auto render_graph = GetRenderGraph(&allocator);
+  CHECK(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
+  CHECK(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
+  auto render_graph = GetRenderGraph(render_pass_var_size, render_pass_var_parse_functions,  &allocator);
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;
   CHECK_UNARY(dxgi_core.Init()); // NOLINT
@@ -727,7 +740,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       auto resource = swapchain.GetResource(); // TODO
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, &resource);
       auto rtv = swapchain.GetRtvHandle(); // TODO
-      (*render_pass_functions.Get(render_pass.name))(command_list, &rtv);
+      (*render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, &rtv);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, &resource);
       used_command_queue[render_pass.command_queue_index] = true;
       command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO

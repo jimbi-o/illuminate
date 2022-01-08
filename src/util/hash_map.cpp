@@ -29,6 +29,6 @@ TEST_CASE("hash map") {
   CHECK_EQ(*ptr2, 101);
   CHECK_UNARY(map2.Insert(key, ptr));
   CHECK_UNARY(map2.Insert(key2, ptr2));
-  CHECK_EQ(*reinterpret_cast<uint32_t*>(map2.Get(key)), 10);
-  CHECK_EQ(*reinterpret_cast<uint32_t*>(map2.Get(key2)), 101);
+  CHECK_EQ(*static_cast<uint32_t*>(map2.Get(key)), 10);
+  CHECK_EQ(*static_cast<uint32_t*>(map2.Get(key2)), 101);
 }
