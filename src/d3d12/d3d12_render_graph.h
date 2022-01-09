@@ -3,11 +3,8 @@
 #include "d3d12_header_common.h"
 #include "illuminate/core/strid.h"
 namespace illuminate {
-struct RenderPassBuffer {
-  StrHash buffer_name{};
-  D3D12_RESOURCE_STATES state{};
-};
 struct BufferConfig {
+  StrHash name{};
   D3D12_HEAP_TYPE heap_type{};
   D3D12_RESOURCE_DIMENSION dimension{};
   uint32_t alignment{};
@@ -25,6 +22,10 @@ struct BufferConfig {
   uint32_t mip_depth{};
   D3D12_RESOURCE_STATES initial_state{};
   D3D12_CLEAR_VALUE clear_value{};
+};
+struct RenderPassBuffer {
+  StrHash buffer_name{};
+  D3D12_RESOURCE_STATES state{};
 };
 struct Barrier {
   StrHash buffer_name{};
@@ -62,7 +63,7 @@ struct RenderGraph {
   uint32_t render_pass_num{0};
   RenderPass* render_pass_list{nullptr};
   uint32_t buffer_num{0};
-  BufferConfig* buffer{nullptr};
+  BufferConfig* buffer_list{nullptr};
 };
 }
 #endif

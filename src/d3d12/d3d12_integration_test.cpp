@@ -46,10 +46,26 @@ auto GetTestJson() {
     "format": "R8G8B8A8_UNORM",
     "usage": ["RENDER_TARGET_OUTPUT"]
   },
-  "buffers": [
+  "buffer": [
     {
       "name": "uav",
-      "format": "R8G8B8A8_UNORM"
+      "format": "R8G8B8A8_UNORM",
+      "heap_type": "default",
+      "dimension": "texture2d",
+      "width": 100,
+      "height": 20,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "format": "R8G8B8A8_UNORM",
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "unknown",
+      "flags": ["rtv"],
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "rtv",
+      "clear_color": [1,0,0,1]
     }
   ],
   "render_pass": [
@@ -187,6 +203,10 @@ struct BufferAllocation {
   D3D12MA::Allocation* allocation{nullptr};
   ID3D12Resource* resource{nullptr};
 };
+void ReleaseBufferAllocation(BufferAllocation* b) {
+  b->allocation->Release();
+  b->resource->Release();
+}
 auto CreateBuffer(const BufferConfig& config, D3D12MA::Allocator* allocator) {
   using namespace D3D12MA;
   ALLOCATION_DESC allocation_desc{
@@ -266,9 +286,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   CHECK_NE(buffer_allocator, nullptr);
-  auto buffer = CreateBuffer(render_graph.buffer[0], buffer_allocator);
+  auto buffer = CreateBuffer(render_graph.buffer_list[0], buffer_allocator);
   CHECK_NE(buffer.allocation, nullptr);
   CHECK_NE(buffer.resource, nullptr);
+  ReleaseBufferAllocation(&buffer); // TODO move
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);

@@ -14,6 +14,7 @@ inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
 uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32_t num, StrHash* list);
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
+void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
 typedef void (*RenderPassVarParseFunction)(const nlohmann::json&, void*);
 template <typename A1, typename A2, typename A3>
@@ -88,6 +89,14 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       }
     }
   }
+  if (j.contains("buffer")) {
+    auto& buffer_list = j.at("buffer");
+    r.buffer_num = static_cast<uint32_t>(buffer_list.size());
+    r.buffer_list = AllocateArray<BufferConfig>(allocator, r.buffer_num);
+    for (uint32_t i = 0; i < r.buffer_num; i++) {
+      GetBufferConfig(buffer_list[i], &r.buffer_list[i]);
+    }
+  }
   {
     auto& render_pass_list = j.at("render_pass");
     r.render_pass_num = static_cast<uint32_t>(render_pass_list.size());
@@ -120,6 +129,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       }
       if (src_pass.contains("postpass_barrier")) {
         auto& postpass_barrier = src_pass.at("postpass_barrier");
+        dst_pass.postpass_barrier_num = static_cast<uint32_t>(postpass_barrier.size());
         dst_pass.postpass_barrier = AllocateArray<Barrier>(allocator, dst_pass.postpass_barrier_num);
         GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
       } // barriers
