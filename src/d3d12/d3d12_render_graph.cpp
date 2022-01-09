@@ -157,7 +157,6 @@ TEST_CASE("d3d12 render graph") { // NOLINT
       frame_signals[i][j] = 0;
     }
   }
-  uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     auto used_command_queue = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
@@ -181,7 +180,6 @@ TEST_CASE("d3d12 render graph") { // NOLINT
       frame_signals[frame_index][render_pass.command_queue_index] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
     } // render pass
     swapchain.Present();
-    tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
   }
   command_queue_signals.WaitAll(device.Get());
   swapchain.Term();
@@ -190,6 +188,5 @@ TEST_CASE("d3d12 render graph") { // NOLINT
   window.Term();
   device.Term();
   dxgi_core.Term();
-  loginfo("memory global:{} temp:{}", gSystemMemoryAllocator->GetOffset(), tmp_memory_max_offset);
   gSystemMemoryAllocator->Reset();
 }
