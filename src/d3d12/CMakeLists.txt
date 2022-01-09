@@ -14,4 +14,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_swapchain.h
   d3d12_swapchain.cpp
   d3d12_integration_test.cpp
+  d3d12_command_list.h
+  d3d12_command_list.cpp
   )
