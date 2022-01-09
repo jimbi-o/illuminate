@@ -28,10 +28,17 @@ auto GetTestJson() {
       "type": "3d",
       "priority": "normal",
       "command_list_num": 1
+    },
+    {
+      "name": "queue_compute",
+      "type": "compute",
+      "priority": "normal",
+      "command_list_num": 1
     }
   ],
   "command_allocator": {
-    "direct": 1
+    "direct": 1,
+    "compute": 1
   },
   "swapchain": {
     "command_queue": "queue_graphics",
@@ -39,6 +46,31 @@ auto GetTestJson() {
     "usage": ["RENDER_TARGET_OUTPUT"]
   },
   "render_pass": [
+    {
+      "name": "clear uav",
+      "command_queue": "queue_compute",
+      "buffers": [
+        {
+          "name": "uav",
+          "state": "uav"
+        }
+      ],
+      "pass_vars": {
+        "clear_color": [0, 1, 0, 1]
+      },
+      "prepass_barrier": [
+        {
+          "buffer_name": "uav",
+          "type": "uav"
+        }
+      ],
+      "postpass_barrier": [
+        {
+          "buffer_name": "uav",
+          "type": "uav"
+        }
+      ]
+    },
     {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
@@ -88,10 +120,23 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
     auto& barrier = barriers[i];
     barrier.Type  = config.type;
     barrier.Flags = config.flag;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.pResource   = resource[i];
-    barrier.Transition.StateBefore = config.state_before;
-    barrier.Transition.StateAfter  = config.state_after;
+    switch (barrier.Type) {
+      case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.pResource   = resource[i];
+        barrier.Transition.StateBefore = config.state_before;
+        barrier.Transition.StateAfter  = config.state_after;
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
+        assert(false && "aliasing barrier not implemented yet");
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
+        barrier.UAV.pResource   = resource[i];
+        break;
+      }
+    }
   }
   command_list->ResourceBarrier(barrier_num, barriers);
 }
@@ -106,6 +151,12 @@ void ParsePassParamClearRtv(const nlohmann::json& j, void* dst) {
     dst_color[i] = src_color[i];
   }
 }
+void ClearUav(D3d12CommandList* command_list, const void* pass_vars, const D3D12_CPU_DESCRIPTOR_HANDLE* uav) {
+  // command_list->ClearRenderTargetView(*uav, static_cast<const FLOAT*>(pass_vars), 0, nullptr);
+}
+void ParsePassParamClearUav(const nlohmann::json& j, void* dst) {
+  // TODO
+}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 render graph") { // NOLINT
@@ -117,6 +168,9 @@ TEST_CASE("d3d12 render graph") { // NOLINT
   CHECK(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
   CHECK(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
   CHECK(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
+  CHECK(render_pass_functions.Insert(SID("clear uav"), ClearUav));
+  CHECK(render_pass_var_size.Insert(SID("clear uav"), sizeof(FLOAT) * 4)); // TODO
+  CHECK(render_pass_var_parse_functions.Insert(SID("clear uav"), ParsePassParamClearUav));
   auto render_graph = GetTestRenderGraph(render_pass_var_size, render_pass_var_parse_functions,  &allocator);
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;

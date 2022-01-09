@@ -13,13 +13,20 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const name) {
   auto state_str = j.at(name).get<std::string_view>();
   D3D12_RESOURCE_STATES state{};
-  // TODO
+  bool val_set = false;
   if (state_str.compare("present") == 0) {
     state |= D3D12_RESOURCE_STATE_PRESENT;
+    val_set = true;
   }
   if (state_str.compare("rtv") == 0) {
     state |= D3D12_RESOURCE_STATE_RENDER_TARGET;
+    val_set = true;
   }
+  if (state_str.compare("uav") == 0) {
+    state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    val_set = true;
+  }
+  assert(val_set && "no valid resource state");
   return state;
 }
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list) {
@@ -59,11 +66,10 @@ void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier
         break;
       }
       case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
-        // TODO
+        assert(false && "aliasing barrier not implemented yet");
         break;
       }
       case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
-        // TODO
         break;
       }
       default: {
