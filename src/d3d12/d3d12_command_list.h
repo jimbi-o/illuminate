@@ -3,15 +3,6 @@
 #include "d3d12_header_common.h"
 #include "d3d12_command_queue.h"
 namespace illuminate {
-static const uint32_t kCommandQueueTypeNum = 3;
-constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
-  switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:  { return 0; }
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE: { return 1; }
-    case D3D12_COMMAND_LIST_TYPE_COPY:    { return 2; }
-    default: { return 0; }
-  }
-}
 class CommandAllocatorPool {
  public:
   void Init(const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type);

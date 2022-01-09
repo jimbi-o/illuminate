@@ -258,4 +258,22 @@ void CommandListSet::Term() {
   command_list_pool_.Term();
   command_queue_list_.Term();
 }
+D3d12CommandList* CommandListSet::GetCommandList(D3d12Device* device, const uint32_t command_queue_index) {
+  auto command_list = command_list_pool_.RetainCommandList(device, command_queue_type_[command_queue_index]);
+  command_list_in_use_.PushCommandList(command_queue_index, command_list);
+  return command_list;
+}
+void CommandListSet::ExecuteCommandList(const uint32_t command_queue_index) {
+  const auto num = command_list_in_use_.GetPushedCommandListNum(command_queue_index);
+  auto list = command_list_in_use_.GetPushedCommandList(command_queue_index);
+  for (uint32_t i = 0; i < num; i++) {
+    auto hr = list[i]->Close();
+    if (FAILED(hr)) {
+      logwarn("failed to close command list. {} {}", hr, i);
+    }
+  }
+  command_queue_list_.Get(command_queue_index)->ExecuteCommandLists(num, reinterpret_cast<ID3D12CommandList**>(list));
+  command_list_pool_.ReturnCommandList(command_queue_type_[command_queue_index], num, list);
+  command_list_in_use_.FreePushedCommandList(command_queue_index);
+}
 }
