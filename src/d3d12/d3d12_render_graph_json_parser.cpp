@@ -10,8 +10,8 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32
   logwarn("FindIndex: {} not found. {}", name, num);
   return ~0U;
 }
-D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const name) {
-  auto state_str = j.at(name).get<std::string_view>();
+D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name) {
+  auto state_str = j.at(entity_name).get<std::string_view>();
   D3D12_RESOURCE_STATES state{};
   bool val_set = false;
   if (state_str.compare("present") == 0) {
@@ -26,8 +26,24 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
     state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     val_set = true;
   }
-  assert(val_set && "no valid resource state");
+  if (!val_set) {
+    logerror("invalid resource state specified. {}", state_str.data());
+  }
+  assert(val_set && "invalid resource state specified");
   return state;
+}
+DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name) {
+  auto format_str = GetStringView(j, entity_name);
+  if (format_str.compare("R16G16B16A16_FLOAT") == 0) {
+    return DXGI_FORMAT_R16G16B16A16_FLOAT;
+  } else if (format_str.compare("B8G8R8A8_UNORM") == 0) {
+    return DXGI_FORMAT_B8G8R8A8_UNORM;
+  } else if (format_str.compare("R8G8B8A8_UNORM") == 0) {
+    return DXGI_FORMAT_R8G8B8A8_UNORM;
+  }
+  logerror("invalid format specified. {}", format_str.data());
+  assert(false && "invalid format specified");
+  return DXGI_FORMAT_R8G8B8A8_UNORM;
 }
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list) {
   for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {

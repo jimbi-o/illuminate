@@ -12,7 +12,8 @@ inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
   return CalcStrHash(GetStringView(j, name).data());
 }
 uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32_t num, StrHash* list);
-D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const name);
+D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
+DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
 typedef void (*RenderPassVarParseFunction)(const nlohmann::json&, void*);
 template <typename A1, typename A2, typename A3>
@@ -66,14 +67,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
   {
     auto& swapchain = j.at("swapchain");
     r.swapchain_command_queue_index = FindIndex(swapchain, "command_queue", r.command_queue_num, r.command_queue_name);
-    auto format_str = GetStringView(swapchain, "format");
-    if (format_str.compare("R16G16B16A16_FLOAT") == 0) {
-      r.swapchain_format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    } else if (format_str.compare("B8G8R8A8_UNORM") == 0) {
-      r.swapchain_format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    } else {
-      r.swapchain_format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    }
+    r.swapchain_format = GetDxgiFormat(swapchain, "format");
     auto usage_list = swapchain.at("usage");
     for (auto& usage : usage_list) {
       auto usage_str = usage.get<std::string_view>();
