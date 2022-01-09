@@ -4,5 +4,6 @@
 namespace illuminate {
 extern LinearAllocator* gSystemMemoryAllocator;
 MemoryAllocationJanitor GetTemporalMemoryAllocator();
+uint32_t GetTemporalMemoryOffset();
 }
 #endif

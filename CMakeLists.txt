@@ -22,6 +22,13 @@ CPMAddPackage(
   VERSION v1.700.10-preview
   DOWNLOAD_ONLY yes
 )
+CPMAddPackage(
+  NAME nlohmann_json
+  GITHUB_REPOSITORY "nlohmann/json"
+  VERSION 3.10.5
+  OPTIONS
+  "JSON_BuildTests OFF"
+)
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -45,28 +52,46 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   spdlog::spdlog
   $<$<CONFIG:Debug>:dxguid.lib>)
 
-
 target_compile_features(${CMAKE_PROJECT_NAME} PUBLIC cxx_std_20)
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>) # parallel build in MSVC
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
   $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wpedantic>
   $<$<CXX_COMPILER_ID:Clang>:-Weverything -Wno-c++98-c++11-c++14-compat -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-c++20-compat>
-  $<$<CXX_COMPILER_ID:MSVC>:/W4>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
 )
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+  $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>)
 target_include_directories(${CMAKE_PROJECT_NAME}
   PRIVATE
   "include"
   "${dxc_SOURCE_DIR}/inc"
   "${d3d12_SOURCE_DIR}/build/native/include"
+  "${nlohmann_json_SOURCE_DIR}/include"
+)
+target_precompile_headers(${CMAKE_PROJECT_NAME}
+  PRIVATE
+  <cstdint>
+  <type_traits>
+  <cstring>
+  <string>
+  <string_view>
+  <dxgi1_6.h>
+  "${dxc_SOURCE_DIR}/inc/d3d12shader.h"
+  "${dxc_SOURCE_DIR}/inc/dxcapi.h"
+  "${d3d12_SOURCE_DIR}/build/native/include/d3d12.h"
+  "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp"
+  "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
 )
 add_subdirectory(src)
 
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
+)
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
   "${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll"
   "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.pdb>"
   "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll>"
   "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.pdb>"
-  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12")
+  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
+)

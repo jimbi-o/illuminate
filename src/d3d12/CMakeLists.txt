@@ -13,5 +13,10 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_win32_window.cpp
   d3d12_swapchain.h
   d3d12_swapchain.cpp
-  d3d12_test.cpp
+  d3d12_command_list.h
+  d3d12_command_list.cpp
+  d3d12_render_graph.h
+  d3d12_render_graph.cpp
+  d3d12_render_graph_json_parser.h
+  d3d12_render_graph_json_parser.cpp
   )

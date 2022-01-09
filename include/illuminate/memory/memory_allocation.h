@@ -12,8 +12,8 @@ constexpr inline auto AlignAddress(const std::uintptr_t addr, const size_t align
 class LinearAllocator {
  public:
   explicit LinearAllocator(const std::byte* buffer, const uint32_t size_in_byte) : head_(reinterpret_cast<uintptr_t>(buffer)), size_in_byte_(size_in_byte), offset_in_byte_(0) {}
-  LinearAllocator() : head_(0), size_in_byte_(0), offset_in_byte_(0) {}
   ~LinearAllocator() {}
+  LinearAllocator() = delete;
   LinearAllocator(const LinearAllocator&) = delete;
   LinearAllocator& operator=(const LinearAllocator&) = delete;
   inline void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
@@ -33,8 +33,8 @@ class LinearAllocator {
 class DoubleBufferedAllocator {
  public:
   explicit DoubleBufferedAllocator(const std::byte* buffer1, const std::byte* buffer2, const uint32_t size_in_byte) : head_{reinterpret_cast<uintptr_t>(buffer1), reinterpret_cast<uintptr_t>(buffer2)}, size_in_byte_(size_in_byte), offset_in_byte_(0), head_index_(0) {}
-  DoubleBufferedAllocator() : head_{}, size_in_byte_(0), offset_in_byte_(0), head_index_(0) {}
   ~DoubleBufferedAllocator() {}
+  DoubleBufferedAllocator() = delete;
   DoubleBufferedAllocator(const DoubleBufferedAllocator&) = delete;
   DoubleBufferedAllocator& operator=(const DoubleBufferedAllocator&) = delete;
   inline void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
@@ -56,7 +56,6 @@ class DoubleBufferedAllocator {
 class StackAllocator {
  public:
   explicit StackAllocator(const std::byte* buffer, const uint32_t size_in_byte) : head_(reinterpret_cast<uintptr_t>(buffer)), size_in_byte_(size_in_byte), offset_in_byte_(0) {}
-  StackAllocator() : head_(0), size_in_byte_(0), offset_in_byte_(0) {}
   ~StackAllocator() {}
   StackAllocator(const StackAllocator&) = delete;
   StackAllocator& operator=(const StackAllocator&) = delete;
@@ -83,6 +82,9 @@ class MemoryAllocationJanitor {
   virtual ~MemoryAllocationJanitor() {
     allocator_->ResetToMarker(marker_);
   }
+  MemoryAllocationJanitor() = delete;
+  MemoryAllocationJanitor(const MemoryAllocationJanitor&) = delete;
+  MemoryAllocationJanitor& operator=(const MemoryAllocationJanitor&) = delete;
   inline void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) { return allocator_->Allocate(bytes, alignment_in_bytes); }
   constexpr auto GetMarker() const { return marker_; }
  private:
