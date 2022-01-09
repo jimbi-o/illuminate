@@ -28,17 +28,10 @@ auto GetTestJson() {
       "type": "3d",
       "priority": "normal",
       "command_list_num": 1
-    },
-    {
-      "name": "queue_compute",
-      "type": "compute",
-      "priority": "normal",
-      "command_list_num": 1
     }
   ],
   "command_allocator": {
-    "direct": 1,
-    "compute": 1
+    "direct": 1
   },
   "swapchain": {
     "command_queue": "queue_graphics",
@@ -46,31 +39,6 @@ auto GetTestJson() {
     "usage": ["RENDER_TARGET_OUTPUT"]
   },
   "render_pass": [
-    {
-      "name": "clear uav",
-      "command_queue": "queue_compute",
-      "buffers": [
-        {
-          "name": "uav",
-          "state": "uav"
-        }
-      ],
-      "pass_vars": {
-        "clear_color": [0, 1, 0, 1]
-      },
-      "prepass_barrier": [
-        {
-          "buffer_name": "uav",
-          "type": "uav"
-        }
-      ],
-      "postpass_barrier": [
-        {
-          "buffer_name": "uav",
-          "type": "uav"
-        }
-      ]
-    },
     {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
@@ -151,12 +119,6 @@ void ParsePassParamClearRtv(const nlohmann::json& j, void* dst) {
     dst_color[i] = src_color[i];
   }
 }
-void ClearUav(D3d12CommandList* command_list, const void* pass_vars, const D3D12_CPU_DESCRIPTOR_HANDLE* uav) {
-  // command_list->ClearRenderTargetView(*uav, static_cast<const FLOAT*>(pass_vars), 0, nullptr);
-}
-void ParsePassParamClearUav(const nlohmann::json& j, void* dst) {
-  // TODO
-}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 render graph") { // NOLINT
@@ -168,9 +130,6 @@ TEST_CASE("d3d12 render graph") { // NOLINT
   CHECK(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
   CHECK(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
   CHECK(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
-  CHECK(render_pass_functions.Insert(SID("clear uav"), ClearUav));
-  CHECK(render_pass_var_size.Insert(SID("clear uav"), sizeof(FLOAT) * 4)); // TODO
-  CHECK(render_pass_var_parse_functions.Insert(SID("clear uav"), ParsePassParamClearUav));
   auto render_graph = GetTestRenderGraph(render_pass_var_size, render_pass_var_parse_functions,  &allocator);
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;
@@ -211,14 +170,14 @@ TEST_CASE("d3d12 render graph") { // NOLINT
     swapchain.UpdateBackBufferIndex();
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
-      auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
-      auto resource = swapchain.GetResource(); // TODO
+      auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index);
+      auto resource = swapchain.GetResource();
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, &resource);
-      auto rtv = swapchain.GetRtvHandle(); // TODO
+      auto rtv = swapchain.GetRtvHandle();
       (*render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, &rtv);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, &resource);
       used_command_queue[render_pass.command_queue_index] = true;
-      command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO
+      command_list_set.ExecuteCommandList(render_pass.command_queue_index);
       frame_signals[frame_index][render_pass.command_queue_index] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
     } // render pass
     swapchain.Present();
