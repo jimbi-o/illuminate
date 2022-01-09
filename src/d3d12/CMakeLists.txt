@@ -19,4 +19,5 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_render_graph.cpp
   d3d12_render_graph_json_parser.h
   d3d12_render_graph_json_parser.cpp
+  d3d12_integration_test.cpp
   )

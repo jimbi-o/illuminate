@@ -7,6 +7,25 @@ struct RenderPassBuffer {
   StrHash buffer_name{};
   D3D12_RESOURCE_STATES state{};
 };
+struct BufferConfig {
+  D3D12_HEAP_TYPE heap_type{};
+  D3D12_RESOURCE_DIMENSION dimension{};
+  uint32_t alignment{};
+  uint32_t width{};
+  uint32_t height{};
+  uint16_t depth_or_array_size{};
+  uint16_t miplevels{};
+  DXGI_FORMAT format{};
+  uint32_t sample_count{};
+  uint32_t  sample_quality{};
+  D3D12_TEXTURE_LAYOUT layout{};
+  D3D12_RESOURCE_FLAGS flags{};
+  uint32_t mip_width{};
+  uint32_t mip_height{};
+  uint32_t mip_depth{};
+  D3D12_RESOURCE_STATES initial_state{};
+  D3D12_CLEAR_VALUE clear_value{};
+};
 struct Barrier {
   StrHash buffer_name{};
   D3D12_RESOURCE_BARRIER_TYPE type{};
@@ -42,6 +61,8 @@ struct RenderGraph {
   DXGI_USAGE swapchain_usage{};
   uint32_t render_pass_num{0};
   RenderPass* render_pass_list{nullptr};
+  uint32_t buffer_num{0};
+  BufferConfig* buffer{nullptr};
 };
 }
 #endif
