@@ -103,7 +103,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       auto& src_pass = render_pass_list[i];
       dst_pass.name = CalcEntityStrHash(src_pass, "name");
       dst_pass.command_queue_index = FindIndex(src_pass, "command_queue", r.command_queue_num, r.command_queue_name);
-      {
+      if (src_pass.contains("buffers")) {
         auto& buffers = src_pass.at("buffers");
         dst_pass.buffer_num = static_cast<uint32_t>(buffers.size());
         dst_pass.buffers = AllocateArray<RenderPassBuffer>(allocator, dst_pass.buffer_num);
@@ -118,11 +118,13 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
         dst_pass.pass_vars = allocator->Allocate(pass_var_size.Get(dst_pass.name));
         (*pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars);
       }
-      {
+      if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
         dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());
         dst_pass.prepass_barrier = AllocateArray<Barrier>(allocator, dst_pass.prepass_barrier_num);
         GetBarrierList(prepass_barrier, dst_pass.prepass_barrier_num, dst_pass.prepass_barrier);
+      }
+      if (src_pass.contains("postpass_barrier")) {
         auto& postpass_barrier = src_pass.at("postpass_barrier");
         dst_pass.postpass_barrier = AllocateArray<Barrier>(allocator, dst_pass.postpass_barrier_num);
         GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
