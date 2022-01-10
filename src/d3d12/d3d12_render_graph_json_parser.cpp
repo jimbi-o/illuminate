@@ -36,14 +36,39 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   auto format_str = GetStringView(j, entity_name);
   if (format_str.compare("R16G16B16A16_FLOAT") == 0) {
     return DXGI_FORMAT_R16G16B16A16_FLOAT;
-  } else if (format_str.compare("B8G8R8A8_UNORM") == 0) {
+  }
+  if (format_str.compare("B8G8R8A8_UNORM") == 0) {
     return DXGI_FORMAT_B8G8R8A8_UNORM;
-  } else if (format_str.compare("R8G8B8A8_UNORM") == 0) {
+  }
+  if (format_str.compare("R8G8B8A8_UNORM") == 0) {
     return DXGI_FORMAT_R8G8B8A8_UNORM;
   }
   logerror("invalid format specified. {}", format_str.data());
   assert(false && "invalid format specified");
   return DXGI_FORMAT_R8G8B8A8_UNORM;
+}
+ViewType GetViewType(const nlohmann::json& j) {
+  auto str = j.get<std::string_view>();
+  if (str.compare("cbv") == 0) {
+    return ViewType::kCbv;
+  }
+  if (str.compare("srv") == 0) {
+    return ViewType::kSrv;
+  }
+  if (str.compare("uav") == 0) {
+    return ViewType::kUav;
+  }
+  if (str.compare("sampler") == 0) {
+    return ViewType::kSampler;
+  }
+  if (str.compare("rtv") == 0) {
+    return ViewType::kRtv;
+  }
+  if (str.compare("dsv") == 0) {
+    return ViewType::kDsv;
+  }
+  assert(false && "invalid view type");
+  return ViewType::kNum;
 }
 namespace {
 D3D12_HEAP_TYPE GetHeapType(const nlohmann::json& j, const char* entity_name) {

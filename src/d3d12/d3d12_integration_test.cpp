@@ -52,19 +52,20 @@ class DescriptorCpu {
       }
     }
   }
-  constexpr const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const StrHash& name, const ViewType type) const {
+  const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const StrHash& name, const ViewType type) {
     auto index = GetViewTypeIndex(type);
     auto ptr = handles_[index].Get(name);
     if (ptr != nullptr) { return ptr; }
-    assert(handle_num_[type] <= total_handle_num_[type] && "handle num exceeded handle pool size");
+    assert(handle_num_[index] <= total_handle_num_[index] && "handle num exceeded handle pool size");
     D3D12_CPU_DESCRIPTOR_HANDLE handle{};
-    handle.ptr = heap_start_[type] + handle_num_[type] * handle_increment_size_[type];
-    if (!handles_[index].Insert(name, std::move(handle))) {
+    handle.ptr = heap_start_[index] + handle_num_[index] * handle_increment_size_[index];
+    auto view_type_index = static_cast<uint32_t>(type);
+    if (!handles_[view_type_index].Insert(name, std::move(handle))) {
       assert(false && "failed to insert handle to map, increase map table size");
       return nullptr;
     }
-    handle_num_[type]++;
-    return handles_[index].Get(name);
+    handle_num_[index]++;
+    return handles_[view_type_index].Get(name);
   }
  private:
   static constexpr auto GetViewTypeIndex(const ViewType& type) {
@@ -152,7 +153,8 @@ auto GetTestJson() {
       "mip_height": 0,
       "mip_depth": 0,
       "initial_state": "rtv",
-      "clear_color": [1,0,0,1]
+      "clear_color": [1,0,0,1],
+      "descriptor_type": ["rtv", "srv"]
     }
   ],
   "render_pass": [
@@ -390,15 +392,21 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   CHECK_NE(buffer_allocator, nullptr);
+  DescriptorCpu<MemoryAllocationJanitor> descriptor_cpu;
+  CHECK_UNARY(descriptor_cpu.Init(device.Get(), render_graph.descriptor_handle_num_per_view_type_or_sampler, &allocator));
   HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator);
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
+    CAPTURE(i);
     auto buffer = CreateBuffer(render_graph.buffer_list[i], buffer_allocator);
     CHECK_NE(buffer.allocation, nullptr);
     CHECK_NE(buffer.resource, nullptr);
     CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
+    for (uint32_t j = 0; j < render_graph.buffer_list[i].descriptor_type_num; j++) {
+      CAPTURE(j);
+      CHECK_NE(descriptor_cpu.GetHandle(render_graph.buffer_list[i].name, render_graph.buffer_list[i].descriptor_type[j]), nullptr);
+      // TODO create view
+    }
   }
-  DescriptorCpu<MemoryAllocationJanitor> descriptor_cpu;
-  CHECK_UNARY(descriptor_cpu.Init(device.Get(), render_graph.descriptor_handle_num_per_view_type_or_sampler, &allocator));
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);

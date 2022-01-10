@@ -22,6 +22,8 @@ struct BufferConfig {
   uint32_t mip_depth{};
   D3D12_RESOURCE_STATES initial_state{};
   D3D12_CLEAR_VALUE clear_value{};
+  uint32_t descriptor_type_num{0};
+  ViewType* descriptor_type{nullptr};
 };
 struct RenderPassBuffer {
   StrHash buffer_name{};

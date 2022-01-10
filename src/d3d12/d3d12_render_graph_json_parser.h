@@ -24,6 +24,7 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
+ViewType GetViewType(const nlohmann::json& j);
 template <typename A1, typename A2, typename A3>
 void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -102,6 +103,12 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
     r.buffer_list = AllocateArray<BufferConfig>(allocator, r.buffer_num);
     for (uint32_t i = 0; i < r.buffer_num; i++) {
       GetBufferConfig(buffer_list[i], &r.buffer_list[i]);
+      auto& descriptor_type_list = buffer_list[i].at("descriptor_type");
+      r.buffer_list[i].descriptor_type_num = static_cast<uint32_t>(descriptor_type_list.size());
+      r.buffer_list[i].descriptor_type = AllocateArray<ViewType>(allocator, r.buffer_list[i].descriptor_type_num);
+      for (uint32_t d = 0; d < r.buffer_list[i].descriptor_type_num; d++) {
+        r.buffer_list[i].descriptor_type[d] = GetViewType(descriptor_type_list[d]);
+      }
     }
   }
   {
