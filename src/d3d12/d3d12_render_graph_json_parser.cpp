@@ -58,9 +58,6 @@ ViewType GetViewType(const nlohmann::json& j) {
   if (str.compare("uav") == 0) {
     return ViewType::kUav;
   }
-  if (str.compare("sampler") == 0) {
-    return ViewType::kSampler;
-  }
   if (str.compare("rtv") == 0) {
     return ViewType::kRtv;
   }
