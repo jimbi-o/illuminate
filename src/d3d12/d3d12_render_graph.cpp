@@ -127,9 +127,9 @@ TEST_CASE("d3d12 render graph") { // NOLINT
   HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(&allocator);
   HashMap<uint32_t, MemoryAllocationJanitor> render_pass_var_size(&allocator);
   HashMap<RenderPassVarParseFunction, MemoryAllocationJanitor> render_pass_var_parse_functions(&allocator);
-  CHECK(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
-  CHECK(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
-  CHECK(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
+  CHECK_UNARY(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
+  CHECK_UNARY(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
+  CHECK_UNARY(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
   auto render_graph = GetTestRenderGraph(render_pass_var_size, render_pass_var_parse_functions,  &allocator);
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;

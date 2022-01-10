@@ -5,6 +5,7 @@
 #include "illuminate/util/hash_map.h"
 #include <nlohmann/json.hpp>
 namespace illuminate {
+using RenderPassVarParseFunction = void (*)(const nlohmann::json&, void*);
 inline auto GetStringView(const nlohmann::json& j, const char* const name) {
   return j.at(name).get<std::string_view>();
 }
@@ -16,7 +17,6 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
-typedef void (*RenderPassVarParseFunction)(const nlohmann::json&, void*);
 template <typename A1, typename A2, typename A3>
 void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator, RenderGraph* graph) {
   auto& r = *graph;

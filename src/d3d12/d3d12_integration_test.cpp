@@ -79,7 +79,7 @@ auto GetTestJson() {
         }
       ],
       "pass_vars": {
-        "clear_color": [0, 1, 0, 1]
+        "clear_color": [1, 0, 0, 1]
       },
       "prepass_barrier": [
         {
@@ -157,22 +157,33 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   }
   command_list->ResourceBarrier(barrier_num, barriers);
 }
-typedef void (*RenderPassFunction)(D3d12CommandList*, const void*, const D3D12_CPU_DESCRIPTOR_HANDLE*);
-void ClearRtv(D3d12CommandList* command_list, const void* pass_vars, const D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {
-  command_list->ClearRenderTargetView(*rtv, static_cast<const FLOAT*>(pass_vars), 0, nullptr);
+template <typename A>
+auto GetRenderPassVarSizeMap(A* allocator) {
+  HashMap<uint32_t, A> render_pass_var_size(allocator);
+  render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4);
+  render_pass_var_size.Insert(SID("clear uav"), sizeof(UINT) * 4);
+  return render_pass_var_size;
+}
+using RenderPassFunction = void (*)(D3d12CommandList*, const void*, const D3D12_GPU_DESCRIPTOR_HANDLE*, const D3D12_CPU_DESCRIPTOR_HANDLE*, ID3D12Resource**);
+void ClearRtv(D3d12CommandList* command_list, const void* pass_vars, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
+  command_list->ClearRenderTargetView(*cpu_handles, static_cast<const FLOAT*>(pass_vars), 0, nullptr);
 }
 void ParsePassParamClearRtv(const nlohmann::json& j, void* dst) {
   auto src_color = j.at("clear_color");
-  auto dst_color = reinterpret_cast<FLOAT*>(dst);
+  auto dst_color = static_cast<FLOAT*>(dst);
   for (uint32_t i = 0; i < 4; i++) {
     dst_color[i] = src_color[i];
   }
 }
-void ClearUav(D3d12CommandList* command_list, const void* pass_vars, const D3D12_CPU_DESCRIPTOR_HANDLE* uav) {
-  // command_list->ClearRenderTargetView(*uav, static_cast<const FLOAT*>(pass_vars), 0, nullptr);
+void ClearUav(D3d12CommandList* command_list, const void* pass_vars, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, ID3D12Resource** resources) {
+  command_list->ClearUnorderedAccessViewUint(*gpu_handles, *cpu_handles, *resources, static_cast<const UINT*>(pass_vars), 0, nullptr);
 }
 void ParsePassParamClearUav(const nlohmann::json& j, void* dst) {
-  // TODO
+  auto src_color = j.at("clear_color");
+  auto dst_color = static_cast<UINT*>(dst);
+  for (uint32_t i = 0; i < 4; i++) {
+    dst_color[i] = src_color[i];
+  }
 }
 void* D3d12BufferAllocatorAllocCallback(size_t Size, size_t Alignment, [[maybe_unused]] void* pUserData) {
   return gSystemMemoryAllocator->Allocate(Size, Alignment);
@@ -257,14 +268,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
   HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(&allocator);
-  HashMap<uint32_t, MemoryAllocationJanitor> render_pass_var_size(&allocator);
   HashMap<RenderPassVarParseFunction, MemoryAllocationJanitor> render_pass_var_parse_functions(&allocator);
-  CHECK(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
-  CHECK(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
-  CHECK(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
-  CHECK(render_pass_functions.Insert(SID("clear uav"), ClearUav));
-  CHECK(render_pass_var_size.Insert(SID("clear uav"), sizeof(FLOAT) * 4)); // TODO
-  CHECK(render_pass_var_parse_functions.Insert(SID("clear uav"), ParsePassParamClearUav));
+  CHECK_UNARY(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
+  CHECK_UNARY(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
+  CHECK_UNARY(render_pass_functions.Insert(SID("clear uav"), ClearUav));
+  CHECK_UNARY(render_pass_var_parse_functions.Insert(SID("clear uav"), ParsePassParamClearUav));
+  auto render_pass_var_size = GetRenderPassVarSizeMap(&allocator);
   RenderGraph render_graph;
   ParseRenderGraphJson(GetTestJson(), render_pass_var_size, render_pass_var_parse_functions, &allocator, &render_graph);
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
