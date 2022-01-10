@@ -118,8 +118,8 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
         }
       } // buffers
       if (pass_var_func.Get(dst_pass.name) != nullptr && src_pass.contains("pass_vars")) {
-        dst_pass.pass_vars = allocator->Allocate(pass_var_size.Get(dst_pass.name));
-        (*pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars);
+        dst_pass.pass_vars = allocator->Allocate(*pass_var_size.Get(dst_pass.name));
+        (**pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars);
       }
       if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");

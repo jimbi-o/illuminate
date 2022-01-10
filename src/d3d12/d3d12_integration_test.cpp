@@ -246,7 +246,7 @@ auto CreateBuffer(const BufferConfig& config, D3D12MA::Allocator* allocator) {
       .Depth = config.mip_depth,
     },
   };
-  BufferAllocation buffer_allocation{};
+  BufferAllocation buffer_allocation;
   auto hr = allocator->CreateResource2(&allocation_desc, &resource_desc, config.initial_state, &config.clear_value, nullptr, &buffer_allocation.allocation, IID_PPV_ARGS(&buffer_allocation.resource));
   if (FAILED(hr)) {
     logerror("failed to create resource. {}", hr);
@@ -295,10 +295,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   CHECK_NE(buffer_allocator, nullptr);
-  auto buffer = CreateBuffer(render_graph.buffer_list[0], buffer_allocator);
-  CHECK_NE(buffer.allocation, nullptr);
-  CHECK_NE(buffer.resource, nullptr);
-  ReleaseBufferAllocation(&buffer); // TODO move
+  HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator);
+  for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
+    auto buffer = CreateBuffer(render_graph.buffer_list[i], buffer_allocator);
+    CHECK_NE(buffer.allocation, nullptr);
+    CHECK_NE(buffer.resource, nullptr);
+    CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
+  }
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
@@ -326,7 +329,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       auto resource = swapchain.GetResource(); // TODO
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, &resource);
       auto rtv = swapchain.GetRtvHandle(); // TODO
-      (*render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, &rtv);
+      (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, &rtv);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, &resource);
       used_command_queue[render_pass.command_queue_index] = true;
       command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO
@@ -338,6 +341,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
 #endif
   command_queue_signals.WaitAll(device.Get());
   swapchain.Term();
+  for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
+    ReleaseBufferAllocation(buffer_list.Get(render_graph.buffer_list[i].name));
+  }
   buffer_allocator->Release();
   command_queue_signals.Term();
   command_list_set.Term();

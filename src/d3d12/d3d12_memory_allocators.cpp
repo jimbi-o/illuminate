@@ -147,3 +147,22 @@ TEST_CASE("MemoryAllocationJanitor") { // NOLINT
   CHECK_EQ(allocator.GetOffset(), prev_marker);
   CHECK_EQ(*v0, 1);
 }
+TEST_CASE("array allocation") { // NOLINT
+  using namespace illuminate; // NOLINT
+  const uint32_t size_in_byte = 4096;
+  std::byte buffer[size_in_byte]{};
+  StackAllocator allocator(buffer, size_in_byte);
+  MemoryAllocationJanitor janitor(&allocator);
+  auto arr1 = AllocateArray<uint64_t>(&janitor, 100);
+  auto arr2 = AllocateArray<uint64_t*>(&janitor, 100);
+  for (uint32_t i = 0; i < 100; i++) {
+    arr1[i] = 100 + i;
+    arr2[i] = Allocate<uint64_t>(&janitor);
+    (*arr2[i]) = 200 + i;
+  }
+  for (uint32_t i = 0; i < 100; i++) {
+    CAPTURE(i);
+    CHECK_EQ(arr1[i], 100 + i);
+    CHECK_EQ((*arr2[i]), 200 + i);
+  }
+}

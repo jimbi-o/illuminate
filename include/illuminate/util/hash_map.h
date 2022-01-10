@@ -16,10 +16,11 @@ class HashMap {
     }
   }
   virtual ~HashMap() {}
-  const T& Get(const StrHash key) const { return *table_[key % table_size_]; }
-  T& Get(const StrHash key) { return *table_[key % table_size_]; }
+  constexpr const uint32_t GetIndex(const StrHash key) const { return key % table_size_; }
+  const T* Get(const StrHash key) const { return table_[GetIndex(key)]; }
+  T* Get(const StrHash key) { return table_[GetIndex(key)]; }
   bool Insert(const StrHash key, T&& val) {
-    auto index = key % table_size_;
+    auto index = GetIndex(key);
     if (table_[index] != nullptr) return false;
     table_[index] = Allocate<T>(allocator_);
     (*table_[index]) = std::move(val);
