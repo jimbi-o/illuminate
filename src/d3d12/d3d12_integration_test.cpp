@@ -1,5 +1,6 @@
 #include "d3d12_header_common.h"
 #include "illuminate/util/hash_map.h"
+#include "d3d12_render_graph.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
 ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags) {
@@ -87,6 +88,37 @@ class DescriptorCpu {
   uint32_t handle_increment_size_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
   uint64_t heap_start_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
 };
+bool CreateView(const ViewType view_type, const BufferConfig& config, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* handle) {
+  // TODO
+  switch (view_type) {
+    case ViewType::kCbv: {
+      assert(false);
+      return true;
+    }
+    case ViewType::kSrv: {
+      assert(false);
+      return true;
+    }
+    case ViewType::kUav: {
+      assert(false);
+      return true;
+    }
+    case ViewType::kSampler: {
+      assert(false);
+      return false;
+    }
+    case ViewType::kRtv: {
+      assert(false);
+      return true;
+    }
+    case ViewType::kDsv: {
+      assert(false);
+      return true;
+    }
+  }
+  assert(false && "CreateView invalid view type");
+  return false;
+}
 }
 #include "D3D12MemAlloc.h"
 #include "doctest/doctest.h"
@@ -95,7 +127,6 @@ class DescriptorCpu {
 #include "d3d12_command_queue.h"
 #include "d3d12_device.h"
 #include "d3d12_dxgi_core.h"
-#include "d3d12_render_graph.h"
 #include "d3d12_render_graph_json_parser.h"
 #include "d3d12_swapchain.h"
 #include "d3d12_win32_window.h"
@@ -403,8 +434,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
     for (uint32_t j = 0; j < render_graph.buffer_list[i].descriptor_type_num; j++) {
       CAPTURE(j);
-      CHECK_NE(descriptor_cpu.GetHandle(render_graph.buffer_list[i].name, render_graph.buffer_list[i].descriptor_type[j]), nullptr);
-      // TODO create view
+      auto cpu_handle = descriptor_cpu.GetHandle(render_graph.buffer_list[i].name, render_graph.buffer_list[i].descriptor_type[j]);
+      CHECK_NE(cpu_handle, nullptr);
+      CHECK_UNARY(CreateView(render_graph.buffer_list[i].descriptor_type[j], render_graph.buffer_list[i], buffer.resource, cpu_handle));
     }
   }
   Swapchain swapchain;
