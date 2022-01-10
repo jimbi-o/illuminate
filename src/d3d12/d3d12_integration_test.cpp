@@ -52,7 +52,7 @@ class DescriptorCpu {
       }
     }
   }
-  constexpr const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const ViewType type, const StrHash& name) const {
+  constexpr const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const StrHash& name, const ViewType type) const {
     auto index = GetViewTypeIndex(type);
     auto ptr = handles_[index].Get(name);
     if (ptr != nullptr) { return ptr; }
