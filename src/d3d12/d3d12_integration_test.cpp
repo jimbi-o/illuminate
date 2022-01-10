@@ -1,4 +1,23 @@
+#include "d3d12_header_common.h"
 #include "d3d12_src_common.h"
+namespace illuminate {
+ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags) {
+  D3D12_DESCRIPTOR_HEAP_DESC descriptor_heap_desc = {
+    .Type = type,
+    .NumDescriptors = descriptor_num,
+    .Flags = flags,
+    .NodeMask = 0,
+  };
+  ID3D12DescriptorHeap* descriptor_heap{nullptr};
+  auto hr = device->CreateDescriptorHeap(&descriptor_heap_desc, IID_PPV_ARGS(&descriptor_heap));
+  if (FAILED(hr)) {
+    logerror("CreateDescriptorHeap failed. {} {} {} {}", hr, type, descriptor_num, flags);
+    assert(false && "CreateDescriptorHeap failed");
+    return nullptr;
+  }
+  return descriptor_heap;
+}
+}
 #include "D3D12MemAlloc.h"
 #include "doctest/doctest.h"
 #include <nlohmann/json.hpp>
