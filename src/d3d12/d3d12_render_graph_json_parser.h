@@ -12,6 +12,9 @@ inline auto GetStringView(const nlohmann::json& j, const char* const name) {
 inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
   return CalcStrHash(GetStringView(j, name).data());
 }
+inline auto GetNum(const nlohmann::json& j, const char* const name, const uint32_t default_val) {
+  return j.contains(name) ? j.at(name).get<uint32_t>() : default_val;
+}
 uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32_t num, StrHash* list);
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
@@ -135,6 +138,15 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       } // barriers
     } // pass
   } // pass_list
+  if (j.contains("descriptor_handle_num_per_view_type_or_sampler")) {
+    auto& list = j.at("descriptor_handle_num_per_view_type_or_sampler");
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kCbv)] = GetNum(list, "cbv", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kSrv)] = GetNum(list, "srv", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kUav)] = GetNum(list, "uav", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kSampler)] = GetNum(list, "sampler", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kRtv)] = GetNum(list, "rtv", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kDsv)] = GetNum(list, "dsv", 0);
+  }
 }
 }
 #endif

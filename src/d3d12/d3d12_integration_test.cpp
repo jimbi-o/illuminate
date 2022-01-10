@@ -1,4 +1,5 @@
 #include "d3d12_header_common.h"
+#include "illuminate/util/hash_map.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
 ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags) {
@@ -17,11 +18,78 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D1
   }
   return descriptor_heap;
 }
+template <typename A>
+class DescriptorCpu {
+ public:
+  bool Init(D3d12Device* const device, const uint32_t* descriptor_handle_num_per_view_type_or_sampler, A* allocator) {
+    for (uint32_t i = 0; i < kViewTypeNum; i++) {
+      handles_[i].SetAllocator(allocator);
+      total_handle_num_[GetViewTypeIndex(static_cast<ViewType>(i))] += descriptor_handle_num_per_view_type_or_sampler[i];
+    }
+    for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
+      if (total_handle_num_[i] == 0) { continue; }
+      const auto type = static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(i);
+      handle_increment_size_[i] = device->GetDescriptorHandleIncrementSize(type);
+      descriptor_heap_[i] = CreateDescriptorHeap(device, type, total_handle_num_[i], D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+      if (descriptor_heap_[i] == nullptr) {
+        assert(false && "CreateDescriptorHeap failed");
+        for (uint32_t j = 0; j < i; j++) {
+          descriptor_heap_[j]->Release();
+          descriptor_heap_[j] = nullptr;
+        }
+        return false;
+      }
+      heap_start_[i] = descriptor_heap_[i]->GetCPUDescriptorHandleForHeapStart().ptr;
+      handle_num_[i] = 0;
+    }
+    return true;
+  }
+  void Term() {
+    for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
+      if (descriptor_heap_[i]) {
+        auto refval = descriptor_heap_[i]->Release();
+        assert(refval == 0);
+      }
+    }
+  }
+  constexpr const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const ViewType type, const StrHash& name) const {
+    auto index = GetViewTypeIndex(type);
+    auto ptr = handles_[index].Get(name);
+    if (ptr != nullptr) { return ptr; }
+    assert(handle_num_[type] <= total_handle_num_[type] && "handle num exceeded handle pool size");
+    D3D12_CPU_DESCRIPTOR_HANDLE handle{};
+    handle.ptr = heap_start_[type] + handle_num_[type] * handle_increment_size_[type];
+    if (!handles_[index].Insert(name, std::move(handle))) {
+      assert(false && "failed to insert handle to map, increase map table size");
+      return nullptr;
+    }
+    handle_num_[type]++;
+    return handles_[index].Get(name);
+  }
+ private:
+  static constexpr auto GetViewTypeIndex(const ViewType& type) {
+    switch (type) {
+      case ViewType::kCbv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+      case ViewType::kSrv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+      case ViewType::kUav: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+      case ViewType::kSampler: { return D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; }
+      case ViewType::kRtv: { return D3D12_DESCRIPTOR_HEAP_TYPE_RTV; }
+      case ViewType::kDsv: { return D3D12_DESCRIPTOR_HEAP_TYPE_DSV; }
+    }
+    assert(false && "invalid ViewType");
+    return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+  }
+  HashMap<D3D12_CPU_DESCRIPTOR_HANDLE, A> handles_[kViewTypeNum];
+  ID3D12DescriptorHeap* descriptor_heap_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
+  uint32_t total_handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
+  uint32_t handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
+  uint32_t handle_increment_size_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
+  uint64_t heap_start_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
+};
 }
 #include "D3D12MemAlloc.h"
 #include "doctest/doctest.h"
 #include <nlohmann/json.hpp>
-#include "illuminate/util/hash_map.h"
 #include "d3d12_command_list.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_device.h"
@@ -144,7 +212,15 @@ auto GetTestJson() {
         }
       ]
     }
-  ]
+  ],
+  "descriptor_handle_num_per_view_type_or_sampler": {
+    "cbv": 0,
+    "srv": 1,
+    "uav": 1,
+    "sampler": 0,
+    "rtv": 1,
+    "dsv": 0
+  }
 }
 )"_json;
 }
@@ -321,6 +397,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     CHECK_NE(buffer.resource, nullptr);
     CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
   }
+  DescriptorCpu<MemoryAllocationJanitor> descriptor_cpu;
+  CHECK_UNARY(descriptor_cpu.Init(device.Get(), render_graph.descriptor_handle_num_per_view_type_or_sampler, &allocator));
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
@@ -360,6 +438,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
 #endif
   command_queue_signals.WaitAll(device.Get());
   swapchain.Term();
+  descriptor_cpu.Term();
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
     ReleaseBufferAllocation(buffer_list.Get(render_graph.buffer_list[i].name));
   }

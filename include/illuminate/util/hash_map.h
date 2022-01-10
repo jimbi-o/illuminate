@@ -6,6 +6,7 @@ template <typename T, typename A>
 class HashMap {
  public:
   static const uint32_t kDefaultTableSize = 32;
+  HashMap() {}
   HashMap(A* allocator, const uint32_t table_size = kDefaultTableSize)
       : allocator_(allocator)
       , table_size_(table_size)
@@ -16,6 +17,14 @@ class HashMap {
     }
   }
   virtual ~HashMap() {}
+  void SetAllocator(A* allocator, const uint32_t table_size = kDefaultTableSize) {
+    allocator_ = allocator;
+    table_size_ = table_size;
+    table_ = AllocateArray<T*>(allocator_, table_size_);
+    for (uint32_t i = 0; i < table_size_; i++) {
+      table_[i] = nullptr;
+    }
+  }
   constexpr const uint32_t GetIndex(const StrHash key) const { return key % table_size_; }
   const T* Get(const StrHash key) const { return table_[GetIndex(key)]; }
   T* Get(const StrHash key) { return table_[GetIndex(key)]; }
@@ -27,9 +36,9 @@ class HashMap {
     return true;
   }
  private:
-  A* allocator_;
-  uint32_t table_size_;
-  T** table_;
+  A* allocator_{nullptr};
+  uint32_t table_size_{0};
+  T** table_{nullptr};
 };
 }
 #endif

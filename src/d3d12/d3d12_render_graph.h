@@ -64,6 +64,7 @@ struct RenderGraph {
   RenderPass* render_pass_list{nullptr};
   uint32_t buffer_num{0};
   BufferConfig* buffer_list{nullptr};
+  uint32_t descriptor_handle_num_per_view_type_or_sampler[kViewTypeNum]{};
 };
 }
 #endif
