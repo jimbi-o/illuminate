@@ -138,12 +138,12 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->heap_type = GetHeapType(j, "heap_type");
   config->dimension = GetDimension(j, "dimension");
   config->width = j.at("width");
-  config->height = j.contains("height") ? j.at("height").get<uint32_t>() : 1;
-  config->depth_or_array_size = j.contains("depth_or_array_size") ? j.at("depth_or_array_size").get<uint16_t>() : 1;
-  config->miplevels = j.contains("miplevels") ? j.at("miplevels").get<uint16_t>() : 1;
+  config->height = GetNum(j, "height", 1);
+  config->depth_or_array_size = GetVal<uint16_t>(j, "depth_or_array_size", 1);
+  config->miplevels = GetVal<uint16_t>(j, "miplevels", 1);
   config->format = GetDxgiFormat(j, "format");
-  config->sample_count = j.contains("sample_count") ? j.at("sample_count").get<uint32_t>() : 1;
-  config->sample_quality = j.contains("sample_quality") ? j.at("sample_quality").get<uint32_t>() : 0;
+  config->sample_count = GetNum(j, "sample_count", 1);
+  config->sample_quality = GetNum(j, "sample_quality", 0);
   config->layout = GetTextureLayout(j, "layout");
   if (config->dimension == D3D12_RESOURCE_DIMENSION_BUFFER && config->layout != D3D12_TEXTURE_LAYOUT_ROW_MAJOR) {
     config->layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -156,9 +156,9 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
       config->flags |= GetD3d12ResourceFlag(flags[i]);
     }
   }
-  config->mip_width = j.contains("mip_width") ? j.at("mip_width").get<uint32_t>() : 0;
-  config->mip_height = j.contains("mip_height") ? j.at("mip_height").get<uint32_t>() : 0;
-  config->mip_depth = j.contains("mip_depth") ? j.at("mip_depth").get<uint32_t>() : 0;
+  config->mip_width = GetNum(j, "mip_width", 0);
+  config->mip_height = GetNum(j, "mip_height", 0);
+  config->mip_depth = GetNum(j, "mip_depth", 0);
   config->initial_state = GetD3d12ResourceState(j, "initial_state");
   config->clear_value.Format = config->format;
   if (config->flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {

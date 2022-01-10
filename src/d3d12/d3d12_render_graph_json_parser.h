@@ -15,6 +15,10 @@ inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
 inline auto GetNum(const nlohmann::json& j, const char* const name, const uint32_t default_val) {
   return j.contains(name) ? j.at(name).get<uint32_t>() : default_val;
 }
+template <typename T>
+inline auto GetVal(const nlohmann::json& j, const char* const name, const T& default_val) {
+  return j.contains(name) ? j.at(name).get<T>() : default_val;
+}
 uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32_t num, StrHash* list);
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
@@ -64,9 +68,9 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
   }
   {
     auto& allocators = j.at("command_allocator");
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = allocators.contains("direct") ? allocators.at("direct").get<uint32_t>() : 0;
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = allocators.contains("compute") ? allocators.at("compute").get<uint32_t>() : 0;
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = allocators.contains("copy") ? allocators.at("copy").get<uint32_t>() : 0;
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = GetNum(allocators, "direct", 0);
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = GetNum(allocators, "compute", 0);
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = GetNum(allocators, "copy", 0);
   }
   {
     auto& swapchain = j.at("swapchain");
