@@ -30,10 +30,15 @@ class HashMap {
   T* Get(const StrHash key) { return table_[GetIndex(key)]; }
   bool Insert(const StrHash key, T&& val) {
     auto index = GetIndex(key);
-    if (table_[index] != nullptr) return false;
+    if (table_[index] != nullptr) { return false; }
     table_[index] = Allocate<T>(allocator_);
     (*table_[index]) = std::move(val);
     return true;
+  }
+  void ForceInsert(const StrHash key, T&& val) {
+    if (Insert(key, std::move(val))) { return; }
+    auto index = GetIndex(key);
+    (*table_[index]) = std::move(val);
   }
  private:
   A* allocator_{nullptr};

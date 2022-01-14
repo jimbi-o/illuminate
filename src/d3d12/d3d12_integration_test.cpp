@@ -509,7 +509,7 @@ void ParsePassParamClearRtv(const nlohmann::json& j, void* dst) {
   }
 }
 void ClearUav(D3d12CommandList* command_list, const void* pass_vars, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, ID3D12Resource** resources) {
-  command_list->ClearUnorderedAccessViewUint(*gpu_handles, *cpu_handles, *resources, static_cast<const UINT*>(pass_vars), 0, nullptr);
+  // command_list->ClearUnorderedAccessViewUint(*gpu_handles, *cpu_handles, *resources, static_cast<const UINT*>(pass_vars), 0, nullptr); // TODO comment-in
 }
 void ParsePassParamClearUav(const nlohmann::json& j, void* dst) {
   auto src_color = j.at("clear_color");
@@ -596,6 +596,16 @@ auto CreateBuffer(const BufferConfig& config, D3D12MA::Allocator* allocator) {
   }
   return buffer_allocation;
 }
+void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list) {
+  auto allocator = GetTemporalMemoryAllocator();
+  auto resource_list = AllocateArray<ID3D12Resource*>(&allocator, barrier_num);
+  for (uint32_t i = 0; i < barrier_num; i++) {
+    auto& buffer_name = barrier_config[i].buffer_name;
+    auto buffer_allocation = buffer_list.Get(buffer_name);
+    resource_list[i] = (buffer_allocation == nullptr) ? *extra_buffer_list.Get(buffer_name) : buffer_allocation->resource;
+  }
+  ExecuteBarrier(command_list, barrier_num, barrier_config, resource_list);
+}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
@@ -647,6 +657,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
+  HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
+  CHECK_UNARY(extra_buffer_list.Insert(SID("swapchain"), nullptr)); // because MemoryAllocationJanitor is a stack allocator, all allocations (Insert in this case) must be done before frame loop starts.
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
   for (uint32_t i = 0; i < render_graph.frame_buffer_num; i++) {
     frame_signals[i] = AllocateArray<uint64_t>(&allocator, render_graph.command_queue_num);
@@ -655,7 +667,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
   }
   uint32_t tmp_memory_max_offset = 0U;
-#if 0
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     auto used_command_queue = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
@@ -666,14 +677,15 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
+    extra_buffer_list.ForceInsert(SID("swapchain"), swapchain.GetResource());
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
       auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
+      ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
       auto resource = swapchain.GetResource(); // TODO
-      ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, &resource);
       auto rtv = swapchain.GetRtvHandle(); // TODO
-      (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, &rtv);
-      ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, &resource);
+      (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, nullptr/*TODO*/, &rtv, &resource);
+      ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
       used_command_queue[render_pass.command_queue_index] = true;
       command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO
       frame_signals[frame_index][render_pass.command_queue_index] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
@@ -681,7 +693,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     swapchain.Present();
     tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
   }
-#endif
   command_queue_signals.WaitAll(device.Get());
   swapchain.Term();
   descriptor_cpu.Term();
