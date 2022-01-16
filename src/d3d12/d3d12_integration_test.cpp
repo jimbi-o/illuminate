@@ -691,8 +691,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
           auto buffer_allocation = buffer_list.Get(buffer.buffer_name);
           resource_list[b] = (buffer_allocation != nullptr) ? buffer_allocation->resource : *extra_buffer_list.Get(buffer.buffer_name);
           cpu_handle_list[b] = (buffer.buffer_name != SID("swapchain")) ? * descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state) : swapchain.GetRtvHandle();
+          tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
         }
         (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, nullptr/*TODO*/, cpu_handle_list, resource_list);
+        tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
       }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
       used_command_queue[render_pass.command_queue_index] = true;
