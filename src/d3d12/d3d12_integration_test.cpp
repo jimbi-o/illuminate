@@ -682,9 +682,17 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       const auto& render_pass = render_graph.render_pass_list[k];
       auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
-      auto resource = swapchain.GetResource(); // TODO
-      auto rtv = swapchain.GetRtvHandle(); // TODO
-      (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, nullptr/*TODO*/, &rtv, &resource);
+      {
+        auto render_pass_allocator = GetTemporalMemoryAllocator();
+        auto resource_list = AllocateArray<ID3D12Resource*>(&render_pass_allocator, render_pass.buffer_num);
+        for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
+          auto& buffer_name = render_pass.buffers[b].buffer_name;
+          auto buffer_allocation = buffer_list.Get(buffer_name);
+          resource_list[b] = (buffer_allocation != nullptr) ? buffer_allocation->resource : *extra_buffer_list.Get(buffer_name);
+        }
+        auto rtv = swapchain.GetRtvHandle(); // TODO
+        (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, nullptr/*TODO*/, &rtv, resource_list);
+      }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
       used_command_queue[render_pass.command_queue_index] = true;
       command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO
