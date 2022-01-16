@@ -690,7 +690,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
           auto& buffer = render_pass.buffers[b];
           auto buffer_allocation = buffer_list.Get(buffer.buffer_name);
           resource_list[b] = (buffer_allocation != nullptr) ? buffer_allocation->resource : *extra_buffer_list.Get(buffer.buffer_name);
-          cpu_handle_list[b] = (buffer.buffer_name != SID("swapchain")) ? * descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state) : swapchain.GetRtvHandle();
+          cpu_handle_list[b] = (buffer.buffer_name != SID("swapchain")) ? *descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state) : swapchain.GetRtvHandle();
           tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
         }
         (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, nullptr/*TODO*/, cpu_handle_list, resource_list);
