@@ -54,13 +54,13 @@ class DescriptorCpu {
     }
   }
   const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const StrHash& name, const ViewType type) {
-    auto index = GetViewTypeIndex(type);
-    auto ptr = handles_[index].Get(name);
+    auto view_type_index = static_cast<uint32_t>(type);
+    auto ptr = handles_[view_type_index].Get(name);
     if (ptr != nullptr) { return ptr; }
+    auto index = GetViewTypeIndex(type);
     assert(handle_num_[index] <= total_handle_num_[index] && "handle num exceeded handle pool size");
     D3D12_CPU_DESCRIPTOR_HANDLE handle{};
     handle.ptr = heap_start_[index] + handle_num_[index] * handle_increment_size_[index];
-    auto view_type_index = static_cast<uint32_t>(type);
     if (!handles_[view_type_index].Insert(name, std::move(handle))) {
       assert(false && "failed to insert handle to map, increase map table size");
       return nullptr;
@@ -685,13 +685,14 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       {
         auto render_pass_allocator = GetTemporalMemoryAllocator();
         auto resource_list = AllocateArray<ID3D12Resource*>(&render_pass_allocator, render_pass.buffer_num);
+        auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&render_pass_allocator, render_pass.buffer_num);
         for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
-          auto& buffer_name = render_pass.buffers[b].buffer_name;
-          auto buffer_allocation = buffer_list.Get(buffer_name);
-          resource_list[b] = (buffer_allocation != nullptr) ? buffer_allocation->resource : *extra_buffer_list.Get(buffer_name);
+          auto& buffer = render_pass.buffers[b];
+          auto buffer_allocation = buffer_list.Get(buffer.buffer_name);
+          resource_list[b] = (buffer_allocation != nullptr) ? buffer_allocation->resource : *extra_buffer_list.Get(buffer.buffer_name);
+          cpu_handle_list[b] = (buffer.buffer_name != SID("swapchain")) ? * descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state) : swapchain.GetRtvHandle();
         }
-        auto rtv = swapchain.GetRtvHandle(); // TODO
-        (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, nullptr/*TODO*/, &rtv, resource_list);
+        (**render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, nullptr/*TODO*/, cpu_handle_list, resource_list);
       }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
       used_command_queue[render_pass.command_queue_index] = true;

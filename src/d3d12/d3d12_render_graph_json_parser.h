@@ -128,7 +128,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
           auto& dst_buffer = dst_pass.buffers[buffer_index];
           auto& src_buffer = buffers[buffer_index];
           dst_buffer.buffer_name = CalcEntityStrHash(src_buffer, "name");
-          dst_buffer.state = GetD3d12ResourceState(src_buffer, "state");
+          dst_buffer.state = GetViewType(GetStringView(src_buffer, "state"));
         }
       } // buffers
       if (pass_var_func.Get(dst_pass.name) != nullptr && src_pass.contains("pass_vars")) {

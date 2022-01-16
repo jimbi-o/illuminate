@@ -27,7 +27,7 @@ struct BufferConfig {
 };
 struct RenderPassBuffer {
   StrHash buffer_name{};
-  D3D12_RESOURCE_STATES state{};
+  ViewType state{};
 };
 struct Barrier {
   StrHash buffer_name{};
