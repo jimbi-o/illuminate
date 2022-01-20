@@ -826,19 +826,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     gpu_descriptor_offset_end[frame_index] = descriptor_gpu.GetOffsetView();
     {
       // check handle num is sufficient for this frame
-      uint32_t view_num = 0;
+      auto view_num = 0;
       for (uint32_t j = 0; j < render_graph.render_pass_num; j++) {
-        for (uint32_t k = 0; k < render_graph.render_pass_list[j].buffer_num; k++) {
-          switch (render_graph.render_pass_list[j].buffer_list[k].state) {
-            case ViewType::kCbv:
-            case ViewType::kSrv:
-            case ViewType::kUav:
-              view_num++;
-              break;
-            default:
-              break;
-          }
-        }
+        view_num += DescriptorGpu::GetViewNum(render_graph.render_pass_list[j].buffer_num, render_graph.render_pass_list[j].buffer_list);
       }
       if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
         CHECK_EQ(gpu_descriptor_offset_end[frame_index] - gpu_descriptor_offset_start[frame_index], view_num);
