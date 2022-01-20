@@ -104,6 +104,23 @@ class DescriptorGpu {
     descriptor_heap.heap_start_gpu = descriptor_heap.descriptor_heap->GetGPUDescriptorHandleForHeapStart().ptr;
     return descriptor_heap;
   }
+  static auto GetViewNum(const uint32_t buffer_num, const RenderPassBuffer* buffer_list) {
+    uint32_t view_num = 0;
+    for (uint32_t i = 0; i < buffer_num; i++) {
+      switch (buffer_list[i].state) {
+        case ViewType::kCbv:
+        case ViewType::kSrv:
+        case ViewType::kUav: {
+          view_num++;
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+    }
+    return view_num;
+  }
   static const uint32_t kHandleNumCbvSrvUav = 1024;
   static const uint32_t kHandleNumSampler = 128;
   bool Init(D3d12Device* device) {
@@ -132,42 +149,34 @@ class DescriptorGpu {
   }
   template <typename AllocatorCpu>
   auto CopyDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffer_list, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
+    const auto view_num = GetViewNum(buffer_num, buffer_list);
+    if (view_num == 0) {
+      return D3D12_GPU_DESCRIPTOR_HANDLE{};
+    }
     auto tmp_allocator = GetTemporalMemoryAllocator();
-    auto buffer_is_view = AllocateArray<bool>(&tmp_allocator, buffer_num);
-    uint32_t view_num = 0;
+    auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, view_num);
+    auto handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, view_num);
+    uint32_t view_index = 0;
     for (uint32_t i = 0; i < buffer_num; i++) {
       switch (buffer_list[i].state) {
         case ViewType::kCbv:
         case ViewType::kSrv:
         case ViewType::kUav: {
-          buffer_is_view[i] = true;
-          view_num++;
-          break;
+          auto& buffer = buffer_list[i];
+          auto handle = descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state);
+          if (handle == nullptr) { continue; }
+          if (i > 0 && handles[i - 1].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle->ptr) {
+            handle_num[view_index]++;
+            continue;
+          }
+          handle_num[view_index] = 1;
+          handles[view_index].ptr = handle->ptr;
+          view_index++;
         }
         default: {
-          buffer_is_view[i] = false;
           break;
         }
       }
-    }
-    if (view_num == 0) {
-      return D3D12_GPU_DESCRIPTOR_HANDLE{};
-    }
-    auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, view_num);
-    auto handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, view_num);
-    uint32_t view_index = 0;
-    for (uint32_t i = 0; i < buffer_num; i++) {
-      if (!buffer_is_view[i]) { continue; }
-      auto& buffer = buffer_list[i];
-      auto handle = descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state);
-      if (handle == nullptr) { continue; }
-      if (i > 0 && handles[i - 1].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle->ptr) {
-        handle_num[view_index]++;
-        continue;
-      }
-      handle_num[view_index] = 1;
-      handles[view_index].ptr = handle->ptr;
-      view_index++;
     }
     assert(view_index > 0 && "buffer view count bug");
     if (descriptor_cbv_srv_uav_.current_handle_num + view_num >= descriptor_cbv_srv_uav_.total_handle_num) {
