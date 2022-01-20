@@ -191,6 +191,8 @@ class DescriptorGpu {
     descriptor_cbv_srv_uav_.current_handle_num += view_num;
     return gpu_handle;
   }
+  auto GetOffsetView() const { return descriptor_cbv_srv_uav_.current_handle_num; }
+  auto GetMaxOffsetView() const { return descriptor_cbv_srv_uav_.total_handle_num; }
  private:
   struct DescriptorHeapSetGpu {
     uint32_t handle_increment_size{};
@@ -788,11 +790,15 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
   extra_buffer_list.Reserve(SID("swapchain")); // because MemoryAllocationJanitor is a stack allocator, all allocations must be done before frame loop starts.
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
+  auto gpu_descriptor_offset_start = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
+  auto gpu_descriptor_offset_end = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
   for (uint32_t i = 0; i < render_graph.frame_buffer_num; i++) {
     frame_signals[i] = AllocateArray<uint64_t>(&allocator, render_graph.command_queue_num);
     for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
       frame_signals[i][j] = 0;
     }
+    gpu_descriptor_offset_start[i] = ~0u;
+    gpu_descriptor_offset_end[i] = ~0u;
   }
   uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
@@ -805,9 +811,35 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
-    // TODO check gpu handle num
     extra_buffer_list.Replace(SID("swapchain"), swapchain.GetResource());
+    gpu_descriptor_offset_start[frame_index] = descriptor_gpu.GetOffsetView();
     auto gpu_handle_list = PrepareGpuHandleList(device.Get(), render_graph.render_pass_num, render_graph.render_pass_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+    gpu_descriptor_offset_end[frame_index] = descriptor_gpu.GetOffsetView();
+    {
+      // check handle num is sufficient for this frame
+      uint32_t view_num = 0;
+      for (uint32_t j = 0; j < render_graph.render_pass_num; j++) {
+        for (uint32_t k = 0; k < render_graph.render_pass_list[j].buffer_num; k++) {
+          switch (render_graph.render_pass_list[j].buffers[k].state) {
+            case ViewType::kCbv:
+            case ViewType::kSrv:
+            case ViewType::kUav:
+              view_num++;
+              break;
+            default:
+              break;
+          }
+        }
+      }
+      if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
+        CHECK_EQ(gpu_descriptor_offset_end[frame_index] - gpu_descriptor_offset_start[frame_index], view_num);
+      } else {
+        CHECK_EQ(descriptor_gpu.GetMaxOffsetView() - gpu_descriptor_offset_end[frame_index] + gpu_descriptor_offset_start[frame_index], view_num);
+      }
+    }
+    if (i > 0) {
+      // TODO check handle in fly is not overwritten
+    }
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
       auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
