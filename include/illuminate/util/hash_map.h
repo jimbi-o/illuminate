@@ -35,10 +35,11 @@ class HashMap {
     (*table_[index]) = std::move(val);
     return true;
   }
-  void ForceInsert(const StrHash key, T&& val) {
-    if (Insert(key, std::move(val))) { return; }
-    auto index = GetIndex(key);
-    (*table_[index]) = std::move(val);
+  void Reserve(const StrHash key) {
+    table_[GetIndex(key)] = Allocate<T>(allocator_);
+  }
+  void Replace(const StrHash key, T&& val) {
+    *(table_[GetIndex(key)]) = std::move(val);
   }
  private:
   A* allocator_{nullptr};

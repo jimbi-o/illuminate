@@ -94,7 +94,7 @@ class DescriptorCpu {
 };
 class DescriptorGpu {
  public:
-  static auto InitDescriptorHeapSetGpu(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint64_t handle_num) {
+  static auto InitDescriptorHeapSetGpu(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t handle_num) {
     DescriptorHeapSetGpu descriptor_heap;
     descriptor_heap.total_handle_num = handle_num;
     descriptor_heap.current_handle_num = 0;
@@ -786,7 +786,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
-  CHECK_UNARY(extra_buffer_list.Insert(SID("swapchain"), nullptr)); // because MemoryAllocationJanitor is a stack allocator, all allocations (Insert in this case) must be done before frame loop starts.
+  extra_buffer_list.Reserve(SID("swapchain")); // because MemoryAllocationJanitor is a stack allocator, all allocations must be done before frame loop starts.
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
   for (uint32_t i = 0; i < render_graph.frame_buffer_num; i++) {
     frame_signals[i] = AllocateArray<uint64_t>(&allocator, render_graph.command_queue_num);
@@ -805,7 +805,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
-    extra_buffer_list.ForceInsert(SID("swapchain"), swapchain.GetResource());
+    // TODO check gpu handle num
+    extra_buffer_list.Replace(SID("swapchain"), swapchain.GetResource());
     auto gpu_handle_list = PrepareGpuHandleList(device.Get(), render_graph.render_pass_num, render_graph.render_pass_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
