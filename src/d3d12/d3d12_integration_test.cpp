@@ -131,12 +131,12 @@ class DescriptorGpu {
     }
   }
   template <typename AllocatorCpu>
-  auto CopyDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffers, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
+  auto CopyDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffer_list, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
     auto buffer_is_view = AllocateArray<bool>(&tmp_allocator, buffer_num);
     uint32_t view_num = 0;
     for (uint32_t i = 0; i < buffer_num; i++) {
-      switch (buffers[i].state) {
+      switch (buffer_list[i].state) {
         case ViewType::kCbv:
         case ViewType::kSrv:
         case ViewType::kUav: {
@@ -158,7 +158,7 @@ class DescriptorGpu {
     uint32_t view_index = 0;
     for (uint32_t i = 0; i < buffer_num; i++) {
       if (!buffer_is_view[i]) { continue; }
-      auto& buffer = buffers[i];
+      auto& buffer = buffer_list[i];
       auto handle = descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state);
       if (handle == nullptr) { continue; }
       if (i > 0 && handles[i - 1].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle->ptr) {
@@ -514,7 +514,7 @@ auto GetTestJson() {
     {
       "name": "clear uav",
       "command_queue": "queue_compute",
-      "buffers": [
+      "buffer_list": [
         {
           "name": "uav",
           "state": "uav"
@@ -539,7 +539,7 @@ auto GetTestJson() {
     {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
-      "buffers": [
+      "buffer_list": [
         {
           "name": "swapchain",
           "state": "rtv"
@@ -727,7 +727,7 @@ auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, c
   HashMap<D3D12_GPU_DESCRIPTOR_HANDLE, MemoryAllocationJanitor> gpu_handle_list(allocator);
   for (uint32_t i = 0; i < render_pass_num; i++) {
     auto& render_pass = render_pass_list[i];
-    if (!gpu_handle_list.Insert(render_pass.name, descriptor_gpu->CopyDescriptors(device, render_pass.buffer_num, render_pass.buffers, descriptor_cpu))) {
+    if (!gpu_handle_list.Insert(render_pass.name, descriptor_gpu->CopyDescriptors(device, render_pass.buffer_num, render_pass.buffer_list, descriptor_cpu))) {
       logerror("gpu_handle_list.Insert failed. {}", i);
       assert(false && "gpu_handle_list.Insert failed.");
     }
@@ -820,7 +820,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       uint32_t view_num = 0;
       for (uint32_t j = 0; j < render_graph.render_pass_num; j++) {
         for (uint32_t k = 0; k < render_graph.render_pass_list[j].buffer_num; k++) {
-          switch (render_graph.render_pass_list[j].buffers[k].state) {
+          switch (render_graph.render_pass_list[j].buffer_list[k].state) {
             case ViewType::kCbv:
             case ViewType::kSrv:
             case ViewType::kUav:
@@ -838,7 +838,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
     if (i > 0) {
-      // TODO check handle in fly is not overwritten
+      // TODO check handles in use is not overwritten
     }
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
@@ -849,7 +849,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         auto resource_list = AllocateArray<ID3D12Resource*>(&render_pass_allocator, render_pass.buffer_num);
         auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&render_pass_allocator, render_pass.buffer_num);
         for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
-          auto& buffer = render_pass.buffers[b];
+          auto& buffer = render_pass.buffer_list[b];
           auto buffer_allocation = buffer_list.Get(buffer.buffer_name);
           resource_list[b] = (buffer_allocation != nullptr) ? buffer_allocation->resource : *extra_buffer_list.Get(buffer.buffer_name);
           cpu_handle_list[b] = (buffer.buffer_name != SID("swapchain")) ? *descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state) : swapchain.GetRtvHandle();

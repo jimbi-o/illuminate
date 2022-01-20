@@ -40,7 +40,7 @@ struct RenderPass {
   StrHash name{};
   uint32_t command_queue_index{0};
   uint32_t buffer_num{0};
-  RenderPassBuffer* buffers{nullptr};
+  RenderPassBuffer* buffer_list{nullptr};
   void* pass_vars{nullptr};
   uint32_t prepass_barrier_num{0};
   Barrier* prepass_barrier{nullptr};

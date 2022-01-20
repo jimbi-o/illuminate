@@ -120,17 +120,17 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       auto& src_pass = render_pass_list[i];
       dst_pass.name = CalcEntityStrHash(src_pass, "name");
       dst_pass.command_queue_index = FindIndex(src_pass, "command_queue", r.command_queue_num, r.command_queue_name);
-      if (src_pass.contains("buffers")) {
-        auto& buffers = src_pass.at("buffers");
-        dst_pass.buffer_num = static_cast<uint32_t>(buffers.size());
-        dst_pass.buffers = AllocateArray<RenderPassBuffer>(allocator, dst_pass.buffer_num);
+      if (src_pass.contains("buffer_list")) {
+        auto& buffer_list = src_pass.at("buffer_list");
+        dst_pass.buffer_num = static_cast<uint32_t>(buffer_list.size());
+        dst_pass.buffer_list = AllocateArray<RenderPassBuffer>(allocator, dst_pass.buffer_num);
         for (uint32_t buffer_index = 0; buffer_index < dst_pass.buffer_num; buffer_index++) {
-          auto& dst_buffer = dst_pass.buffers[buffer_index];
-          auto& src_buffer = buffers[buffer_index];
+          auto& dst_buffer = dst_pass.buffer_list[buffer_index];
+          auto& src_buffer = buffer_list[buffer_index];
           dst_buffer.buffer_name = CalcEntityStrHash(src_buffer, "name");
           dst_buffer.state = GetViewType(GetStringView(src_buffer, "state"));
         }
-      } // buffers
+      } // buffer_list
       if (pass_var_func.Get(dst_pass.name) != nullptr && src_pass.contains("pass_vars")) {
         dst_pass.pass_vars = allocator->Allocate(*pass_var_size.Get(dst_pass.name));
         (**pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars);

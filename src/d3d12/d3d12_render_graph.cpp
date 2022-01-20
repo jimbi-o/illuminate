@@ -42,7 +42,7 @@ auto GetTestJson() {
     {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
-      "buffers": [
+      "buffer_list": [
         {
           "name": "swapchain",
           "state": "rtv"
