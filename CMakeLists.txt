@@ -60,6 +60,7 @@ set_target_properties(spdlog PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<T
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   spdlog::spdlog
   D3D12MemoryAllocator
+  "${dxc_SOURCE_DIR}/lib/x64/dxcompiler.lib"
   $<$<CONFIG:Debug>:dxguid.lib>
 )
 
@@ -96,6 +97,12 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
 )
 add_subdirectory(src)
 
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  "${dxc_SOURCE_DIR}/bin/x64/dxil.dll"
+  "${dxc_SOURCE_DIR}/bin/x64/dxcompiler.dll"
+  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/"
+)
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory
   "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"

@@ -26,4 +26,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_view_util.cpp
   d3d12_header_common.h
   d3d12_header_common.cpp
+  d3d12_shader_compiler.h
+  d3d12_shader_compiler.cpp
   )
