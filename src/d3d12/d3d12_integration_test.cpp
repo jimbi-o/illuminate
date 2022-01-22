@@ -164,6 +164,7 @@ class DescriptorGpu {
   }
   auto GetViewHandleCount() const { return descriptor_cbv_srv_uav_.current_handle_num; }
   auto GetViewHandleTotal() const { return descriptor_cbv_srv_uav_.total_handle_num; }
+  void SetDescriptorHeapsToCommandList(const uint32_t command_list_num, D3d12CommandList** command_list);
  private:
   struct DescriptorHeapSetGpu {
     uint32_t handle_increment_size{};
@@ -226,6 +227,12 @@ void DescriptorGpu::Term() {
       logerror("descriptor_sampler_ descriptor_heap reference left: {}", refval);
       assert(false && "descriptor_sampler_ descriptor_heap reference left");
     }
+  }
+}
+void DescriptorGpu::SetDescriptorHeapsToCommandList(const uint32_t command_list_num, D3d12CommandList** command_list) {
+  ID3D12DescriptorHeap* heaps[] = {descriptor_cbv_srv_uav_.descriptor_heap, descriptor_sampler_.descriptor_heap, };
+  for (uint32_t i = 0; i < command_list_num; i++) {
+    command_list[i]->SetDescriptorHeaps(2, heaps);
   }
 }
 auto GetUavDimension(const D3D12_RESOURCE_DIMENSION dimension, const uint16_t depth_or_array_size) {
@@ -649,7 +656,7 @@ void ParsePassParamClearRtv(const nlohmann::json& j, void* dst) {
   }
 }
 void ClearUav(D3d12CommandList* command_list, const void* pass_vars, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, ID3D12Resource** resources) {
-  // command_list->ClearUnorderedAccessViewUint(*gpu_handles, *cpu_handles, *resources, static_cast<const UINT*>(pass_vars), 0, nullptr); // TODO comment-in
+  command_list->ClearUnorderedAccessViewUint(*gpu_handles, *cpu_handles, *resources, static_cast<const UINT*>(pass_vars), 0, nullptr);
 }
 void ParsePassParamClearUav(const nlohmann::json& j, void* dst) {
   auto src_color = j.at("clear_color");
@@ -873,6 +880,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
       auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
+      descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
       {
         auto render_pass_allocator = GetTemporalMemoryAllocator();
