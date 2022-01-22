@@ -24,7 +24,7 @@ class DescriptorCpu {
  public:
   bool Init(D3d12Device* const device, const uint32_t* descriptor_handle_num_per_view_type_or_sampler, A* allocator) {
     for (uint32_t i = 0; i < kViewTypeNum; i++) {
-      handles_[i].SetAllocator(allocator);
+      handles_[i].SetAllocator(allocator, descriptor_handle_num_per_view_type_or_sampler[i] * kHandleMapSizeCoefficient);
       total_handle_num_[GetViewTypeIndex(static_cast<ViewType>(i))] += descriptor_handle_num_per_view_type_or_sampler[i];
     }
     for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
@@ -53,10 +53,9 @@ class DescriptorCpu {
       }
     }
   }
-  const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const StrHash& name, const ViewType type) {
+  const D3D12_CPU_DESCRIPTOR_HANDLE* CreateHandle(const StrHash& name, const ViewType type) {
     auto view_type_index = static_cast<uint32_t>(type);
-    auto ptr = handles_[view_type_index].Get(name);
-    if (ptr != nullptr) { return ptr; }
+    assert(handles_[view_type_index].Get(name) == nullptr && "increase handles_[view_type_index] map size");
     auto index = GetViewTypeIndex(type);
     assert(handle_num_[index] <= total_handle_num_[index] && "handle num exceeded handle pool size");
     D3D12_CPU_DESCRIPTOR_HANDLE handle{};
@@ -85,6 +84,7 @@ class DescriptorCpu {
     assert(false && "invalid ViewType");
     return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
   }
+  static const uint32_t kHandleMapSizeCoefficient = 8;
   HashMap<D3D12_CPU_DESCRIPTOR_HANDLE, A> handles_[kViewTypeNum];
   ID3D12DescriptorHeap* descriptor_heap_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
   uint32_t total_handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
@@ -121,7 +121,7 @@ class DescriptorGpu {
     }
     return view_num;
   }
-  static const uint32_t kHandleNumCbvSrvUav = 1024;
+  static const uint32_t kHandleNumCbvSrvUav = 32;
   static const uint32_t kHandleNumSampler = 128;
   bool Init(D3d12Device* device) {
     descriptor_cbv_srv_uav_ = InitDescriptorHeapSetGpu(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kHandleNumCbvSrvUav);
@@ -153,10 +153,16 @@ class DescriptorGpu {
     if (view_num == 0) {
       return D3D12_GPU_DESCRIPTOR_HANDLE{};
     }
+    assert(view_num <= descriptor_cbv_srv_uav_.total_handle_num);
     auto tmp_allocator = GetTemporalMemoryAllocator();
     auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, view_num);
     auto handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, view_num);
+    for (uint32_t i = 0; i < view_num; i++) {
+      handle_num[i] = 0;
+      handles[i].ptr = 0;
+    }
     uint32_t view_index = 0;
+    bool first_buffer = true;
     for (uint32_t i = 0; i < buffer_num; i++) {
       switch (buffer_list[i].state) {
         case ViewType::kCbv:
@@ -164,25 +170,31 @@ class DescriptorGpu {
         case ViewType::kUav: {
           auto& buffer = buffer_list[i];
           auto handle = descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state);
-          if (handle == nullptr) { continue; }
-          if (i > 0 && handles[i - 1].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle->ptr) {
+          if (handle == nullptr) { break; }
+          if (!first_buffer && handles[view_index].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle->ptr) {
             handle_num[view_index]++;
-            continue;
+            break;
+          }
+          if (!first_buffer) {
+            view_index++;
           }
           handle_num[view_index] = 1;
           handles[view_index].ptr = handle->ptr;
-          view_index++;
+          first_buffer = false;
+          break;
         }
         default: {
           break;
         }
       }
     }
-    assert(view_index > 0 && "buffer view count bug");
-    if (descriptor_cbv_srv_uav_.current_handle_num + view_num >= descriptor_cbv_srv_uav_.total_handle_num) {
+    assert(view_index < view_num && "buffer view count bug");
+    if (descriptor_cbv_srv_uav_.current_handle_num + view_num > descriptor_cbv_srv_uav_.total_handle_num) {
       descriptor_cbv_srv_uav_.current_handle_num = 0;
     }
     D3D12_CPU_DESCRIPTOR_HANDLE dst_handle{descriptor_cbv_srv_uav_.heap_start_cpu + descriptor_cbv_srv_uav_.current_handle_num * descriptor_cbv_srv_uav_.handle_increment_size};
+    assert(handle_num[view_index] > 0);
+    view_index++;
     if (view_index == 1) {
       assert(handle_num[0] == view_num);
       device->CopyDescriptorsSimple(view_num, dst_handle, handles[0], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -200,8 +212,8 @@ class DescriptorGpu {
     descriptor_cbv_srv_uav_.current_handle_num += view_num;
     return gpu_handle;
   }
-  auto GetOffsetView() const { return descriptor_cbv_srv_uav_.current_handle_num; }
-  auto GetMaxOffsetView() const { return descriptor_cbv_srv_uav_.total_handle_num; }
+  auto GetViewHandleCount() const { return descriptor_cbv_srv_uav_.current_handle_num; }
+  auto GetViewHandleTotal() const { return descriptor_cbv_srv_uav_.total_handle_num; }
  private:
   struct DescriptorHeapSetGpu {
     uint32_t handle_increment_size{};
@@ -734,12 +746,22 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
 }
 auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, const RenderPass* render_pass_list, const DescriptorCpu<MemoryAllocationJanitor>& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
   HashMap<D3D12_GPU_DESCRIPTOR_HANDLE, MemoryAllocationJanitor> gpu_handle_list(allocator);
+  auto total_handle_count = descriptor_gpu->GetViewHandleTotal();
+  uint32_t occupied_handle_num = 0;
   for (uint32_t i = 0; i < render_pass_num; i++) {
+    auto prev_handle_count = descriptor_gpu->GetViewHandleCount();
     auto& render_pass = render_pass_list[i];
     if (!gpu_handle_list.Insert(render_pass.name, descriptor_gpu->CopyDescriptors(device, render_pass.buffer_num, render_pass.buffer_list, descriptor_cpu))) {
       logerror("gpu_handle_list.Insert failed. {}", i);
       assert(false && "gpu_handle_list.Insert failed.");
     }
+    auto current_handle_count = descriptor_gpu->GetViewHandleCount();
+    if (prev_handle_count <= current_handle_count) {
+      occupied_handle_num += current_handle_count - prev_handle_count;
+    } else {
+      occupied_handle_num += total_handle_count - prev_handle_count + current_handle_count;
+    }
+    assert(occupied_handle_num <= total_handle_count && "increase kHandleNumCbvSrvUav");
   }
   return gpu_handle_list;
 }
@@ -778,7 +800,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   CHECK_NE(buffer_allocator, nullptr);
   DescriptorCpu<MemoryAllocationJanitor> descriptor_cpu;
   CHECK_UNARY(descriptor_cpu.Init(device.Get(), render_graph.descriptor_handle_num_per_view_type_or_sampler, &allocator));
-  HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator);
+  HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator, 256);
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
     CAPTURE(i);
     auto buffer = CreateBuffer(render_graph.buffer_list[i], buffer_allocator);
@@ -787,7 +809,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
     for (uint32_t j = 0; j < render_graph.buffer_list[i].descriptor_type_num; j++) {
       CAPTURE(j);
-      auto cpu_handle = descriptor_cpu.GetHandle(render_graph.buffer_list[i].name, render_graph.buffer_list[i].descriptor_type[j]);
+      auto cpu_handle = descriptor_cpu.CreateHandle(render_graph.buffer_list[i].name, render_graph.buffer_list[i].descriptor_type[j]);
       CHECK_NE(cpu_handle, nullptr);
       CHECK_UNARY(CreateView(device.Get(), render_graph.buffer_list[i].descriptor_type[j], render_graph.buffer_list[i], buffer.resource, cpu_handle));
     }
@@ -821,23 +843,30 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
     extra_buffer_list.Replace(SID("swapchain"), swapchain.GetResource());
-    gpu_descriptor_offset_start[frame_index] = descriptor_gpu.GetOffsetView();
-    auto gpu_handle_list = PrepareGpuHandleList(device.Get(), render_graph.render_pass_num, render_graph.render_pass_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
-    gpu_descriptor_offset_end[frame_index] = descriptor_gpu.GetOffsetView();
-    {
-      // check handle num is sufficient for this frame
-      auto view_num = 0;
-      for (uint32_t j = 0; j < render_graph.render_pass_num; j++) {
-        view_num += DescriptorGpu::GetViewNum(render_graph.render_pass_list[j].buffer_num, render_graph.render_pass_list[j].buffer_list);
-      }
-      if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
-        CHECK_EQ(gpu_descriptor_offset_end[frame_index] - gpu_descriptor_offset_start[frame_index], view_num);
-      } else {
-        CHECK_EQ(descriptor_gpu.GetMaxOffsetView() - gpu_descriptor_offset_end[frame_index] + gpu_descriptor_offset_start[frame_index], view_num);
-      }
+    gpu_descriptor_offset_start[frame_index] = descriptor_gpu.GetViewHandleCount();
+    if (gpu_descriptor_offset_start[frame_index] == descriptor_gpu.GetViewHandleTotal()) {
+      gpu_descriptor_offset_start[frame_index] = 0;
     }
+    auto gpu_handle_list = PrepareGpuHandleList(device.Get(), render_graph.render_pass_num, render_graph.render_pass_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+    gpu_descriptor_offset_end[frame_index] = descriptor_gpu.GetViewHandleCount();
     if (i > 0) {
-      // TODO check handles in use is not overwritten
+      for (uint32_t j = 0; j < render_graph.frame_buffer_num; j++) {
+        if (frame_index == j) { continue; }
+        if (gpu_descriptor_offset_start[j] == ~0u) { continue; }
+        if (gpu_descriptor_offset_start[j] <= gpu_descriptor_offset_end[j]) {
+          if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
+            assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] || gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase kHandleNumCbvSrvUav");
+            continue;
+          }
+          assert(gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && "increase kHandleNumCbvSrvUav");
+          continue;
+        }
+        if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
+          assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase kHandleNumCbvSrvUav");
+          continue;
+        }
+        assert(false  && "increase kHandleNumCbvSrvUav");
+      }
     }
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
