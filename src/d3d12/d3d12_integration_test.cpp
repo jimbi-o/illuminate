@@ -372,6 +372,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     gpu_descriptor_offset_start[i] = ~0u;
     gpu_descriptor_offset_end[i] = ~0u;
   }
+  HashMap<uint64_t, MemoryAllocationJanitor> render_pass_signal(&allocator);
+  for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
+    auto& render_pass = render_graph.render_pass_list[i];
+    if (render_pass.execute) {
+      render_pass_signal.Reserve(render_pass.name);
+    }
+  }
   uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
@@ -432,7 +439,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (render_pass.execute) {
         used_command_queue[render_pass.command_queue_index] = true;
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
-        frame_signals[frame_index][render_pass.command_queue_index] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
+        auto signal_val = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
+        frame_signals[frame_index][render_pass.command_queue_index] = signal_val;
+        render_pass_signal.Replace(render_pass.name, std::move(signal_val));
       }
     } // render pass
     swapchain.Present();
