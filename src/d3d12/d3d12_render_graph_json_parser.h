@@ -151,8 +151,28 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
         GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
       } // barriers
       dst_pass.execute = GetBool(src_pass, "execute", false);
+      if (src_pass.contains("wait_pass")) {
+        auto& wait_pass = src_pass.at("wait_pass");
+        dst_pass.wait_pass_num = static_cast<uint32_t>(wait_pass.size());
+        dst_pass.signal_queue_index = AllocateArray<uint32_t>(allocator, dst_pass.wait_pass_num);
+        dst_pass.signal_pass_name = AllocateArray<StrHash>(allocator, dst_pass.wait_pass_num);
+        for (uint32_t p = 0; p < dst_pass.wait_pass_num; p++) {
+          dst_pass.signal_pass_name[p] = CalcStrHash(wait_pass[p].get<std::string_view>().data());
+        }
+      }
     } // pass
   } // pass_list
+  for (uint32_t i = 0; i < r.render_pass_num; i++) {
+    for (uint32_t w = 0; w < r.render_pass_list[i].wait_pass_num; w++) {
+      for (uint32_t k = 0; k < r.render_pass_num; k++) {
+        if (i == k) { continue; }
+        if (r.render_pass_list[i].signal_pass_name[w] == r.render_pass_list[k].name) {
+          r.render_pass_list[i].signal_queue_index[w] = r.render_pass_list[k].command_queue_index;
+          break;
+        }
+      }
+    }
+  }
   if (j.contains("descriptor_handle_num_per_view_type_or_sampler")) {
     auto& list = j.at("descriptor_handle_num_per_view_type_or_sampler");
     r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kCbv)] = GetNum(list, "cbv", 0);

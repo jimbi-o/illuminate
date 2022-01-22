@@ -98,6 +98,7 @@ auto GetTestJson() {
     {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
+      "wait_pass": ["clear uav"],
       "execute": true,
       "buffer_list": [
         {
@@ -418,6 +419,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
+      for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
+        CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(render_pass.signal_queue_index[l], render_pass.command_queue_index, *render_pass_signal.Get(render_pass.signal_pass_name[l])));
+      }
       auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
       descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
