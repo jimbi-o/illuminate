@@ -9,10 +9,10 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D1
 template <typename A>
 class DescriptorCpu {
  public:
-  bool Init(D3d12Device* const device, const uint32_t* descriptor_handle_num_per_view_type_or_sampler, A* allocator) {
-    for (uint32_t i = 0; i < kViewTypeNum; i++) {
-      handles_[i].SetAllocator(allocator, descriptor_handle_num_per_view_type_or_sampler[i] * kHandleMapSizeCoefficient);
-      total_handle_num_[GetViewTypeIndex(static_cast<ViewType>(i))] += descriptor_handle_num_per_view_type_or_sampler[i];
+  bool Init(D3d12Device* const device, const uint32_t* descriptor_handle_num_per_type, A* allocator) {
+    for (uint32_t i = 0; i < kDescriptorTypeNum; i++) {
+      handles_[i].SetAllocator(allocator, descriptor_handle_num_per_type[i] * kHandleMapSizeCoefficient);
+      total_handle_num_[GetDescriptorTypeIndex(static_cast<DescriptorType>(i))] += descriptor_handle_num_per_type[i];
     }
     for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
       if (total_handle_num_[i] == 0) { continue; }
@@ -40,39 +40,39 @@ class DescriptorCpu {
       }
     }
   }
-  const D3D12_CPU_DESCRIPTOR_HANDLE* CreateHandle(const StrHash& name, const ViewType type) {
-    auto view_type_index = static_cast<uint32_t>(type);
-    assert(handles_[view_type_index].Get(name) == nullptr && "increase handles_[view_type_index] map size");
-    auto index = GetViewTypeIndex(type);
+  const D3D12_CPU_DESCRIPTOR_HANDLE* CreateHandle(const StrHash& name, const DescriptorType type) {
+    auto descriptor_type_index = static_cast<uint32_t>(type);
+    assert(handles_[descriptor_type_index].Get(name) == nullptr && "increase handles_[descriptor_type_index] map size");
+    auto index = GetDescriptorTypeIndex(type);
     assert(handle_num_[index] <= total_handle_num_[index] && "handle num exceeded handle pool size");
     D3D12_CPU_DESCRIPTOR_HANDLE handle{};
     handle.ptr = heap_start_[index] + handle_num_[index] * handle_increment_size_[index];
-    if (!handles_[view_type_index].Insert(name, std::move(handle))) {
+    if (!handles_[descriptor_type_index].Insert(name, std::move(handle))) {
       assert(false && "failed to insert handle to map, increase map table size");
       return nullptr;
     }
     handle_num_[index]++;
-    return handles_[view_type_index].Get(name);
+    return handles_[descriptor_type_index].Get(name);
   }
-  const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const StrHash& name, const ViewType type) const {
-    auto view_type_index = static_cast<uint32_t>(type);
-    return handles_[view_type_index].Get(name);
+  const D3D12_CPU_DESCRIPTOR_HANDLE* GetHandle(const StrHash& name, const DescriptorType type) const {
+    auto descriptor_type_index = static_cast<uint32_t>(type);
+    return handles_[descriptor_type_index].Get(name);
   }
  private:
-  static constexpr auto GetViewTypeIndex(const ViewType& type) {
+  static constexpr auto GetDescriptorTypeIndex(const DescriptorType& type) {
     switch (type) {
-      case ViewType::kCbv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
-      case ViewType::kSrv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
-      case ViewType::kUav: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
-      case ViewType::kSampler: { return D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; }
-      case ViewType::kRtv: { return D3D12_DESCRIPTOR_HEAP_TYPE_RTV; }
-      case ViewType::kDsv: { return D3D12_DESCRIPTOR_HEAP_TYPE_DSV; }
+      case DescriptorType::kCbv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+      case DescriptorType::kSrv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+      case DescriptorType::kUav: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+      case DescriptorType::kSampler: { return D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; }
+      case DescriptorType::kRtv: { return D3D12_DESCRIPTOR_HEAP_TYPE_RTV; }
+      case DescriptorType::kDsv: { return D3D12_DESCRIPTOR_HEAP_TYPE_DSV; }
     }
-    assert(false && "invalid ViewType");
+    assert(false && "invalid DescriptorType");
     return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
   }
   static const uint32_t kHandleMapSizeCoefficient = 8;
-  HashMap<D3D12_CPU_DESCRIPTOR_HANDLE, A> handles_[kViewTypeNum];
+  HashMap<D3D12_CPU_DESCRIPTOR_HANDLE, A> handles_[kDescriptorTypeNum];
   ID3D12DescriptorHeap* descriptor_heap_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
   uint32_t total_handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
   uint32_t handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
@@ -101,12 +101,13 @@ class DescriptorGpu {
     uint32_t view_index = 0;
     bool first_buffer = true;
     for (uint32_t i = 0; i < buffer_num; i++) {
-      switch (buffer_list[i].state) {
-        case ViewType::kCbv:
-        case ViewType::kSrv:
-        case ViewType::kUav: {
-          auto& buffer = buffer_list[i];
-          auto handle = descriptor_cpu.GetHandle(buffer.buffer_name, buffer.state);
+      auto& buffer = buffer_list[i];
+      auto descriptor_type = ConvertToDescriptorType(buffer.state);
+      switch (descriptor_type) {
+        case DescriptorType::kCbv:
+        case DescriptorType::kSrv:
+        case DescriptorType::kUav: {
+          auto handle = descriptor_cpu.GetHandle(buffer.buffer_name, descriptor_type);
           if (handle == nullptr) { break; }
           if (!first_buffer && handles[view_index].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle->ptr) {
             handle_num[view_index]++;

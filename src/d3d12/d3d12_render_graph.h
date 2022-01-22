@@ -8,8 +8,9 @@ struct BufferConfig {
   D3D12_HEAP_TYPE heap_type{};
   D3D12_RESOURCE_DIMENSION dimension{};
   uint32_t alignment{};
-  uint32_t width{};
-  uint32_t height{};
+  BufferSizeRelativeness size_type{};
+  float width{};
+  float height{};
   uint16_t depth_or_array_size{};
   uint16_t miplevels{};
   DXGI_FORMAT format{};
@@ -23,11 +24,11 @@ struct BufferConfig {
   D3D12_RESOURCE_STATES initial_state{};
   D3D12_CLEAR_VALUE clear_value{};
   uint32_t descriptor_type_num{0};
-  ViewType* descriptor_type{nullptr};
+  DescriptorType* descriptor_type{nullptr};
 };
 struct RenderPassBuffer {
   StrHash buffer_name{};
-  ViewType state{};
+  ResourceStateType state{};
 };
 struct Barrier {
   StrHash buffer_name{};
@@ -54,6 +55,8 @@ struct RenderPass {
 struct RenderGraph {
   uint32_t frame_buffer_num{0};
   uint32_t frame_loop_num{0};
+  uint32_t primarybuffer_width{0};
+  uint32_t primarybuffer_height{0};
   char* window_title{nullptr};
   uint32_t window_width{0};
   uint32_t window_height{0};
@@ -70,7 +73,7 @@ struct RenderGraph {
   RenderPass* render_pass_list{nullptr};
   uint32_t buffer_num{0};
   BufferConfig* buffer_list{nullptr};
-  uint32_t descriptor_handle_num_per_view_type_or_sampler[kViewTypeNum]{};
+  uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
   uint32_t gpu_handle_num_view{0};
   uint32_t gpu_handle_num_sampler{0};
 };

@@ -21,9 +21,9 @@ uint32_t DescriptorGpu::GetViewNum(const uint32_t buffer_num, const RenderPassBu
   uint32_t view_num = 0;
   for (uint32_t i = 0; i < buffer_num; i++) {
     switch (buffer_list[i].state) {
-      case ViewType::kCbv:
-      case ViewType::kSrv:
-      case ViewType::kUav: {
+      case ResourceStateType::kCbv:
+      case ResourceStateType::kSrv:
+      case ResourceStateType::kUav: {
         view_num++;
         break;
       }

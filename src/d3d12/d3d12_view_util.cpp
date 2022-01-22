@@ -61,13 +61,13 @@ auto GetSrvDimension(const D3D12_RESOURCE_DIMENSION dimension, const uint16_t de
   assert(false && "invalid dimension");
   return D3D12_SRV_DIMENSION_UNKNOWN;
 }
-bool CreateView(D3d12Device* device, const ViewType view_type, const BufferConfig& config, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* handle) {
-  switch (view_type) {
-    case ViewType::kCbv: {
+bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, const BufferConfig& config, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* handle) {
+  switch (descriptor_type) {
+    case DescriptorType::kCbv: {
       assert(false && "CreateView cbv not implemented");
       return false;
     }
-    case ViewType::kSrv: {
+    case DescriptorType::kSrv: {
       auto desc = D3D12_SHADER_RESOURCE_VIEW_DESC{
         .Format = config.format,
         .ViewDimension = GetSrvDimension(config.dimension, config.depth_or_array_size),
@@ -164,7 +164,7 @@ bool CreateView(D3d12Device* device, const ViewType view_type, const BufferConfi
       device->CreateShaderResourceView(resource, &desc, *handle);
       return true;
     }
-    case ViewType::kUav: {
+    case DescriptorType::kUav: {
       auto desc = D3D12_UNORDERED_ACCESS_VIEW_DESC{
         .Format = config.format,
         .ViewDimension = GetUavDimension(config.dimension, config.depth_or_array_size),
@@ -222,15 +222,11 @@ bool CreateView(D3d12Device* device, const ViewType view_type, const BufferConfi
       device->CreateUnorderedAccessView(resource, nullptr, &desc, *handle);
       return true;
     }
-    case ViewType::kSampler: {
-      assert(false && "CreateView sampler not implemented");
-      return false;
-    }
-    case ViewType::kRtv: {
+    case DescriptorType::kRtv: {
       assert(false && "CreateView rtv not implemented");
       return false;
     }
-    case ViewType::kDsv: {
+    case DescriptorType::kDsv: {
       assert(false && "CreateView dsv not implemented");
       return false;
     }

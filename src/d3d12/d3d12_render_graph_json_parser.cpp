@@ -26,6 +26,14 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
     state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     val_set = true;
   }
+  if (state_str.compare("copy_source") == 0) {
+    state |= D3D12_RESOURCE_STATE_COPY_SOURCE;
+    val_set = true;
+  }
+  if (state_str.compare("copy_dest") == 0) {
+    state |= D3D12_RESOURCE_STATE_COPY_DEST;
+    val_set = true;
+  }
   if (!val_set) {
     logerror("invalid resource state specified. {}", state_str.data());
   }
@@ -47,25 +55,51 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   assert(false && "invalid format specified");
   return DXGI_FORMAT_R8G8B8A8_UNORM;
 }
-ViewType GetViewType(const nlohmann::json& j) {
+DescriptorType GetDescriptorType(const nlohmann::json& j) {
   auto str = j.get<std::string_view>();
   if (str.compare("cbv") == 0) {
-    return ViewType::kCbv;
+    return DescriptorType::kCbv;
   }
   if (str.compare("srv") == 0) {
-    return ViewType::kSrv;
+    return DescriptorType::kSrv;
   }
   if (str.compare("uav") == 0) {
-    return ViewType::kUav;
+    return DescriptorType::kUav;
   }
   if (str.compare("rtv") == 0) {
-    return ViewType::kRtv;
+    return DescriptorType::kRtv;
   }
   if (str.compare("dsv") == 0) {
-    return ViewType::kDsv;
+    return DescriptorType::kDsv;
   }
-  assert(false && "invalid view type");
-  return ViewType::kNum;
+  assert(false && "invalid DescriptorType");
+  return DescriptorType::kNum;
+}
+ResourceStateType GetResourceStateType(const nlohmann::json& j) {
+  auto str = j.get<std::string_view>();
+  if (str.compare("cbv") == 0) {
+    return ResourceStateType::kCbv;
+  }
+  if (str.compare("srv") == 0) {
+    return ResourceStateType::kSrv;
+  }
+  if (str.compare("uav") == 0) {
+    return ResourceStateType::kUav;
+  }
+  if (str.compare("rtv") == 0) {
+    return ResourceStateType::kRtv;
+  }
+  if (str.compare("dsv") == 0) {
+    return ResourceStateType::kDsv;
+  }
+  if (str.compare("copy_source") == 0) {
+    return ResourceStateType::kCopySrc;
+  }
+  if (str.compare("copy_dest") == 0) {
+    return ResourceStateType::kCopyDst;
+  }
+  assert(false && "invalid ResourceStateType");
+  return ResourceStateType::kNum;
 }
 namespace {
 D3D12_HEAP_TYPE GetHeapType(const nlohmann::json& j, const char* entity_name) {
@@ -154,13 +188,24 @@ D3D12_RESOURCE_FLAGS GetD3d12ResourceFlag(const nlohmann::json& j) {
   assert(false && "invalid resource flag");
   return D3D12_RESOURCE_FLAG_NONE;
 }
+auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) {
+  auto str = GetStringView(j, name);
+  if (str.compare("swapchain_relative") == 0) {
+    return BufferSizeRelativeness::kSwapchainRelative;
+  }
+  if (str.compare("primary_relative") == 0) {
+    return BufferSizeRelativeness::kPrimaryBufferRelative;
+  }
+  return BufferSizeRelativeness::kAbsolute;
+}
 }
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->name = CalcEntityStrHash(j, "name");
   config->heap_type = GetHeapType(j, "heap_type");
   config->dimension = GetDimension(j, "dimension");
+  config->size_type = GetBufferSizeRelativeness(j, "size_type");
   config->width = j.at("width");
-  config->height = GetNum(j, "height", 1);
+  config->height = GetFloat(j, "height", 1.0f);
   config->depth_or_array_size = GetVal<uint16_t>(j, "depth_or_array_size", 1);
   config->miplevels = GetVal<uint16_t>(j, "miplevels", 1);
   config->format = GetDxgiFormat(j, "format");

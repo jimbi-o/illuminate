@@ -24,4 +24,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_descriptors.cpp
   d3d12_view_util.h
   d3d12_view_util.cpp
+  d3d12_header_common.h
+  d3d12_header_common.cpp
   )

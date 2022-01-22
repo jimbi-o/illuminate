@@ -21,7 +21,30 @@ constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
     default: { return 0; }
   }
 }
-enum class ViewType : uint8_t { kCbv = 0, kSrv, kUav, kSampler, kRtv, kDsv, kNum, };
-static const auto kViewTypeNum = static_cast<uint32_t>(ViewType::kNum);
+enum class DescriptorType : uint8_t { kCbv = 0, kSrv, kUav, kSampler, kRtv, kDsv, kNum, };
+static const auto kDescriptorTypeNum = static_cast<uint32_t>(DescriptorType::kNum);
+enum class ResourceStateType : uint8_t { kCbv = 0, kSrv, kUav, kRtv, kDsv, kCopySrc, kCopyDst, kNum, };
+static const auto kResourceStateTypeNum = static_cast<uint32_t>(ResourceStateType::kNum);
+constexpr auto ConvertToDescriptorType(const ResourceStateType& state) {
+  switch (state) {
+    case ResourceStateType::kCbv: { return DescriptorType::kCbv; };
+    case ResourceStateType::kSrv: { return DescriptorType::kSrv; };
+    case ResourceStateType::kUav: { return DescriptorType::kUav; };
+    case ResourceStateType::kRtv: { return DescriptorType::kRtv; };
+    case ResourceStateType::kDsv: { return DescriptorType::kDsv; };
+  }
+  return DescriptorType::kNum;
+}
+enum class BufferSizeRelativeness : uint8_t { kAbsolute, kSwapchainRelative, kPrimaryBufferRelative, };
+struct Size2d {
+  uint32_t width{};
+  uint32_t height{};
+};
+struct MainBufferSize {
+  Size2d swapchain{};
+  Size2d primarybuffer{};
+};
+uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
+uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 }
 #endif

@@ -15,6 +15,9 @@ inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
 inline auto GetNum(const nlohmann::json& j, const char* const name, const uint32_t default_val) {
   return j.contains(name) ? j.at(name).get<uint32_t>() : default_val;
 }
+inline auto GetFloat(const nlohmann::json& j, const char* const name, const float default_val) {
+  return j.contains(name) ? j.at(name).get<float>() : default_val;
+}
 inline auto GetBool(const nlohmann::json& j, const char* const name, const bool default_val) {
   return j.contains(name) ? j.at(name).get<bool>() : default_val;
 }
@@ -27,12 +30,15 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
-ViewType GetViewType(const nlohmann::json& j);
+DescriptorType GetDescriptorType(const nlohmann::json& j);
+ResourceStateType GetResourceStateType(const nlohmann::json& j);
 template <typename A1, typename A2, typename A3>
 void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator, RenderGraph* graph) {
   auto& r = *graph;
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
   j.at("frame_loop_num").get_to(r.frame_loop_num);
+  r.primarybuffer_width = GetNum(j, "primarybuffer_width", 1);
+  r.primarybuffer_height = GetNum(j, "primarybuffer_height", 1);
   {
     auto& window = j.at("window");
     auto window_title = GetStringView(window, "title");
@@ -108,9 +114,9 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       GetBufferConfig(buffer_list[i], &r.buffer_list[i]);
       auto& descriptor_type_list = buffer_list[i].at("descriptor_type");
       r.buffer_list[i].descriptor_type_num = static_cast<uint32_t>(descriptor_type_list.size());
-      r.buffer_list[i].descriptor_type = AllocateArray<ViewType>(allocator, r.buffer_list[i].descriptor_type_num);
+      r.buffer_list[i].descriptor_type = AllocateArray<DescriptorType>(allocator, r.buffer_list[i].descriptor_type_num);
       for (uint32_t d = 0; d < r.buffer_list[i].descriptor_type_num; d++) {
-        r.buffer_list[i].descriptor_type[d] = GetViewType(descriptor_type_list[d]);
+        r.buffer_list[i].descriptor_type[d] = GetDescriptorType(descriptor_type_list[d]);
       }
     }
   }
@@ -131,7 +137,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
           auto& dst_buffer = dst_pass.buffer_list[buffer_index];
           auto& src_buffer = buffer_list[buffer_index];
           dst_buffer.buffer_name = CalcEntityStrHash(src_buffer, "name");
-          dst_buffer.state = GetViewType(GetStringView(src_buffer, "state"));
+          dst_buffer.state = GetResourceStateType(GetStringView(src_buffer, "state"));
         }
       } // buffer_list
       if (pass_var_func.Get(dst_pass.name) != nullptr && src_pass.contains("pass_vars")) {
@@ -173,14 +179,14 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       }
     }
   }
-  if (j.contains("descriptor_handle_num_per_view_type_or_sampler")) {
-    auto& list = j.at("descriptor_handle_num_per_view_type_or_sampler");
-    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kCbv)] = GetNum(list, "cbv", 0);
-    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kSrv)] = GetNum(list, "srv", 0);
-    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kUav)] = GetNum(list, "uav", 0);
-    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kSampler)] = GetNum(list, "sampler", 0);
-    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kRtv)] = GetNum(list, "rtv", 0);
-    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kDsv)] = GetNum(list, "dsv", 0);
+  if (j.contains("descriptor_handle_num_per_type")) {
+    auto& list = j.at("descriptor_handle_num_per_type");
+    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kCbv)] = GetNum(list, "cbv", 0);
+    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] = GetNum(list, "srv", 0);
+    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kUav)] = GetNum(list, "uav", 0);
+    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)] = GetNum(list, "sampler", 0);
+    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kRtv)] = GetNum(list, "rtv", 0);
+    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kDsv)] = GetNum(list, "dsv", 0);
   }
   r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", 1);
   r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", 1);
