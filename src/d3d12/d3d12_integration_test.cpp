@@ -121,14 +121,12 @@ class DescriptorGpu {
     }
     return view_num;
   }
-  static const uint32_t kHandleNumCbvSrvUav = 32;
-  static const uint32_t kHandleNumSampler = 128;
-  bool Init(D3d12Device* device) {
-    descriptor_cbv_srv_uav_ = InitDescriptorHeapSetGpu(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kHandleNumCbvSrvUav);
+  bool Init(D3d12Device* device, const uint32_t handle_num_view, const uint32_t handle_num_sampler) {
+    descriptor_cbv_srv_uav_ = InitDescriptorHeapSetGpu(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, handle_num_view);
     if (descriptor_cbv_srv_uav_.descriptor_heap == nullptr) {
       return false;
     }
-    descriptor_sampler_ = InitDescriptorHeapSetGpu(device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, kHandleNumSampler);
+    descriptor_sampler_ = InitDescriptorHeapSetGpu(device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, handle_num_sampler);
     return descriptor_sampler_.descriptor_heap != nullptr;
   }
   void Term() {
@@ -136,14 +134,14 @@ class DescriptorGpu {
       auto refval = descriptor_cbv_srv_uav_.descriptor_heap->Release();
       if (refval > 0) {
         logerror("descriptor_cbv_srv_uav_ descriptor_heap reference left: {}", refval);
-        assert(false && "");
+        assert(false && "descriptor_cbv_srv_uav_ descriptor_heap reference left");
       }
     }
     {
       auto refval = descriptor_sampler_.descriptor_heap->Release();
       if (refval > 0) {
         logerror("descriptor_sampler_ descriptor_heap reference left: {}", refval);
-        assert(false && "");
+        assert(false && "descriptor_sampler_ descriptor_heap reference left");
       }
     }
   }
@@ -761,7 +759,7 @@ auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, c
     } else {
       occupied_handle_num += total_handle_count - prev_handle_count + current_handle_count;
     }
-    assert(occupied_handle_num <= total_handle_count && "increase kHandleNumCbvSrvUav");
+    assert(occupied_handle_num <= total_handle_count && "increase view handle num in DescriptorGpu");
   }
   return gpu_handle_list;
 }
@@ -815,7 +813,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
   }
   DescriptorGpu descriptor_gpu;
-  CHECK_UNARY(descriptor_gpu.Init(device.Get()));
+  CHECK_UNARY(descriptor_gpu.Init(device.Get(), 32, 8));
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
@@ -855,17 +853,17 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         if (gpu_descriptor_offset_start[j] == ~0u) { continue; }
         if (gpu_descriptor_offset_start[j] <= gpu_descriptor_offset_end[j]) {
           if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
-            assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] || gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase kHandleNumCbvSrvUav");
+            assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] || gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase view handle num in DescriptorGpu");
             continue;
           }
-          assert(gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && "increase kHandleNumCbvSrvUav");
+          assert(gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && "increase view handle num in DescriptorGpu");
           continue;
         }
         if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
-          assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase kHandleNumCbvSrvUav");
+          assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase view handle num in DescriptorGpu");
           continue;
         }
-        assert(false  && "increase kHandleNumCbvSrvUav");
+        assert(false  && "increase view handle num in DescriptorGpu");
       }
     }
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
