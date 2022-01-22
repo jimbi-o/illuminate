@@ -15,6 +15,9 @@ inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
 inline auto GetNum(const nlohmann::json& j, const char* const name, const uint32_t default_val) {
   return j.contains(name) ? j.at(name).get<uint32_t>() : default_val;
 }
+inline auto GetBool(const nlohmann::json& j, const char* const name, const bool default_val) {
+  return j.contains(name) ? j.at(name).get<bool>() : default_val;
+}
 template <typename T>
 inline auto GetVal(const nlohmann::json& j, const char* const name, const T& default_val) {
   return j.contains(name) ? j.at(name).get<T>() : default_val;
@@ -147,6 +150,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
         dst_pass.postpass_barrier = AllocateArray<Barrier>(allocator, dst_pass.postpass_barrier_num);
         GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
       } // barriers
+      dst_pass.execute = GetBool(src_pass, "execute", false);
     } // pass
   } // pass_list
   if (j.contains("descriptor_handle_num_per_view_type_or_sampler")) {

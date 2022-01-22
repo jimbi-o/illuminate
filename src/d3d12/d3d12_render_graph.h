@@ -46,6 +46,7 @@ struct RenderPass {
   Barrier* prepass_barrier{nullptr};
   uint32_t postpass_barrier_num{0};
   Barrier* postpass_barrier{nullptr};
+  bool execute{false};
 };
 struct RenderGraph {
   uint32_t frame_buffer_num{0};

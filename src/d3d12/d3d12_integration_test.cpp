@@ -72,6 +72,7 @@ auto GetTestJson() {
     {
       "name": "clear uav",
       "command_queue": "queue_compute",
+      "execute": true,
       "buffer_list": [
         {
           "name": "uav",
@@ -97,6 +98,7 @@ auto GetTestJson() {
     {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
+      "execute": true,
       "buffer_list": [
         {
           "name": "swapchain",
@@ -427,9 +429,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
       }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
-      used_command_queue[render_pass.command_queue_index] = true;
-      command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO
-      frame_signals[frame_index][render_pass.command_queue_index] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
+      if (render_pass.execute) {
+        used_command_queue[render_pass.command_queue_index] = true;
+        command_list_set.ExecuteCommandList(render_pass.command_queue_index);
+        frame_signals[frame_index][render_pass.command_queue_index] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
+      }
     } // render pass
     swapchain.Present();
     tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
