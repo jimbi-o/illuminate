@@ -22,4 +22,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_integration_test.cpp
   d3d12_descriptors.h
   d3d12_descriptors.cpp
+  d3d12_view_util.h
+  d3d12_view_util.cpp
   )
