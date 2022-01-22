@@ -5,16 +5,26 @@
 #include "illuminate/util/hash_map.h"
 #include <nlohmann/json.hpp>
 namespace illuminate {
+using RenderPassVarParseFunction = void (*)(const nlohmann::json&, void*);
 inline auto GetStringView(const nlohmann::json& j, const char* const name) {
   return j.at(name).get<std::string_view>();
 }
 inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
   return CalcStrHash(GetStringView(j, name).data());
 }
+inline auto GetNum(const nlohmann::json& j, const char* const name, const uint32_t default_val) {
+  return j.contains(name) ? j.at(name).get<uint32_t>() : default_val;
+}
+template <typename T>
+inline auto GetVal(const nlohmann::json& j, const char* const name, const T& default_val) {
+  return j.contains(name) ? j.at(name).get<T>() : default_val;
+}
 uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32_t num, StrHash* list);
-D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const name);
+D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
+DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
+void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
-typedef void (*RenderPassVarParseFunction)(const nlohmann::json&, void*);
+ViewType GetViewType(const nlohmann::json& j);
 template <typename A1, typename A2, typename A3>
 void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -59,21 +69,14 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
   }
   {
     auto& allocators = j.at("command_allocator");
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = allocators.contains("direct") ? allocators.at("direct").get<uint32_t>() : 0;
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = allocators.contains("compute") ? allocators.at("compute").get<uint32_t>() : 0;
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = allocators.contains("copy") ? allocators.at("copy").get<uint32_t>() : 0;
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = GetNum(allocators, "direct", 0);
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = GetNum(allocators, "compute", 0);
+    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = GetNum(allocators, "copy", 0);
   }
   {
     auto& swapchain = j.at("swapchain");
     r.swapchain_command_queue_index = FindIndex(swapchain, "command_queue", r.command_queue_num, r.command_queue_name);
-    auto format_str = GetStringView(swapchain, "format");
-    if (format_str.compare("R16G16B16A16_FLOAT") == 0) {
-      r.swapchain_format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    } else if (format_str.compare("B8G8R8A8_UNORM") == 0) {
-      r.swapchain_format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    } else {
-      r.swapchain_format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    }
+    r.swapchain_format = GetDxgiFormat(swapchain, "format");
     auto usage_list = swapchain.at("usage");
     for (auto& usage : usage_list) {
       auto usage_str = usage.get<std::string_view>();
@@ -94,6 +97,20 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       }
     }
   }
+  if (j.contains("buffer")) {
+    auto& buffer_list = j.at("buffer");
+    r.buffer_num = static_cast<uint32_t>(buffer_list.size());
+    r.buffer_list = AllocateArray<BufferConfig>(allocator, r.buffer_num);
+    for (uint32_t i = 0; i < r.buffer_num; i++) {
+      GetBufferConfig(buffer_list[i], &r.buffer_list[i]);
+      auto& descriptor_type_list = buffer_list[i].at("descriptor_type");
+      r.buffer_list[i].descriptor_type_num = static_cast<uint32_t>(descriptor_type_list.size());
+      r.buffer_list[i].descriptor_type = AllocateArray<ViewType>(allocator, r.buffer_list[i].descriptor_type_num);
+      for (uint32_t d = 0; d < r.buffer_list[i].descriptor_type_num; d++) {
+        r.buffer_list[i].descriptor_type[d] = GetViewType(descriptor_type_list[d]);
+      }
+    }
+  }
   {
     auto& render_pass_list = j.at("render_pass");
     r.render_pass_num = static_cast<uint32_t>(render_pass_list.size());
@@ -103,20 +120,20 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       auto& src_pass = render_pass_list[i];
       dst_pass.name = CalcEntityStrHash(src_pass, "name");
       dst_pass.command_queue_index = FindIndex(src_pass, "command_queue", r.command_queue_num, r.command_queue_name);
-      if (src_pass.contains("buffers")) {
-        auto& buffers = src_pass.at("buffers");
-        dst_pass.buffer_num = static_cast<uint32_t>(buffers.size());
-        dst_pass.buffers = AllocateArray<RenderPassBuffer>(allocator, dst_pass.buffer_num);
+      if (src_pass.contains("buffer_list")) {
+        auto& buffer_list = src_pass.at("buffer_list");
+        dst_pass.buffer_num = static_cast<uint32_t>(buffer_list.size());
+        dst_pass.buffer_list = AllocateArray<RenderPassBuffer>(allocator, dst_pass.buffer_num);
         for (uint32_t buffer_index = 0; buffer_index < dst_pass.buffer_num; buffer_index++) {
-          auto& dst_buffer = dst_pass.buffers[buffer_index];
-          auto& src_buffer = buffers[buffer_index];
+          auto& dst_buffer = dst_pass.buffer_list[buffer_index];
+          auto& src_buffer = buffer_list[buffer_index];
           dst_buffer.buffer_name = CalcEntityStrHash(src_buffer, "name");
-          dst_buffer.state = GetD3d12ResourceState(src_buffer, "state");
+          dst_buffer.state = GetViewType(GetStringView(src_buffer, "state"));
         }
-      } // buffers
+      } // buffer_list
       if (pass_var_func.Get(dst_pass.name) != nullptr && src_pass.contains("pass_vars")) {
-        dst_pass.pass_vars = allocator->Allocate(pass_var_size.Get(dst_pass.name));
-        (*pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars);
+        dst_pass.pass_vars = allocator->Allocate(*pass_var_size.Get(dst_pass.name));
+        (**pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars);
       }
       if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
@@ -126,11 +143,21 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
       }
       if (src_pass.contains("postpass_barrier")) {
         auto& postpass_barrier = src_pass.at("postpass_barrier");
+        dst_pass.postpass_barrier_num = static_cast<uint32_t>(postpass_barrier.size());
         dst_pass.postpass_barrier = AllocateArray<Barrier>(allocator, dst_pass.postpass_barrier_num);
         GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
       } // barriers
     } // pass
   } // pass_list
+  if (j.contains("descriptor_handle_num_per_view_type_or_sampler")) {
+    auto& list = j.at("descriptor_handle_num_per_view_type_or_sampler");
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kCbv)] = GetNum(list, "cbv", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kSrv)] = GetNum(list, "srv", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kUav)] = GetNum(list, "uav", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kSampler)] = GetNum(list, "sampler", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kRtv)] = GetNum(list, "rtv", 0);
+    r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kDsv)] = GetNum(list, "dsv", 0);
+  }
 }
 }
 #endif

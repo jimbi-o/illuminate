@@ -42,7 +42,7 @@ auto GetTestJson() {
     {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
-      "buffers": [
+      "buffer_list": [
         {
           "name": "swapchain",
           "state": "rtv"
@@ -88,10 +88,23 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
     auto& barrier = barriers[i];
     barrier.Type  = config.type;
     barrier.Flags = config.flag;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.pResource   = resource[i];
-    barrier.Transition.StateBefore = config.state_before;
-    barrier.Transition.StateAfter  = config.state_after;
+    switch (barrier.Type) {
+      case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.pResource   = resource[i];
+        barrier.Transition.StateBefore = config.state_before;
+        barrier.Transition.StateAfter  = config.state_after;
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
+        assert(false && "aliasing barrier not implemented yet");
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
+        barrier.UAV.pResource   = resource[i];
+        break;
+      }
+    }
   }
   command_list->ResourceBarrier(barrier_num, barriers);
 }
@@ -114,9 +127,9 @@ TEST_CASE("d3d12 render graph") { // NOLINT
   HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(&allocator);
   HashMap<uint32_t, MemoryAllocationJanitor> render_pass_var_size(&allocator);
   HashMap<RenderPassVarParseFunction, MemoryAllocationJanitor> render_pass_var_parse_functions(&allocator);
-  CHECK(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
-  CHECK(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
-  CHECK(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
+  CHECK_UNARY(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
+  CHECK_UNARY(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
+  CHECK_UNARY(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
   auto render_graph = GetTestRenderGraph(render_pass_var_size, render_pass_var_parse_functions,  &allocator);
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;
@@ -144,7 +157,6 @@ TEST_CASE("d3d12 render graph") { // NOLINT
       frame_signals[i][j] = 0;
     }
   }
-  uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     auto used_command_queue = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
@@ -157,18 +169,17 @@ TEST_CASE("d3d12 render graph") { // NOLINT
     swapchain.UpdateBackBufferIndex();
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
-      auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
-      auto resource = swapchain.GetResource(); // TODO
+      auto command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index);
+      auto resource = swapchain.GetResource();
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, &resource);
-      auto rtv = swapchain.GetRtvHandle(); // TODO
+      auto rtv = swapchain.GetRtvHandle();
       (*render_pass_functions.Get(render_pass.name))(command_list, render_pass.pass_vars, &rtv);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, &resource);
       used_command_queue[render_pass.command_queue_index] = true;
-      command_list_set.ExecuteCommandList(render_pass.command_queue_index); // TODO
+      command_list_set.ExecuteCommandList(render_pass.command_queue_index);
       frame_signals[frame_index][render_pass.command_queue_index] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
     } // render pass
     swapchain.Present();
-    tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
   }
   command_queue_signals.WaitAll(device.Get());
   swapchain.Term();
@@ -177,6 +188,5 @@ TEST_CASE("d3d12 render graph") { // NOLINT
   window.Term();
   device.Term();
   dxgi_core.Term();
-  loginfo("memory global:{} temp:{}", gSystemMemoryAllocator->GetOffset(), tmp_memory_max_offset);
   gSystemMemoryAllocator->Reset();
 }

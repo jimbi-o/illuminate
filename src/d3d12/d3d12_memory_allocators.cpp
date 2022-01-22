@@ -1,9 +1,9 @@
 #include "d3d12_memory_allocators.h"
 namespace illuminate {
 namespace {
-static const uint32_t system_memory_buffer_size_in_bytes = 512;
+static const uint32_t system_memory_buffer_size_in_bytes = 128 * 1024;
 static std::byte system_memory_buffer[system_memory_buffer_size_in_bytes];
-static const uint32_t temporal_memory_buffer_size_in_bytes = 2048;
+static const uint32_t temporal_memory_buffer_size_in_bytes = 16 * 1024;
 static std::byte temporal_memory_buffer[temporal_memory_buffer_size_in_bytes];
 static LinearAllocator system_memory_allocator(system_memory_buffer, system_memory_buffer_size_in_bytes);
 static StackAllocator temporal_memory_allocator(temporal_memory_buffer, temporal_memory_buffer_size_in_bytes);
@@ -146,4 +146,23 @@ TEST_CASE("MemoryAllocationJanitor") { // NOLINT
   }
   CHECK_EQ(allocator.GetOffset(), prev_marker);
   CHECK_EQ(*v0, 1);
+}
+TEST_CASE("array allocation") { // NOLINT
+  using namespace illuminate; // NOLINT
+  const uint32_t size_in_byte = 4096;
+  std::byte buffer[size_in_byte]{};
+  StackAllocator allocator(buffer, size_in_byte);
+  MemoryAllocationJanitor janitor(&allocator);
+  auto arr1 = AllocateArray<uint64_t>(&janitor, 100);
+  auto arr2 = AllocateArray<uint64_t*>(&janitor, 100);
+  for (uint32_t i = 0; i < 100; i++) {
+    arr1[i] = 100 + i;
+    arr2[i] = Allocate<uint64_t>(&janitor);
+    (*arr2[i]) = 200 + i;
+  }
+  for (uint32_t i = 0; i < 100; i++) {
+    CAPTURE(i);
+    CHECK_EQ(arr1[i], 100 + i);
+    CHECK_EQ((*arr2[i]), 200 + i);
+  }
 }

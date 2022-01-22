@@ -93,7 +93,7 @@ class MemoryAllocationJanitor {
 };
 template <typename T, typename A>
 auto Allocate(A* allocator, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
-  return new(allocator->Allocate(sizeof(T*), alignment_in_bytes)) T;
+  return new(allocator->Allocate(sizeof(T), alignment_in_bytes)) T;
 }
 template <typename T, typename A>
 auto AllocateArray(A* allocator, const uint32_t len, const size_t alignment_in_bytes = kDefaultAlignmentSize) {

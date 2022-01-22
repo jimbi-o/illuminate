@@ -21,5 +21,7 @@ constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
     default: { return 0; }
   }
 }
+enum class ViewType : uint8_t { kCbv = 0, kSrv, kUav, kSampler, kRtv, kDsv, kNum, };
+static const auto kViewTypeNum = static_cast<uint32_t>(ViewType::kNum);
 }
 #endif

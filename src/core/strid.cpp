@@ -1,6 +1,7 @@
 #include "illuminate/core/strid.h"
 #include <cstring>
 #include <string>
+#include "../src_common.h"
 namespace illuminate {
 StrHash CalcStrHash(const char* const str, const StrHash prime) {
   if (str == nullptr) { return 0U; }
@@ -8,6 +9,9 @@ StrHash CalcStrHash(const char* const str, const StrHash prime) {
   for (uint32_t i = 0; str[i] != 0; i++) {
     hash = prime * hash + static_cast<StrHash>(str[i]);
   }
+#ifdef PRINT_SID
+  spdlog::info("SID {}:{}", str, hash);
+#endif
   return hash;
 }
 } // namespace illuminate
