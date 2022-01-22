@@ -1,7 +1,7 @@
 #include "d3d12_shader_compiler.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
-// https://simoncoenen.com/blog/programming/graphics/DxcRevised.html
+// https://simoncoenen.com/blog/programming/graphics/DxcCompiling
 IDxcUtils* CreateDxcUtils() {
   IDxcUtils* utils = nullptr;
   auto hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils));
@@ -33,4 +33,7 @@ TEST_CASE("compile shader") { // NOLINT
   CHECK_NE(include_handler, nullptr); // NOLINT
   auto compiler = CreateDxcShaderCompiler();
   CHECK_NE(compiler, nullptr); // NOLINT
+  CHECK_EQ(compiler->Release(), 0);
+  CHECK_EQ(include_handler->Release(), 0);
+  CHECK_EQ(utils->Release(), 0);
 }
