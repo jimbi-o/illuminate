@@ -605,7 +605,9 @@ auto GetTestJson() {
     "sampler": 0,
     "rtv": 0,
     "dsv": 0
-  }
+  },
+  "gpu_handle_num_view":10,
+  "gpu_handle_num_sampler":1
 }
 )"_json;
 }
@@ -770,7 +772,7 @@ auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, c
     } else {
       occupied_handle_num += total_handle_count - prev_handle_count + current_handle_count;
     }
-    assert(occupied_handle_num <= total_handle_count && "increase view handle num in DescriptorGpu");
+    assert(occupied_handle_num <= total_handle_count && "increase RenderGraph::gpu_handle_num_view");
   }
   return gpu_handle_list;
 }
@@ -824,7 +826,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
   }
   DescriptorGpu descriptor_gpu;
-  CHECK_UNARY(descriptor_gpu.Init(device.Get(), 32, 8));
+  CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
   Swapchain swapchain;
   CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
@@ -864,17 +866,17 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         if (gpu_descriptor_offset_start[j] == ~0u) { continue; }
         if (gpu_descriptor_offset_start[j] <= gpu_descriptor_offset_end[j]) {
           if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
-            assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] || gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase view handle num in DescriptorGpu");
+            assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] || gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase RenderGraph::gpu_handle_num_view");
             continue;
           }
-          assert(gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && "increase view handle num in DescriptorGpu");
+          assert(gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && "increase RenderGraph::gpu_handle_num_view");
           continue;
         }
         if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
-          assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase view handle num in DescriptorGpu");
+          assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase RenderGraph::gpu_handle_num_view");
           continue;
         }
-        assert(false  && "increase view handle num in DescriptorGpu");
+        assert(false  && "increase RenderGraph::gpu_handle_num_view");
       }
     }
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {

@@ -67,6 +67,8 @@ struct RenderGraph {
   uint32_t buffer_num{0};
   BufferConfig* buffer_list{nullptr};
   uint32_t descriptor_handle_num_per_view_type_or_sampler[kViewTypeNum]{};
+  uint32_t gpu_handle_num_view{0};
+  uint32_t gpu_handle_num_sampler{0};
 };
 }
 #endif

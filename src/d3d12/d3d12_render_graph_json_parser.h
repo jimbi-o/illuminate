@@ -158,6 +158,8 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
     r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kRtv)] = GetNum(list, "rtv", 0);
     r.descriptor_handle_num_per_view_type_or_sampler[static_cast<uint32_t>(ViewType::kDsv)] = GetNum(list, "dsv", 0);
   }
+  r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", 1);
+  r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", 1);
 }
 }
 #endif
