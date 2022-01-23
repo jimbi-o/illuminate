@@ -1,4 +1,5 @@
 #include "d3d12_shader_compiler.h"
+#include "directx/d3dx12.h"
 #include "d3d12_src_common.h"
 #include "../win32_dll_util_macro.h"
 namespace illuminate {
@@ -84,6 +85,33 @@ ID3D12RootSignature* CreateRootSignature(D3d12Device* device, IDxcResult* result
   }
   return nullptr;
 }
+ID3D12PipelineState* CreatePipelineStateCs(D3d12Device* device, IDxcResult* result, ID3D12RootSignature* root_signature) {
+  IDxcBlob* shader_object = nullptr;
+  auto hr = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader_object), nullptr);
+  if (FAILED(hr)) {
+    logwarn("failed to extract shader object. {}", hr);
+    if (shader_object) {
+      shader_object->Release();
+    }
+    return nullptr;
+  }
+  struct {
+    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
+    CD3DX12_PIPELINE_STATE_STREAM_CS cs;
+  } desc_local {
+    .root_signature = root_signature,
+    .cs = D3D12_SHADER_BYTECODE{shader_object->GetBufferPointer(), shader_object->GetBufferSize()},
+  };
+  D3D12_PIPELINE_STATE_STREAM_DESC desc{sizeof(desc_local), &desc_local};
+  ID3D12PipelineState* pso = nullptr;
+  hr = device->CreatePipelineState(&desc, IID_PPV_ARGS(&pso));
+  shader_object->Release();
+  if (SUCCEEDED(hr)) { return pso; }
+  if (pso) {
+    pso->Release();
+  }
+  return nullptr;
+}
 }
 #include "doctest/doctest.h"
 #include "d3d12_device.h"
@@ -127,6 +155,9 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     CHECK_UNARY(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
     auto root_signature = CreateRootSignature(device.Get(), result);
     CHECK_NE(root_signature, nullptr);
+    auto pso_cs = CreatePipelineStateCs(device.Get(), result, root_signature);
+    CHECK_NE(pso_cs, nullptr);
+    CHECK_EQ(pso_cs->Release(), 0);
     CHECK_EQ(root_signature->Release(), 0);
     device.Term();
     dxgi_core.Term();

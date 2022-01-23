@@ -40,6 +40,7 @@ CPMAddPackage(
   GITHUB_REPOSITORY "GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator"
   GIT_TAG "f78c4fbd38e309b36d7b0a7db3d44267d6ac23c0"
 )
+CPMAddPackage("gh:microsoft/DirectX-Headers#v1.700.10-preview")
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -84,6 +85,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${d3d12_SOURCE_DIR}/build/native/include"
   "${nlohmann_json_SOURCE_DIR}/include"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
+  "${DirectX-Headers_SOURCE_DIR}/include"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -99,6 +101,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp"
   "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
+  "${DirectX-Headers_SOURCE_DIR}/include/directx/d3dx12.h"
 )
 add_subdirectory(src)
 
