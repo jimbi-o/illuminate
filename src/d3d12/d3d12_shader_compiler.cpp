@@ -63,8 +63,31 @@ bool IsCompileSuccessful(IDxcResult* result) {
   if (FAILED(hr) || FAILED(compile_result)) { return false; }
   return result->HasOutput(DXC_OUT_OBJECT);
 }
+ID3D12RootSignature* CreateRootSignature(D3d12Device* device, IDxcResult* result) {
+  if (!result->HasOutput(DXC_OUT_ROOT_SIGNATURE)) { return nullptr; }
+  IDxcBlob* root_signature_blob = nullptr;
+  auto hr = result->GetOutput(DXC_OUT_ROOT_SIGNATURE, IID_PPV_ARGS(&root_signature_blob), nullptr);
+  if (FAILED(hr)) {
+    logwarn("failed to extract root signature. {}", hr);
+    if (root_signature_blob) {
+      root_signature_blob->Release();
+    }
+    return nullptr;
+  }
+  ID3D12RootSignature* root_signature = nullptr;
+  hr = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(&root_signature));
+  root_signature_blob->Release();
+  if (SUCCEEDED(hr)) { return root_signature; }
+  logwarn("failed to create root signature. {}", hr);
+  if (root_signature) {
+    root_signature->Release();
+  }
+  return nullptr;
+}
 }
 #include "doctest/doctest.h"
+#include "d3d12_device.h"
+#include "d3d12_dxgi_core.h"
 TEST_CASE("compile shader") { // NOLINT
   auto data = R"(
 RWTexture2D<float4> uav : register(u0);
@@ -80,6 +103,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     L"-E", L"main",
     L"-Zi",
     L"-Zpr",
+    L"-Qstrip_debug",
     L"-Qstrip_reflect",
     L"-Qstrip_rootsignature",
   };
@@ -95,6 +119,18 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   auto result = CompileShader(compiler, static_cast<uint32_t>(strlen(data)), data, sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args, include_handler);
   CHECK_NE(result, nullptr);
   CHECK_UNARY(IsCompileSuccessful(result));
+  {
+    DxgiCore dxgi_core;
+    CHECK_UNARY(dxgi_core.Init()); // NOLINT
+    Device device;
+    CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
+    CHECK_UNARY(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
+    auto root_signature = CreateRootSignature(device.Get(), result);
+    CHECK_NE(root_signature, nullptr);
+    CHECK_EQ(root_signature->Release(), 0);
+    device.Term();
+    dxgi_core.Term();
+  }
   CHECK_EQ(result->Release(), 0);
   CHECK_EQ(include_handler->Release(), 0);
   CHECK_EQ(utils->Release(), 0);
