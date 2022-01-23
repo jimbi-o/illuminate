@@ -9,7 +9,13 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT i
 
 include(cmake/CPM.cmake)
 CPMAddPackage("gh:onqtam/doctest#2.4.6")
-CPMAddPackage("gh:gabime/spdlog@1.9.2")
+CPMAddPackage(
+  NAME spdlog
+  GITHUB_REPOSITORY "gabime/spdlog"
+  VERSION 1.9.2
+  OPTIONS
+  "SPDLOG_WCHAR_SUPPORT ON"
+)
 CPMAddPackage(
   NAME dxc
   URL https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.6.2112/dxc_2021_12_08.zip
@@ -58,7 +64,7 @@ endif()
 target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM INTERFACE spdlog)
 set_target_properties(spdlog PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-  spdlog::spdlog
+  spdlog
   D3D12MemoryAllocator
   $<$<CONFIG:Debug>:dxguid.lib>
 )
