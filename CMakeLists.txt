@@ -85,7 +85,6 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${d3d12_SOURCE_DIR}/build/native/include"
   "${nlohmann_json_SOURCE_DIR}/include"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
-  "${DirectX-Headers_SOURCE_DIR}/include"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -101,7 +100,6 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp"
   "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
-  "${DirectX-Headers_SOURCE_DIR}/include/directx/d3dx12.h"
 )
 add_subdirectory(src)
 
