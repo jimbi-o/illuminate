@@ -58,7 +58,14 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
 }
 )";
-  const wchar_t* compiler_args[] = {L"-T", L"cs_6_6", L"-E", L"main",};
+  const wchar_t* compiler_args[] = {
+    L"-T", L"cs_6_6",
+    L"-E", L"main",
+    L"-Zi",
+    L"-Zpr",
+    L"-Qstrip_reflect",
+    L"-Qstrip_rootsignature",
+  };
   using namespace illuminate; // NOLINT
   auto library = LoadDxcLibrary();
   CHECK_NE(library, nullptr);
