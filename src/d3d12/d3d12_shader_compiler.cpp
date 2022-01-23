@@ -32,6 +32,15 @@ IDxcIncludeHandler* CreateDxcIncludeHandler(IDxcUtils* utils) {
 }
 #include "doctest/doctest.h"
 TEST_CASE("compile shader") { // NOLINT
+  auto data = R"(
+RWTexture2D<float4> uav : register(u0);
+#define FillScreenCsRootsig \"DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL)\"
+[RootSignature(FillScreenCsRootsig)]
+[numthreads(32,32,1)]
+void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
+  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
+}
+)";
   using namespace illuminate; // NOLINT
   auto library = LoadDxcLibrary();
   CHECK_NE(library, nullptr);
@@ -39,7 +48,12 @@ TEST_CASE("compile shader") { // NOLINT
   CHECK_NE(compiler, nullptr); // NOLINT
   auto utils = CreateDxcUtils(library);
   CHECK_NE(utils, nullptr); // NOLINT
+  IDxcBlobEncoding* blob = nullptr;
+  auto hr = utils->CreateBlobFromPinned(data, sizeof(data), DXC_CP_ACP, &blob);
+  CHECK_UNARY(SUCCEEDED(hr));
+  CHECK_NE(blob, nullptr);
   auto include_handler = CreateDxcIncludeHandler(utils);
+  CHECK_EQ(blob->Release(), 0);
   CHECK_NE(include_handler, nullptr); // NOLINT
   CHECK_EQ(include_handler->Release(), 0);
   CHECK_EQ(utils->Release(), 0);
