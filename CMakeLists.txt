@@ -60,7 +60,6 @@ set_target_properties(spdlog PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<T
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   spdlog::spdlog
   D3D12MemoryAllocator
-  "${dxc_SOURCE_DIR}/lib/x64/dxcompiler.lib"
   $<$<CONFIG:Debug>:dxguid.lib>
 )
 
