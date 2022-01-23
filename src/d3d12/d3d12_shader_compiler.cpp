@@ -29,10 +29,27 @@ IDxcIncludeHandler* CreateDxcIncludeHandler(IDxcUtils* utils) {
   logerror("CreateDefaultIncludeHandler failed. {}", hr);
   return nullptr;
 }
+IDxcResult* CompileShader(IDxcCompiler3* compiler, const uint32_t len, const void* data, const uint32_t compiler_arg_num, LPCWSTR* compiler_args, IDxcIncludeHandler* include_handler){
+  DxcBuffer buffer{
+    .Ptr = data,
+    .Size = len,
+    .Encoding = DXC_CP_ACP,
+  };
+  IDxcResult* result = nullptr;
+  auto hr = compiler->Compile(&buffer, compiler_args, compiler_arg_num, include_handler, IID_PPV_ARGS(&result));
+  if (SUCCEEDED(hr)) {
+    return result;
+  }
+  logwarn("compile failed.", hr);
+  if (result) {
+    result->Release();
+  }
+  return nullptr;
+}
 bool IsCompileSuccessful(IDxcResult* result) {
-  IDxcBlobUtf8* error_text = nullptr;
   auto hr = result->HasOutput(DXC_OUT_ERRORS);
   if (SUCCEEDED(hr)) {
+    IDxcBlobUtf8* error_text = nullptr;
     hr = result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error_text), nullptr);
     if (SUCCEEDED(hr) && error_text && error_text->GetStringLength() > 0) {
       loginfo("{}", error_text->GetStringPointer());
@@ -73,16 +90,9 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   CHECK_NE(compiler, nullptr); // NOLINT
   auto utils = CreateDxcUtils(library);
   CHECK_NE(utils, nullptr); // NOLINT
-  DxcBuffer buffer{
-    .Ptr = data,
-    .Size = strlen(data),
-    .Encoding = DXC_CP_ACP,
-  };
   auto include_handler = CreateDxcIncludeHandler(utils);
   CHECK_NE(include_handler, nullptr); // NOLINT
-  IDxcResult* result = nullptr;
-  auto hr = compiler->Compile(&buffer, compiler_args, sizeof(compiler_args) / sizeof(compiler_args[0]), include_handler, IID_PPV_ARGS(&result));
-  CHECK_UNARY(SUCCEEDED(hr));
+  auto result = CompileShader(compiler, static_cast<uint32_t>(strlen(data)), data, sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args, include_handler);
   CHECK_NE(result, nullptr);
   CHECK_UNARY(IsCompileSuccessful(result));
   CHECK_EQ(result->Release(), 0);
