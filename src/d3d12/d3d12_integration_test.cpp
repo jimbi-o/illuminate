@@ -180,9 +180,8 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   }
   command_list->ResourceBarrier(barrier_num, barriers);
 }
-template <typename A>
-auto GetRenderPassVarSizeMap(A* allocator) {
-  HashMap<uint32_t, A> render_pass_var_size(allocator);
+auto GetRenderPassVarSizeMap(MemoryAllocationJanitor* allocator) {
+  HashMap<uint32_t, MemoryAllocationJanitor> render_pass_var_size(allocator);
   render_pass_var_size.Insert(SID("clear uav"), sizeof(UINT) * 4);
   return render_pass_var_size;
 }
