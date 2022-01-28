@@ -229,12 +229,18 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->initial_state = GetD3d12ResourceState(j, "initial_state");
   config->clear_value.Format = config->format;
   if (config->flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-    config->clear_value.DepthStencil.Depth = j.at("clear_depth");
-    config->clear_value.DepthStencil.Stencil = j.at("clear_stencil");
+    config->clear_value.DepthStencil.Depth = GetVal<FLOAT>(j, "clear_depth", 1.0f);
+    config->clear_value.DepthStencil.Stencil = GetVal<UINT8>(j, "clear_stencil", 0);
   } else {
-    auto& color = j.at("clear_color");
-    for (uint32_t i = 0; i < 4; i++) {
-      config->clear_value.Color[i] = color[i];
+    if (j.contains("clear_color")) {
+      auto& color = j.at("clear_color");
+      for (uint32_t i = 0; i < 4; i++) {
+        config->clear_value.Color[i] = color[i];
+      }
+    } else {
+      for (uint32_t i = 0; i < 4; i++) {
+        config->clear_value.Color[i] = 0.0f;
+      }
     }
   }
 }

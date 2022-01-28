@@ -74,6 +74,7 @@ auto GetTestJson() {
 }
 )"_json;
 }
+using RenderPassVarParseFunction = void (*)(const nlohmann::json&, void*);
 template <typename A1, typename A2, typename A3>
 RenderGraph GetTestRenderGraph(const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator) {
   RenderGraph graph;

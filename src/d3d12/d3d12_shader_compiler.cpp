@@ -2,6 +2,7 @@
 #include "d3d12_src_common.h"
 #include "../win32_dll_util_macro.h"
 namespace illuminate {
+namespace {
 // https://simoncoenen.com/blog/programming/graphics/DxcCompiling
 HMODULE LoadDxcLibrary() {
   auto library = LoadLibrary("dxcompiler.dll");
@@ -114,7 +115,75 @@ ID3D12PipelineState* CreatePipelineState(D3d12Device* device, IDxcResult* result
   }
   return nullptr;
 }
+} // namespace anonymous
+bool ShaderCompiler::Init() {
+  library_ = LoadDxcLibrary();
+  if (library_ == nullptr) { return false; }
+  compiler_ = CreateDxcShaderCompiler(library_);
+  if (compiler_ == nullptr) { return false; }
+   utils_ = CreateDxcUtils(library_);
+  if (compiler_ == nullptr) { return false; }
+  include_handler_ = CreateDxcIncludeHandler(utils_);
+  if (include_handler_ == nullptr) { return false; }
+  return true;
 }
+void ShaderCompiler::Term() {
+  include_handler_->Release();
+  utils_->Release();
+  compiler_->Release();
+  FreeLibrary(library_);
+}
+bool ShaderCompiler::CreateRootSignatureAndPso(const char* const shadercode, const uint32_t shadercode_len, const uint32_t args_num, const wchar_t** args, D3d12Device* device, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
+  auto result = CompileShader(compiler_, shadercode_len, shadercode, args_num, args, include_handler_);
+  assert(result && "CompileShader failed.");
+  *rootsig = CreateRootSignature(device, result);
+  assert(*rootsig && "CreateRootSignature failed.");
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE shader_type{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
+  for (uint32_t i = 0; i < args_num; i++) {
+    if (wcscmp(L"-T", args[i]) != 0) { continue; }
+    assert(i + 1 < args_num && "invalid shader compiler option num");
+    const auto target_index = i + 1;
+    if (wcsncmp(L"vs_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS;
+      break;
+    }
+    if (wcsncmp(L"ps_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
+      break;
+    }
+    if (wcsncmp(L"ds_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS;
+      break;
+    }
+    if (wcsncmp(L"hs_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS;
+      break;
+    }
+    if (wcsncmp(L"gs_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS;
+      break;
+    }
+    if (wcsncmp(L"cs_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
+      break;
+    }
+    if (wcsncmp(L"as_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
+      break;
+    }
+    if (wcsncmp(L"ms_", args[target_index], 3) == 0) {
+      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
+      break;
+    }
+    assert(false && "invalid shader compile target");
+    break;
+  }
+  *pso =  CreatePipelineState(device, result, shader_type, *rootsig);
+  assert(*pso && "CreatePipelineState failed.");
+  result->Release();
+  return true;
+}
+} // namespace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_device.h"
 #include "d3d12_dxgi_core.h"
