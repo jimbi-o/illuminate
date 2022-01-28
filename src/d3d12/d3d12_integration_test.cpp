@@ -644,4 +644,3 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   loginfo("memory global:{} temp:{}", gSystemMemoryAllocator->GetOffset(), tmp_memory_max_offset);
   gSystemMemoryAllocator->Reset();
 }
-// TODO share root signature between render pass.
