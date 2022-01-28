@@ -18,8 +18,9 @@ auto GetTestJson() {
 {
   "frame_buffer_num": 2,
   "frame_loop_num": 5,
-  "primarybuffer_width":300,
-  "primarybuffer_height":400,
+  "primarybuffer_width": 300,
+  "primarybuffer_height": 400,
+  "primarybuffer_format": "R8G8B8A8_UNORM",
   "window": {
     "title": "integration test",
     "width": 500,
