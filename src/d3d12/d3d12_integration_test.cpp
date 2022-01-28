@@ -349,6 +349,17 @@ auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, c
   }
   return gpu_handle_list;
 }
+void ReleaseRenderPassResources(const uint32_t render_pass_num, RenderPass* render_pass_list) {
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    const auto& render_pass = render_pass_list[i];
+    switch (render_pass.name) {
+      case SID("dispatch cs"): {
+        ReleaseResourceDispatchCs(render_pass.pass_vars);
+        break;
+      }
+    }
+  }
+}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
@@ -521,15 +532,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
   }
   command_queue_signals.WaitAll(device.Get());
-  for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
-    const auto& render_pass = render_graph.render_pass_list[i];
-    switch (render_pass.name) {
-      case SID("dispatch cs"): {
-        ReleaseResourceDispatchCs(render_pass.pass_vars);
-        break;
-      }
-    }
-  }
+  ReleaseRenderPassResources(render_graph.render_pass_num, render_graph.render_pass_list);
   swapchain.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();
