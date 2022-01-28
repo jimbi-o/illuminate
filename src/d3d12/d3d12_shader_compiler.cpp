@@ -138,7 +138,7 @@ bool ShaderCompiler::CreateRootSignatureAndPso(const char* const shadercode, con
   assert(result && "CompileShader failed.");
   *rootsig = CreateRootSignature(device, result);
   assert(*rootsig && "CreateRootSignature failed.");
-  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE shader_type{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
+  auto shader_type{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
   for (uint32_t i = 0; i < args_num; i++) {
     if (wcscmp(L"-T", args[i]) != 0) { continue; }
     assert(i + 1 < args_num && "invalid shader compiler option num");
