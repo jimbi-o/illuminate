@@ -34,6 +34,10 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
     state |= D3D12_RESOURCE_STATE_COPY_DEST;
     val_set = true;
   }
+  if (state_str.compare("srv_ps") == 0) {
+    state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    val_set = true;
+  }
   if (!val_set) {
     logerror("invalid resource state specified. {}", state_str.data());
   }
@@ -41,6 +45,7 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
   return state;
 }
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name) {
+  if (!j.contains(entity_name)) { return DXGI_FORMAT_UNKNOWN; }
   auto format_str = GetStringView(j, entity_name);
   if (format_str.compare("R16G16B16A16_FLOAT") == 0) {
     return DXGI_FORMAT_R16G16B16A16_FLOAT;

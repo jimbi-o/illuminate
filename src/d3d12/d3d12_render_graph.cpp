@@ -74,14 +74,8 @@ auto GetTestJson() {
 }
 )"_json;
 }
-using RenderPassVarParseFunction = void (*)(const nlohmann::json&, void*);
-template <typename A1, typename A2, typename A3>
-RenderGraph GetTestRenderGraph(const HashMap<uint32_t, A1>& pass_var_size, const HashMap<RenderPassVarParseFunction, A2>& pass_var_func, A3* allocator) {
-  RenderGraph graph;
-  ParseRenderGraphJson(GetTestJson(), pass_var_size, pass_var_func, allocator, &graph);
-  return graph;
-}
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
+  assert(barrier_num > 0);
   auto allocator = GetTemporalMemoryAllocator();
   auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
@@ -126,12 +120,14 @@ TEST_CASE("d3d12 render graph") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
   HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(&allocator);
-  HashMap<uint32_t, MemoryAllocationJanitor> render_pass_var_size(&allocator);
-  HashMap<RenderPassVarParseFunction, MemoryAllocationJanitor> render_pass_var_parse_functions(&allocator);
   CHECK_UNARY(render_pass_functions.Insert(SID("output to swapchain"), ClearRtv));
-  CHECK_UNARY(render_pass_var_size.Insert(SID("output to swapchain"), sizeof(FLOAT) * 4));
-  CHECK_UNARY(render_pass_var_parse_functions.Insert(SID("output to swapchain"), ParsePassParamClearRtv));
-  auto render_graph = GetTestRenderGraph(render_pass_var_size, render_pass_var_parse_functions,  &allocator);
+  RenderGraph render_graph;
+  {
+    auto json = GetTestJson();
+    ParseRenderGraphJson(json, &allocator, &render_graph);
+    render_graph.render_pass_list[0].pass_vars = allocator.Allocate(sizeof(FLOAT) * 4);
+    ParsePassParamClearRtv(json.at("render_pass")[0].at("pass_vars"), render_graph.render_pass_list[0].pass_vars);
+  }
   const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
   DxgiCore dxgi_core;
   CHECK_UNARY(dxgi_core.Init()); // NOLINT

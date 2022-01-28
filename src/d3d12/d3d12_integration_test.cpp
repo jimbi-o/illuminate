@@ -67,8 +67,8 @@ auto GetTestJson() {
       "mip_width": 0,
       "mip_height": 0,
       "mip_depth": 0,
-      "initial_state": "copy_source",
-      "descriptor_type": ["uav"]
+      "initial_state": "uav",
+      "descriptor_type": ["uav", "srv"]
     }
   ],
   "render_pass": [
@@ -87,25 +87,7 @@ auto GetTestJson() {
         "thread_group_count_y": 32,
         "shader": "test.cs.hlsl",
         "shader_compile_args":["-T", "cs_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-      },
-      "prepass_barrier": [
-        {
-          "buffer_name": "uav",
-          "type": "transition",
-          "split_type": "none",
-          "state_before": "copy_source",
-          "state_after": "uav"
-        }
-      ],
-      "postpass_barrier": [
-        {
-          "buffer_name": "uav",
-          "type": "transition",
-          "split_type": "none",
-          "state_before": "uav",
-          "state_after": "copy_source"
-        }
-      ]
+      }
     },
     {
       "name": "output to swapchain",
@@ -115,11 +97,11 @@ auto GetTestJson() {
       "buffer_list": [
         {
           "name": "uav",
-          "state": "copy_source"
+          "state": "srv"
         },
         {
           "name": "swapchain",
-          "state": "copy_dest"
+          "state": "rtv"
         }
       ],
       "prepass_barrier": [
@@ -128,7 +110,14 @@ auto GetTestJson() {
           "type": "transition",
           "split_type": "none",
           "state_before": "present",
-          "state_after": "copy_dest"
+          "state_after": "rtv"
+        },
+        {
+          "buffer_name": "uav",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": "uav",
+          "state_after": "srv_ps"
         }
       ],
       "postpass_barrier": [
@@ -136,10 +125,23 @@ auto GetTestJson() {
           "buffer_name": "swapchain",
           "type": "transition",
           "split_type": "none",
-          "state_before": "copy_dest",
+          "state_before": "rtv",
           "state_after": "present"
+        },
+        {
+          "buffer_name": "uav",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": "srv_ps",
+          "state_after": "uav"
         }
-      ]
+      ],
+      "pass_vars": {
+        "shader_vs": "test.vs.hlsl",
+        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "shader_ps": "test.ps.hlsl",
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      }
     }
   ],
   "descriptor_handle_num_per_type": {
@@ -156,6 +158,7 @@ auto GetTestJson() {
 )"_json;
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
+  if (barrier_num == 0) { return; }
   auto allocator = GetTemporalMemoryAllocator();
   auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
@@ -189,11 +192,10 @@ struct CsDispatchParams {
   uint32_t thread_group_count_x{0};
   uint32_t thread_group_count_y{0};
 };
-auto GetRenderPassVarSizeMap(MemoryAllocationJanitor* allocator) {
-  HashMap<uint32_t, MemoryAllocationJanitor> render_pass_var_size(allocator);
-  render_pass_var_size.Insert(SID("dispatch cs"), sizeof(CsDispatchParams));
-  return render_pass_var_size;
-}
+struct VsPsCopyResource {
+  ID3D12RootSignature* rootsig{nullptr};
+  ID3D12PipelineState* pso{nullptr};
+};
 using RenderPassFunction = void (*)(D3d12CommandList*, const MainBufferSize&, const void*, const D3D12_GPU_DESCRIPTOR_HANDLE*, const D3D12_CPU_DESCRIPTOR_HANDLE*, ID3D12Resource**);
 void CopyResource(D3d12CommandList* command_list, [[maybe_unused]]const MainBufferSize& main_buffer_size, [[maybe_unused]]const void* pass_vars, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, [[maybe_unused]]const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, ID3D12Resource** resources) {
   command_list->CopyResource(resources[1], resources[0]);
@@ -205,40 +207,153 @@ void DispatchCs(D3d12CommandList* command_list, const MainBufferSize& main_buffe
   command_list->SetComputeRootDescriptorTable(0, gpu_handles[0]);
   command_list->Dispatch(main_buffer_size.swapchain.width / pass_vars->thread_group_count_x, main_buffer_size.swapchain.width / pass_vars->thread_group_count_y, 1);
 }
-using RenderPassVarParseFunction = void (*)(const nlohmann::json&, void*, ShaderCompiler* shader_compiler, D3d12Device*, const HashMap<const char*, MemoryAllocationJanitor>&);
-void ParsePassParamDispatchCs(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const HashMap<const char*, MemoryAllocationJanitor>& shaders) {
-  auto param = static_cast<CsDispatchParams*>(dst);
-  auto shadercode = shaders.Get(CalcStrHash(j.at("shader").get<std::string_view>().data()));
-  assert(shadercode && "shader not found");
-  auto shader_compile_args = j.at("shader_compile_args");
-  auto allocator = GetTemporalMemoryAllocator();
+void CopyResourceVsPs(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
+  auto pass_vars = static_cast<const VsPsCopyResource*>(pass_vars_ptr);
+  auto& width = main_buffer_size.swapchain.width;
+  auto& height = main_buffer_size.swapchain.height;
+  command_list->SetGraphicsRootSignature(pass_vars->rootsig);
+  D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
+  command_list->RSSetViewports(1, &viewport);
+  D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
+  command_list->RSSetScissorRects(1, &scissor_rect);
+  command_list->SetPipelineState(pass_vars->pso);
+  command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  command_list->OMSetRenderTargets(1, &cpu_handles[1], true, nullptr);
+  command_list->SetGraphicsRootDescriptorTable(0, gpu_handles[0]);
+  command_list->DrawInstanced(3, 1, 0, 0);
+}
+auto GetShaderCode(const nlohmann::json& j, const HashMap<const char*, MemoryAllocationJanitor>& shaders, const char* const name) {
+  return shaders.Get(CalcStrHash(j.at(name).get<std::string_view>().data()));
+}
+auto GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args) {
+  auto shader_compile_args = j.at(name);
   auto args_num = static_cast<uint32_t>(shader_compile_args.size());
-  auto wstr_args = AllocateArray<std::wstring>(&allocator, args_num);
-  auto args = AllocateArray<const wchar_t*>(&allocator, args_num);
+  *wstr_args = AllocateArray<std::wstring>(allocator, args_num);
+  *args = AllocateArray<const wchar_t*>(allocator, args_num);
   for (uint32_t i = 0; i < args_num; i++) {
     auto str = shader_compile_args[i].get<std::string_view>();
-    wstr_args[i] = std::wstring(str.begin(), str.end()); // assuming string content is single-byte charcters only.
-    args[i] = wstr_args[i].c_str();
+    (*wstr_args)[i] = std::wstring(str.begin(), str.end()); // assuming string content is single-byte charcters only.
+    (*args)[i] = (*wstr_args)[i].c_str();
   }
-  assert(shader_compiler->CreateRootSignatureAndPso(*shadercode, static_cast<uint32_t>(strlen(*shadercode)), args_num, args, device, &param->rootsig, &param->pso) && "compute shader parse error");
+  return args_num;
+}
+void ParsePassParamDispatchCs(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const char* shader_code) {
+  auto param = static_cast<CsDispatchParams*>(dst);
+  std::wstring* wstr_args{nullptr};
+  const wchar_t** args{nullptr};
+  auto allocator = GetTemporalMemoryAllocator();
+  auto args_num = GetShaderCompilerArgs(j, "shader_compile_args", &allocator, &wstr_args, &args);
+  assert(args_num > 0);
+  assert(shader_compiler->CreateRootSignatureAndPsoCs(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device, &param->rootsig, &param->pso) && "compute shader parse error");
   param->thread_group_count_x = j.at("thread_group_count_x");
   param->thread_group_count_y = j.at("thread_group_count_y");
+}
+void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const MainBufferFormat& main_buffer_format, const char* shader_code_vs, const char* shader_code_ps) {
+  auto param = static_cast<VsPsCopyResource*>(dst);
+  auto allocator = GetTemporalMemoryAllocator();
+  std::wstring* wstr_args_vs{nullptr};
+  const wchar_t** args_vs{nullptr};
+  auto args_num_vs = GetShaderCompilerArgs(j, "shader_compile_args_vs", &allocator, &wstr_args_vs, &args_vs);
+  assert(args_num_vs > 0);
+  std::wstring* wstr_args_ps{nullptr};
+  const wchar_t** args_ps{nullptr};
+  auto args_num_ps = GetShaderCompilerArgs(j, "shader_compile_args_ps", &allocator, &wstr_args_ps, &args_ps);
+  assert(args_num_ps > 0);
+  ShaderCompiler::PsoDescVsPs pso_desc{};
+  pso_desc.render_target_formats.RTFormats[0] = main_buffer_format.swapchain;
+  pso_desc.render_target_formats.NumRenderTargets = 1;
+  pso_desc.depth_stencil1.DepthEnable = false;
+  assert(shader_compiler->CreateRootSignatureAndPsoVsPs(shader_code_vs, static_cast<uint32_t>(strlen(shader_code_vs)), args_num_vs, args_vs,
+                                                        shader_code_ps, static_cast<uint32_t>(strlen(shader_code_ps)), args_num_ps, args_ps,
+                                                        device, &pso_desc, &param->rootsig, &param->pso) && "vs ps parse error");
 }
 void ReleaseResourceDispatchCs(void* ptr) {
   auto param = static_cast<CsDispatchParams*>(ptr);
   assert(param->pso->Release() == 0);
   assert(param->rootsig->Release() == 0);
 }
+void ReleaseResourceVsPsCopyResource(void* ptr) {
+  auto param = static_cast<VsPsCopyResource*>(ptr);
+  assert(param->pso->Release() == 0);
+  assert(param->rootsig->Release() == 0);
+}
+void PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, const uint32_t render_pass_num, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, RenderPass* dst_render_pass_list) {
+  ShaderCompiler shader_compiler;
+  assert(shader_compiler.Init());
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    auto& src_json = src_render_pass_list[i].at("pass_vars");
+    auto& dst_render_pass = dst_render_pass_list[i];
+    switch (dst_render_pass.name) {
+      case SID("dispatch cs"): {
+        dst_render_pass.pass_vars = allocator->Allocate(sizeof(CsDispatchParams));
+        auto shader_code_cs = R"(
+RWTexture2D<float4> uav : register(u0);
+#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
+[RootSignature(FillScreenCsRootsig)]
+[numthreads(32,32,1)]
+void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
+  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
+}
+)";
+        ParsePassParamDispatchCs(src_json, dst_render_pass.pass_vars, &shader_compiler, device, shader_code_cs);
+        break;
+      }
+      case SID("output to swapchain"): {
+        dst_render_pass.pass_vars = allocator->Allocate(sizeof(VsPsCopyResource));
+        auto shader_code_vs = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput main(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 1) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 2) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+)";
+        auto shader_code_ps = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+Texture2D src : register(t0);
+#define CopyFullscreenRootsig "DescriptorTable(SRV(t0), visibility=SHADER_VISIBILITY_PIXEL) "
+[RootSignature(CopyFullscreenRootsig)]
+float4 main(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  float4 color = src.Load(int3(input.position.x, input.position.y, 0));
+  return color;
+}
+)";
+        ParsePassParamVsPsCopyResource(src_json, dst_render_pass.pass_vars, &shader_compiler, device, main_buffer_format, shader_code_vs, shader_code_ps);
+        break;
+      }
+    }
+  }
+  shader_compiler.Term();
+}
+void ReleaseRenderPassResources(const uint32_t render_pass_num, RenderPass* render_pass_list) {
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    const auto& render_pass = render_pass_list[i];
+    switch (render_pass.name) {
+      case SID("dispatch cs"): {
+        ReleaseResourceDispatchCs(render_pass.pass_vars);
+        break;
+      }
+      case SID("output to swapchain"): {
+        ReleaseResourceVsPsCopyResource(render_pass.pass_vars);
+        break;
+      }
+    }
+  }
+}
 auto GetRenderPassFunctions(MemoryAllocationJanitor* allocator) {
   HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(allocator);
   assert(render_pass_functions.Insert(SID("dispatch cs"), DispatchCs));
-  assert(render_pass_functions.Insert(SID("output to swapchain"), CopyResource));
+  assert(render_pass_functions.Insert(SID("output to swapchain"), CopyResourceVsPs));
   return render_pass_functions;
-}
-auto GetRenderPassVarParseFunctions(MemoryAllocationJanitor* allocator) {
-  HashMap<RenderPassVarParseFunction, MemoryAllocationJanitor> render_pass_var_parse_functions(allocator);
-  CHECK_UNARY(render_pass_var_parse_functions.Insert(SID("dispatch cs"), ParsePassParamDispatchCs));
-  return render_pass_var_parse_functions;
 }
 void* D3d12BufferAllocatorAllocCallback(size_t Size, size_t Alignment, [[maybe_unused]] void* pUserData) {
   return gSystemMemoryAllocator->Allocate(Size, Alignment);
@@ -349,17 +464,6 @@ auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, c
   }
   return gpu_handle_list;
 }
-void ReleaseRenderPassResources(const uint32_t render_pass_num, RenderPass* render_pass_list) {
-  for (uint32_t i = 0; i < render_pass_num; i++) {
-    const auto& render_pass = render_pass_list[i];
-    switch (render_pass.name) {
-      case SID("dispatch cs"): {
-        ReleaseResourceDispatchCs(render_pass.pass_vars);
-        break;
-      }
-    }
-  }
-}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
@@ -369,56 +473,46 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   CHECK_UNARY(dxgi_core.Init()); // NOLINT
   Device device;
   CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
-  auto render_pass_functions = GetRenderPassFunctions(&allocator);
+  MainBufferSize main_buffer_size{};
+  MainBufferFormat main_buffer_format{};
+  Window window;
+  CommandListSet command_list_set;
+  Swapchain swapchain;
   RenderGraph render_graph;
   {
-    auto render_pass_var_parse_functions = GetRenderPassVarParseFunctions(&allocator);
-    auto render_pass_var_size = GetRenderPassVarSizeMap(&allocator);
-    HashMap<const char*, MemoryAllocationJanitor> shaders(&allocator);
-    auto shader_code_cs = R"(
-RWTexture2D<float4> uav : register(u0);
-#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
-[RootSignature(FillScreenCsRootsig)]
-[numthreads(32,32,1)]
-void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
-  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
-}
-)";
-    CHECK_UNARY(shaders.Insert(SID("test.cs.hlsl"), std::move(shader_code_cs)));
-    ShaderCompiler shader_compiler;
-    CHECK_UNARY(shader_compiler.Init());
-    ParseRenderGraphJson(GetTestJson(), render_pass_var_size, render_pass_var_parse_functions, &allocator, &render_graph, &shader_compiler, device.Get(), shaders);
-    shader_compiler.Term();
+    auto json = GetTestJson();
+    ParseRenderGraphJson(json, &allocator, &render_graph);
+    CHECK_UNARY(command_list_set.Init(device.Get(),
+                                      render_graph.command_queue_num,
+                                      render_graph.command_queue_type,
+                                      render_graph.command_queue_priority,
+                                      render_graph.command_list_num_per_queue,
+                                      render_graph.frame_buffer_num,
+                                      render_graph.command_allocator_num_per_queue_type));
+    CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height)); // NOLINT
+    CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, render_graph.frame_buffer_num + 1, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
+    main_buffer_size = MainBufferSize{
+      .swapchain = {
+        .width = swapchain.GetWidth(),
+        .height = swapchain.GetHeight(),
+      },
+      .primarybuffer = {
+        render_graph.primarybuffer_width,
+        render_graph.primarybuffer_height,
+      },
+    };
+    main_buffer_format = MainBufferFormat{
+      .swapchain = render_graph.swapchain_format,
+      .primarybuffer = render_graph.primarybuffer_format,
+    };
+    PrepareRenderPassResources(json.at("render_pass"), render_graph.render_pass_num, &allocator, device.Get(), main_buffer_format, render_graph.render_pass_list);
   }
-  Window window;
-  CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height)); // NOLINT
-  CommandListSet command_list_set;
-  CHECK_UNARY(command_list_set.Init(device.Get(),
-                                    render_graph.command_queue_num,
-                                    render_graph.command_queue_type,
-                                    render_graph.command_queue_priority,
-                                    render_graph.command_list_num_per_queue,
-                                    render_graph.frame_buffer_num,
-                                    render_graph.command_allocator_num_per_queue_type));
   CommandQueueSignals command_queue_signals;
   command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   CHECK_NE(buffer_allocator, nullptr);
   DescriptorCpu<MemoryAllocationJanitor> descriptor_cpu;
   CHECK_UNARY(descriptor_cpu.Init(device.Get(), render_graph.descriptor_handle_num_per_type, &allocator));
-  const uint32_t swapchain_buffer_num = render_graph.frame_buffer_num + 1;
-  Swapchain swapchain;
-  CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, swapchain_buffer_num, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
-  MainBufferSize main_buffer_size{
-    .swapchain = {
-      .width = swapchain.GetWidth(),
-      .height = swapchain.GetHeight(),
-    },
-    .primarybuffer = {
-      render_graph.primarybuffer_width,
-      render_graph.primarybuffer_height,
-    },
-  };
   HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator, 256);
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
     CAPTURE(i);
@@ -455,6 +549,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
       render_pass_signal.Reserve(render_pass.name);
     }
   }
+  auto render_pass_functions = GetRenderPassFunctions(&allocator);
   uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
@@ -548,3 +643,4 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   loginfo("memory global:{} temp:{}", gSystemMemoryAllocator->GetOffset(), tmp_memory_max_offset);
   gSystemMemoryAllocator->Reset();
 }
+// TODO share root signature between render pass.

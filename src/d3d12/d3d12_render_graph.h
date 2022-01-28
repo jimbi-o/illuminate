@@ -57,6 +57,7 @@ struct RenderGraph {
   uint32_t frame_loop_num{0};
   uint32_t primarybuffer_width{0};
   uint32_t primarybuffer_height{0};
+  DXGI_FORMAT primarybuffer_format{};
   char* window_title{nullptr};
   uint32_t window_width{0};
   uint32_t window_height{0};

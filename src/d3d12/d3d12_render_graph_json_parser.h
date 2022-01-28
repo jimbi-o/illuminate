@@ -31,13 +31,14 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
 DescriptorType GetDescriptorType(const nlohmann::json& j);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
-template <typename A1, typename A2, typename A3, typename F, typename... ParserArgs>
-void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& pass_var_size, const HashMap<F, A2>& pass_var_func, A3* allocator, RenderGraph* graph, ParserArgs... other_params) {
+template <typename A>
+void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
   j.at("frame_loop_num").get_to(r.frame_loop_num);
   r.primarybuffer_width = GetNum(j, "primarybuffer_width", 1);
   r.primarybuffer_height = GetNum(j, "primarybuffer_height", 1);
+  r.primarybuffer_format = GetDxgiFormat(j, "primarybuffer_format");
   {
     auto& window = j.at("window");
     auto window_title = GetStringView(window, "title");
@@ -139,10 +140,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, const HashMap<uint32_t, A1>& 
           dst_buffer.state = GetResourceStateType(GetStringView(src_buffer, "state"));
         }
       } // buffer_list
-      if (pass_var_func.Get(dst_pass.name) != nullptr && src_pass.contains("pass_vars")) {
-        dst_pass.pass_vars = allocator->Allocate(*pass_var_size.Get(dst_pass.name));
-        (**pass_var_func.Get(dst_pass.name))(src_pass.at("pass_vars"), dst_pass.pass_vars, other_params...);
-      }
       if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
         dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());

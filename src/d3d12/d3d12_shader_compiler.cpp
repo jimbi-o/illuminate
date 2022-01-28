@@ -115,6 +115,40 @@ ID3D12PipelineState* CreatePipelineState(D3d12Device* device, IDxcResult* result
   }
   return nullptr;
 }
+ID3D12PipelineState* CreatePipelineStateVsPs(D3d12Device* device, IDxcResult* result_vs, IDxcResult* result_ps, ShaderCompiler::PsoDescVsPs* pso_desc) {
+  IDxcBlob* shader_object_vs = nullptr;
+  auto hr = result_vs->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader_object_vs), nullptr);
+  if (FAILED(hr)) {
+    logwarn("failed to extract shader object. {}", hr);
+    if (shader_object_vs) {
+      shader_object_vs->Release();
+    }
+    return nullptr;
+  }
+  IDxcBlob* shader_object_ps = nullptr;
+  hr = result_ps->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader_object_ps), nullptr);
+  if (FAILED(hr)) {
+    logwarn("failed to extract shader object. {}", hr);
+    shader_object_vs->Release();
+    if (shader_object_ps) {
+      shader_object_ps->Release();
+    }
+    return nullptr;
+  }
+  pso_desc->shader_bytecode_vs = D3D12_SHADER_BYTECODE{shader_object_vs->GetBufferPointer(), shader_object_vs->GetBufferSize()};
+  pso_desc->shader_bytecode_ps = D3D12_SHADER_BYTECODE{shader_object_ps->GetBufferPointer(), shader_object_ps->GetBufferSize()};
+  D3D12_PIPELINE_STATE_STREAM_DESC desc{sizeof(*pso_desc), pso_desc};
+  ID3D12PipelineState* pso = nullptr;
+  hr = device->CreatePipelineState(&desc, IID_PPV_ARGS(&pso));
+  shader_object_vs->Release();
+  shader_object_ps->Release();
+  if (SUCCEEDED(hr)) { return pso; }
+  logwarn("failed to create pso. {}", hr);
+  if (pso) {
+    pso->Release();
+  }
+  return nullptr;
+}
 } // namespace anonymous
 bool ShaderCompiler::Init() {
   library_ = LoadDxcLibrary();
@@ -133,7 +167,7 @@ void ShaderCompiler::Term() {
   compiler_->Release();
   FreeLibrary(library_);
 }
-bool ShaderCompiler::CreateRootSignatureAndPso(const char* const shadercode, const uint32_t shadercode_len, const uint32_t args_num, const wchar_t** args, D3d12Device* device, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
+bool ShaderCompiler::CreateRootSignatureAndPsoCs(const char* const shadercode, const uint32_t shadercode_len, const uint32_t args_num, const wchar_t** args, D3d12Device* device, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
   auto result = CompileShader(compiler_, shadercode_len, shadercode, args_num, args, include_handler_);
   assert(result && "CompileShader failed.");
   *rootsig = CreateRootSignature(device, result);
@@ -178,9 +212,25 @@ bool ShaderCompiler::CreateRootSignatureAndPso(const char* const shadercode, con
     assert(false && "invalid shader compile target");
     break;
   }
-  *pso =  CreatePipelineState(device, result, shader_type, *rootsig);
+  *pso = CreatePipelineState(device, result, shader_type, *rootsig);
   assert(*pso && "CreatePipelineState failed.");
   result->Release();
+  return true;
+}
+bool ShaderCompiler::CreateRootSignatureAndPsoVsPs(const char* const shadercode_vs, const uint32_t shadercode_vs_len, const uint32_t args_num_vs, const wchar_t** args_vs,
+                                                   const char* const shadercode_ps, const uint32_t shadercode_ps_len, const uint32_t args_num_ps, const wchar_t** args_ps,
+                                                   D3d12Device* device, PsoDescVsPs* pso_desc, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
+  auto result_vs = CompileShader(compiler_, shadercode_vs_len, shadercode_vs, args_num_vs, args_vs, include_handler_);
+  assert(result_vs && "CompileShader vs failed.");
+  auto result_ps = CompileShader(compiler_, shadercode_ps_len, shadercode_ps, args_num_ps, args_ps, include_handler_);
+  assert(result_ps && "CompileShader ps failed.");
+  *rootsig = CreateRootSignature(device, result_ps);
+  assert(*rootsig && "CreateRootSignature failed.");
+  pso_desc->root_signature = *rootsig;
+  *pso = CreatePipelineStateVsPs(device, result_vs, result_ps, pso_desc);
+  assert(*pso && "CreatePipelineStateVsPs failed.");
+  result_vs->Release();
+  result_ps->Release();
   return true;
 }
 } // namespace illuminate

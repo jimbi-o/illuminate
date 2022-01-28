@@ -44,6 +44,10 @@ struct MainBufferSize {
   Size2d swapchain{};
   Size2d primarybuffer{};
 };
+struct MainBufferFormat {
+  DXGI_FORMAT swapchain{};
+  DXGI_FORMAT primarybuffer{};
+};
 uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 }
