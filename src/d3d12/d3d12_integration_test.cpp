@@ -176,7 +176,7 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
         break;
       }
       case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
-        barrier.UAV.pResource   = resource[i];
+        barrier.UAV.pResource = resource[i];
         break;
       }
     }
