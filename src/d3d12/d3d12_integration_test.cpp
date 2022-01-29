@@ -93,6 +93,16 @@ auto GetTestJson() {
       "clear_stencil": 0
     }
   ],
+  "descriptor_handle_num_per_type": {
+    "cbv": 0,
+    "srv": 1,
+    "uav": 1,
+    "sampler": 0,
+    "rtv": 0,
+    "dsv": 1
+  },
+  "gpu_handle_num_view":10,
+  "gpu_handle_num_sampler":1,
   "render_pass": [
     {
       "name": "dispatch cs",
@@ -165,17 +175,7 @@ auto GetTestJson() {
         "shader_compile_args_ps":["-T", "ps_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       }
     }
-  ],
-  "descriptor_handle_num_per_type": {
-    "cbv": 0,
-    "srv": 1,
-    "uav": 1,
-    "sampler": 0,
-    "rtv": 0,
-    "dsv": 1
-  },
-  "gpu_handle_num_view":10,
-  "gpu_handle_num_sampler":1
+  ]
 }
 )"_json;
 }
