@@ -41,7 +41,7 @@ auto GetTestJson() {
     }
   ],
   "command_allocator": {
-    "direct": 1,
+    "direct": 2,
     "compute": 1
   },
   "swapchain": {
@@ -122,6 +122,21 @@ auto GetTestJson() {
       }
     },
     {
+      "name": "prez",
+      "command_queue": "queue_graphics",
+      "execute": true,
+      "buffer_list": [
+        {
+          "name": "dsv",
+          "state": "dsv_write"
+        }
+      ],
+      "pass_vars": {
+        "shader": "prez.vs.hlsl",
+        "shader_compile_args":["-T", "vs_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      }
+    },
+    {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
@@ -185,7 +200,7 @@ struct CsDispatchParams {
   uint32_t thread_group_count_x{0};
   uint32_t thread_group_count_y{0};
 };
-struct VsPsCopyResource {
+struct ShaderResourceSet {
   ID3D12RootSignature* rootsig{nullptr};
   ID3D12PipelineState* pso{nullptr};
 };
@@ -197,11 +212,25 @@ void DispatchCs(D3d12CommandList* command_list, const MainBufferSize& main_buffe
   auto pass_vars = static_cast<const CsDispatchParams*>(pass_vars_ptr);
   command_list->SetComputeRootSignature(pass_vars->rootsig);
   command_list->SetPipelineState(pass_vars->pso);
-  command_list->SetComputeRootDescriptorTable(0, gpu_handles[0]);
+  command_list->SetComputeRootDescriptorTable(0, *gpu_handles);
   command_list->Dispatch(main_buffer_size.swapchain.width / pass_vars->thread_group_count_x, main_buffer_size.swapchain.width / pass_vars->thread_group_count_y, 1);
 }
+void PreZ(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
+  auto pass_vars = static_cast<const ShaderResourceSet*>(pass_vars_ptr);
+  auto& width = main_buffer_size.primarybuffer.width;
+  auto& height = main_buffer_size.primarybuffer.height;
+  command_list->SetGraphicsRootSignature(pass_vars->rootsig);
+  D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
+  command_list->RSSetViewports(1, &viewport);
+  D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
+  command_list->RSSetScissorRects(1, &scissor_rect);
+  command_list->SetPipelineState(pass_vars->pso);
+  command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  command_list->OMSetRenderTargets(0, nullptr, true, cpu_handles);
+  command_list->DrawInstanced(0, 1, 0, 0);
+}
 void CopyResourceVsPs(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
-  auto pass_vars = static_cast<const VsPsCopyResource*>(pass_vars_ptr);
+  auto pass_vars = static_cast<const ShaderResourceSet*>(pass_vars_ptr);
   auto& width = main_buffer_size.swapchain.width;
   auto& height = main_buffer_size.swapchain.height;
   command_list->SetGraphicsRootSignature(pass_vars->rootsig);
@@ -212,7 +241,7 @@ void CopyResourceVsPs(D3d12CommandList* command_list, const MainBufferSize& main
   command_list->SetPipelineState(pass_vars->pso);
   command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   command_list->OMSetRenderTargets(1, &cpu_handles[1], true, nullptr);
-  command_list->SetGraphicsRootDescriptorTable(0, gpu_handles[0]);
+  command_list->SetGraphicsRootDescriptorTable(0, *gpu_handles);
   command_list->DrawInstanced(3, 1, 0, 0);
 }
 auto GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args) {
@@ -229,6 +258,7 @@ auto GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, Memo
 }
 void ParsePassParamDispatchCs(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const char* shader_code) {
   auto param = static_cast<CsDispatchParams*>(dst);
+  *param = {};
   std::wstring* wstr_args{nullptr};
   const wchar_t** args{nullptr};
   auto allocator = GetTemporalMemoryAllocator();
@@ -241,8 +271,24 @@ void ParsePassParamDispatchCs(const nlohmann::json& j, void* dst, ShaderCompiler
   param->thread_group_count_x = j.at("thread_group_count_x");
   param->thread_group_count_y = j.at("thread_group_count_y");
 }
+void ParsePassParamPreZ(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const char* shader_code) {
+  auto param = static_cast<ShaderResourceSet*>(dst);
+  *param = {};
+  std::wstring* wstr_args{nullptr};
+  const wchar_t** args{nullptr};
+  auto allocator = GetTemporalMemoryAllocator();
+  auto args_num = GetShaderCompilerArgs(j, "shader_compile_args", &allocator, &wstr_args, &args);
+  assert(args_num > 0);
+  ShaderCompiler::PsoDescVsPs pso_desc{};
+  pso_desc.depth_stencil_format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+  if (!shader_compiler->CreateRootSignatureAndPsoVs(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device, &pso_desc, &param->rootsig, &param->pso)) {
+    logerror("vs parse error");
+    assert(false && "vs parse error");
+  }
+}
 void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const MainBufferFormat& main_buffer_format, const char* shader_code_vs, const char* shader_code_ps) {
-  auto param = static_cast<VsPsCopyResource*>(dst);
+  auto param = static_cast<ShaderResourceSet*>(dst);
+  *param = {};
   auto allocator = GetTemporalMemoryAllocator();
   std::wstring* wstr_args_vs{nullptr};
   const wchar_t** args_vs{nullptr};
@@ -257,7 +303,7 @@ void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCo
   pso_desc.render_target_formats.NumRenderTargets = 1;
   pso_desc.depth_stencil1.DepthEnable = false;
   if (!shader_compiler->CreateRootSignatureAndPsoVsPs(shader_code_vs, static_cast<uint32_t>(strlen(shader_code_vs)), args_num_vs, args_vs,
-                                                        shader_code_ps, static_cast<uint32_t>(strlen(shader_code_ps)), args_num_ps, args_ps,
+                                                      shader_code_ps, static_cast<uint32_t>(strlen(shader_code_ps)), args_num_ps, args_ps,
                                                       device, &pso_desc, &param->rootsig, &param->pso)) {
     logerror("vs ps parse error");
     assert(false && "vs ps parse error");
@@ -272,13 +318,13 @@ void ReleaseResourceDispatchCs(void* ptr) {
     logwarn("ReleaseResourceDispatchCs rootsig ref left.");
   }
 }
-void ReleaseResourceVsPsCopyResource(void* ptr) {
-  auto param = static_cast<VsPsCopyResource*>(ptr);
+void ReleaseResourceShaderResourceSet(void* ptr) {
+  auto param = static_cast<ShaderResourceSet*>(ptr);
   if (param->pso->Release() != 0) {
-    logwarn("ReleaseResourceVsPsCopyResource pso ref left.");
+    logwarn("ReleaseResourceShaderResourceSet pso ref left.");
   }
   if (param->rootsig->Release() != 0) {
-    logwarn("ReleaseResourceVsPsCopyResource rootsig ref left.");
+    logwarn("ReleaseResourceShaderResourceSet rootsig ref left.");
   }
 }
 void PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, const uint32_t render_pass_num, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, RenderPass* dst_render_pass_list) {
@@ -305,8 +351,22 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
         ParsePassParamDispatchCs(src_json, dst_render_pass.pass_vars, &shader_compiler, device, shader_code_cs);
         break;
       }
+      case SID("prez"): {
+        dst_render_pass.pass_vars = allocator->Allocate(sizeof(ShaderResourceSet));
+        auto shader_code_vs = R"(
+#define EmptyRootSig ""
+[RootSignature(EmptyRootSig)]
+float4 main(uint id : SV_VertexID) : SV_Position {
+  float4 output;
+  output = 1.0f;
+  return output;
+}
+)";
+        ParsePassParamPreZ(src_json, dst_render_pass.pass_vars, &shader_compiler, device, shader_code_vs);
+        break;
+      }
       case SID("output to swapchain"): {
-        dst_render_pass.pass_vars = allocator->Allocate(sizeof(VsPsCopyResource));
+        dst_render_pass.pass_vars = allocator->Allocate(sizeof(ShaderResourceSet));
         auto shader_code_vs = R"(
 struct FullscreenTriangleVSOutput {
   float4 position : SV_POSITION;
@@ -349,8 +409,9 @@ void ReleaseRenderPassResources(const uint32_t render_pass_num, RenderPass* rend
         ReleaseResourceDispatchCs(render_pass.pass_vars);
         break;
       }
+      case SID("prez"):
       case SID("output to swapchain"): {
-        ReleaseResourceVsPsCopyResource(render_pass.pass_vars);
+        ReleaseResourceShaderResourceSet(render_pass.pass_vars);
         break;
       }
     }
@@ -361,6 +422,10 @@ auto GetRenderPassFunctions(MemoryAllocationJanitor* allocator) {
   if (!render_pass_functions.Insert(SID("dispatch cs"), DispatchCs)) {
     logerror("failed to insert dispatch cs");
     assert(false && "failed to insert dispatch cs");
+  }
+  if (!render_pass_functions.Insert(SID("prez"), PreZ)) {
+    logerror("failed to insert prez");
+    assert(false && "failed to insert prez");
   }
   if (!render_pass_functions.Insert(SID("output to swapchain"), CopyResourceVsPs)) {
     logerror("failed to insert output to swapchain");
@@ -653,7 +718,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
           }
           tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
         }
-        (**render_pass_functions.Get(render_pass.name))(command_list, main_buffer_size, render_pass.pass_vars, gpu_handle_list.Get(render_pass.name), cpu_handle_list, resource_list);
+        auto gpu_handles = gpu_handle_list.Get(render_pass.name);
+        (**render_pass_functions.Get(render_pass.name))(command_list, main_buffer_size, render_pass.pass_vars, gpu_handles, cpu_handle_list, resource_list);
         tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
       }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);

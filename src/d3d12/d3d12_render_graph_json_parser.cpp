@@ -104,8 +104,8 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   if (str.compare("rtv") == 0) {
     return ResourceStateType::kRtv;
   }
-  if (str.compare("dsv") == 0) {
-    return ResourceStateType::kDsv;
+  if (str.compare("dsv_write") == 0) {
+    return ResourceStateType::kDsvWrite;
   }
   if (str.compare("copy_source") == 0) {
     return ResourceStateType::kCopySrc;

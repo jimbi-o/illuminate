@@ -23,7 +23,7 @@ constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
 }
 enum class DescriptorType : uint8_t { kCbv = 0, kSrv, kUav, kSampler, kRtv, kDsv, kNum, };
 static const auto kDescriptorTypeNum = static_cast<uint32_t>(DescriptorType::kNum);
-enum class ResourceStateType : uint8_t { kCbv = 0, kSrv, kUav, kRtv, kDsv, kCopySrc, kCopyDst, kNum, };
+enum class ResourceStateType : uint8_t { kCbv = 0, kSrv, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kNum, };
 static const auto kResourceStateTypeNum = static_cast<uint32_t>(ResourceStateType::kNum);
 constexpr auto ConvertToDescriptorType(const ResourceStateType& state) {
   switch (state) {
@@ -31,7 +31,7 @@ constexpr auto ConvertToDescriptorType(const ResourceStateType& state) {
     case ResourceStateType::kSrv: { return DescriptorType::kSrv; };
     case ResourceStateType::kUav: { return DescriptorType::kUav; };
     case ResourceStateType::kRtv: { return DescriptorType::kRtv; };
-    case ResourceStateType::kDsv: { return DescriptorType::kDsv; };
+    case ResourceStateType::kDsvWrite: { return DescriptorType::kDsv; };
   }
   return DescriptorType::kNum;
 }

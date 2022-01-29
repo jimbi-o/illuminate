@@ -162,6 +162,10 @@ bool ShaderCompiler::CreateRootSignatureAndPsoCs(const char* const shadercode, c
   result->Release();
   return true;
 }
+bool ShaderCompiler::CreateRootSignatureAndPsoVs(const char* const shadercode, const uint32_t shadercode_len, const uint32_t args_num, const wchar_t** args,
+                                                 D3d12Device* device, PsoDescVsPs* pso_desc, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
+  return CreateRootSignatureAndPsoVsPs(shadercode, shadercode_len, args_num, args, nullptr, 0, 0, nullptr, device, pso_desc, rootsig, pso);
+}
 bool ShaderCompiler::CreateRootSignatureAndPsoVsPs(const char* const shadercode_vs, const uint32_t shadercode_vs_len, const uint32_t args_num_vs, const wchar_t** args_vs,
                                                    const char* const shadercode_ps, const uint32_t shadercode_ps_len, const uint32_t args_num_ps, const wchar_t** args_ps,
                                                    D3d12Device* device, PsoDescVsPs* pso_desc, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
@@ -169,8 +173,13 @@ bool ShaderCompiler::CreateRootSignatureAndPsoVsPs(const char* const shadercode_
   assert(result_vs && "CompileShader vs failed.");
   auto result_ps = CompileShader(compiler_, shadercode_ps_len, shadercode_ps, args_num_ps, args_ps, include_handler_);
   assert(result_ps && "CompileShader ps failed.");
-  *rootsig = CreateRootSignature(device, result_ps);
-  assert(*rootsig && "CreateRootSignature failed.");
+  if (shadercode_ps_len > 0) {
+    *rootsig = CreateRootSignature(device, result_ps);
+    assert(*rootsig && "CreateRootSignature(ps) failed.");
+  }
+  if (*rootsig == nullptr) {
+    *rootsig = CreateRootSignature(device, result_vs);
+  }
   pso_desc->root_signature = *rootsig;
   *pso = CreatePipelineStateVsPs(device, result_vs, result_ps, pso_desc);
   assert(*pso && "CreatePipelineStateVsPs failed.");
