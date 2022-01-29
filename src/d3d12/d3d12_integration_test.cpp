@@ -158,35 +158,6 @@ auto GetTestJson() {
 }
 )"_json;
 }
-void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
-  if (barrier_num == 0) { return; }
-  auto allocator = GetTemporalMemoryAllocator();
-  auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
-  for (uint32_t i = 0; i < barrier_num; i++) {
-    auto& config = barrier_config[i];
-    auto& barrier = barriers[i];
-    barrier.Type  = config.type;
-    barrier.Flags = config.flag;
-    switch (barrier.Type) {
-      case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.pResource   = resource[i];
-        barrier.Transition.StateBefore = config.state_before;
-        barrier.Transition.StateAfter  = config.state_after;
-        break;
-      }
-      case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
-        assert(false && "aliasing barrier not implemented yet");
-        break;
-      }
-      case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
-        barrier.UAV.pResource = resource[i];
-        break;
-      }
-    }
-  }
-  command_list->ResourceBarrier(barrier_num, barriers);
-}
 struct CsDispatchParams {
   ID3D12RootSignature* rootsig{nullptr};
   ID3D12PipelineState* pso{nullptr};
@@ -222,9 +193,6 @@ void CopyResourceVsPs(D3d12CommandList* command_list, const MainBufferSize& main
   command_list->OMSetRenderTargets(1, &cpu_handles[1], true, nullptr);
   command_list->SetGraphicsRootDescriptorTable(0, gpu_handles[0]);
   command_list->DrawInstanced(3, 1, 0, 0);
-}
-auto GetShaderCode(const nlohmann::json& j, const HashMap<const char*, MemoryAllocationJanitor>& shaders, const char* const name) {
-  return shaders.Get(CalcStrHash(j.at(name).get<std::string_view>().data()));
 }
 auto GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args) {
   auto shader_compile_args = j.at(name);
@@ -433,6 +401,35 @@ auto CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_
     }
   }
   return buffer_allocation;
+}
+void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
+  if (barrier_num == 0) { return; }
+  auto allocator = GetTemporalMemoryAllocator();
+  auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
+  for (uint32_t i = 0; i < barrier_num; i++) {
+    auto& config = barrier_config[i];
+    auto& barrier = barriers[i];
+    barrier.Type  = config.type;
+    barrier.Flags = config.flag;
+    switch (barrier.Type) {
+      case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.pResource   = resource[i];
+        barrier.Transition.StateBefore = config.state_before;
+        barrier.Transition.StateAfter  = config.state_after;
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
+        assert(false && "aliasing barrier not implemented yet");
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
+        barrier.UAV.pResource = resource[i];
+        break;
+      }
+    }
+  }
+  command_list->ResourceBarrier(barrier_num, barriers);
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list) {
   auto allocator = GetTemporalMemoryAllocator();
