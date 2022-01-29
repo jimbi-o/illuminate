@@ -60,7 +60,6 @@ auto GetTestJson() {
       "height": 1.0,
       "depth_or_array_size": 1,
       "miplevels": 1,
-      "format": "R8G8B8A8_UNORM",
       "sample_count": 1,
       "sample_quality": 0,
       "layout": "unknown",
@@ -70,6 +69,28 @@ auto GetTestJson() {
       "mip_depth": 0,
       "initial_state": "uav",
       "descriptor_type": ["uav", "srv"]
+    },
+    {
+      "name": "dsv",
+      "format": "D24_UNORM_S8_UINT",
+      "heap_type": "default",
+      "dimension": "texture2d",
+      "size_type": "primarybuffer_relative",
+      "width": 1.0,
+      "height": 1.0,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "unknown",
+      "flags": ["dsv"],
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "dsv_write",
+      "descriptor_type": ["dsv"],
+      "clear_depth": 1,
+      "clear_stencil": 0
     }
   ],
   "render_pass": [
@@ -151,7 +172,7 @@ auto GetTestJson() {
     "uav": 1,
     "sampler": 0,
     "rtv": 0,
-    "dsv": 0
+    "dsv": 1
   },
   "gpu_handle_num_view":10,
   "gpu_handle_num_sampler":1

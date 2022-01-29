@@ -34,7 +34,27 @@ class ShaderCompiler {
     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil_format{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT};
     DXGI_FORMAT depth_stencil_format{};
     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil1{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1};
-    D3D12_DEPTH_STENCIL_DESC1 depth_stencil1{};
+    D3D12_DEPTH_STENCIL_DESC1 depth_stencil1{
+      .DepthEnable = true,
+      .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+      .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+      .StencilEnable = false,
+      .StencilReadMask = 255U,
+      .StencilWriteMask = 255U,
+      .FrontFace = {
+        .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+        .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+        .StencilPassOp = D3D12_STENCIL_OP_REPLACE,
+        .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+      },
+      .BackFace = {
+        .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+        .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+        .StencilPassOp = D3D12_STENCIL_OP_REPLACE,
+        .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+      },
+      .DepthBoundsTestEnable = false,
+    };
   };
   bool Init();
   void Term();

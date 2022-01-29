@@ -38,6 +38,10 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
     state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     val_set = true;
   }
+  if (state_str.compare("dsv_write") == 0) {
+    state |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    val_set = true;
+  }
   if (!val_set) {
     logerror("invalid resource state specified. {}", state_str.data());
   }
@@ -59,9 +63,12 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   if (format_str.compare("R8G8B8A8_UNORM") == 0) {
     return DXGI_FORMAT_R8G8B8A8_UNORM;
   }
+  if (format_str.compare("D24_UNORM_S8_UINT") == 0) {
+    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+  }
   logerror("invalid format specified. {}", format_str.data());
   assert(false && "invalid format specified");
-  return DXGI_FORMAT_R8G8B8A8_UNORM;
+  return DXGI_FORMAT_UNKNOWN;
 }
 DescriptorType GetDescriptorType(const nlohmann::json& j) {
   auto str = j.get<std::string_view>();
