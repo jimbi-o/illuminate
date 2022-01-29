@@ -85,29 +85,20 @@ ID3D12RootSignature* CreateRootSignature(D3d12Device* device, IDxcResult* result
   }
   return nullptr;
 }
-ID3D12PipelineState* CreatePipelineState(D3d12Device* device, IDxcResult* result, const D3D12_PIPELINE_STATE_SUBOBJECT_TYPE shader_object_type, ID3D12RootSignature* root_signature) {
+IDxcBlob* GetShaderObject(IDxcResult* result) {
   IDxcBlob* shader_object = nullptr;
   auto hr = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader_object), nullptr);
-  if (FAILED(hr)) {
-    logwarn("failed to extract shader object. {}", hr);
-    if (shader_object) {
-      shader_object->Release();
-    }
-    return nullptr;
+  if (SUCCEEDED(hr)) { return shader_object; }
+  logwarn("failed to extract shader object. {}", hr);
+  if (shader_object) {
+    shader_object->Release();
   }
-  struct {
-    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
-    ID3D12RootSignature* root_signature{nullptr};
-    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{shader_object_type};
-    D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
-  } desc_local {
-    .root_signature = root_signature,
-    .shader_bytecode = D3D12_SHADER_BYTECODE{shader_object->GetBufferPointer(), shader_object->GetBufferSize()},
-  };
-  D3D12_PIPELINE_STATE_STREAM_DESC desc{sizeof(desc_local), &desc_local};
+  return nullptr;
+}
+ID3D12PipelineState* CreatePipelineState(D3d12Device* device, const std::size_t& size_in_byte, void* desc_ptr) {
+  D3D12_PIPELINE_STATE_STREAM_DESC desc{size_in_byte, desc_ptr};
   ID3D12PipelineState* pso = nullptr;
-  hr = device->CreatePipelineState(&desc, IID_PPV_ARGS(&pso));
-  shader_object->Release();
+  auto hr = device->CreatePipelineState(&desc, IID_PPV_ARGS(&pso));
   if (SUCCEEDED(hr)) { return pso; }
   logwarn("failed to create pso. {}", hr);
   if (pso) {
@@ -115,39 +106,33 @@ ID3D12PipelineState* CreatePipelineState(D3d12Device* device, IDxcResult* result
   }
   return nullptr;
 }
+ID3D12PipelineState* CreatePipelineStateCs(D3d12Device* device, IDxcResult* result, ID3D12RootSignature* root_signature) {
+  auto shader_object = GetShaderObject(result);
+  assert(shader_object);
+  struct {
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
+    ID3D12RootSignature* root_signature{nullptr};
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
+    D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
+  } desc_local {
+    .root_signature = root_signature,
+    .shader_bytecode = D3D12_SHADER_BYTECODE{shader_object->GetBufferPointer(), shader_object->GetBufferSize()},
+  };
+  auto pso = CreatePipelineState(device, sizeof(desc_local), &desc_local);
+  shader_object->Release();
+  return pso;
+}
 ID3D12PipelineState* CreatePipelineStateVsPs(D3d12Device* device, IDxcResult* result_vs, IDxcResult* result_ps, ShaderCompiler::PsoDescVsPs* pso_desc) {
-  IDxcBlob* shader_object_vs = nullptr;
-  auto hr = result_vs->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader_object_vs), nullptr);
-  if (FAILED(hr)) {
-    logwarn("failed to extract shader object. {}", hr);
-    if (shader_object_vs) {
-      shader_object_vs->Release();
-    }
-    return nullptr;
-  }
-  IDxcBlob* shader_object_ps = nullptr;
-  hr = result_ps->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader_object_ps), nullptr);
-  if (FAILED(hr)) {
-    logwarn("failed to extract shader object. {}", hr);
-    shader_object_vs->Release();
-    if (shader_object_ps) {
-      shader_object_ps->Release();
-    }
-    return nullptr;
-  }
+  auto shader_object_vs = GetShaderObject(result_vs);
+  assert(shader_object_vs);
+  auto shader_object_ps = GetShaderObject(result_ps);
+  assert(shader_object_ps);
   pso_desc->shader_bytecode_vs = D3D12_SHADER_BYTECODE{shader_object_vs->GetBufferPointer(), shader_object_vs->GetBufferSize()};
   pso_desc->shader_bytecode_ps = D3D12_SHADER_BYTECODE{shader_object_ps->GetBufferPointer(), shader_object_ps->GetBufferSize()};
-  D3D12_PIPELINE_STATE_STREAM_DESC desc{sizeof(*pso_desc), pso_desc};
-  ID3D12PipelineState* pso = nullptr;
-  hr = device->CreatePipelineState(&desc, IID_PPV_ARGS(&pso));
-  shader_object_vs->Release();
+  auto pso = CreatePipelineState(device, sizeof(*pso_desc), pso_desc);
   shader_object_ps->Release();
-  if (SUCCEEDED(hr)) { return pso; }
-  logwarn("failed to create pso. {}", hr);
-  if (pso) {
-    pso->Release();
-  }
-  return nullptr;
+  shader_object_vs->Release();
+  return pso;
 }
 } // namespace anonymous
 bool ShaderCompiler::Init() {
@@ -172,47 +157,7 @@ bool ShaderCompiler::CreateRootSignatureAndPsoCs(const char* const shadercode, c
   assert(result && "CompileShader failed.");
   *rootsig = CreateRootSignature(device, result);
   assert(*rootsig && "CreateRootSignature failed.");
-  auto shader_type{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
-  for (uint32_t i = 0; i < args_num; i++) {
-    if (wcscmp(L"-T", args[i]) != 0) { continue; }
-    assert(i + 1 < args_num && "invalid shader compiler option num");
-    const auto target_index = i + 1;
-    if (wcsncmp(L"vs_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS;
-      break;
-    }
-    if (wcsncmp(L"ps_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
-      break;
-    }
-    if (wcsncmp(L"ds_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS;
-      break;
-    }
-    if (wcsncmp(L"hs_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS;
-      break;
-    }
-    if (wcsncmp(L"gs_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS;
-      break;
-    }
-    if (wcsncmp(L"cs_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
-      break;
-    }
-    if (wcsncmp(L"as_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
-      break;
-    }
-    if (wcsncmp(L"ms_", args[target_index], 3) == 0) {
-      shader_type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
-      break;
-    }
-    assert(false && "invalid shader compile target");
-    break;
-  }
-  *pso = CreatePipelineState(device, result, shader_type, *rootsig);
+  *pso = CreatePipelineStateCs(device, result, *rootsig);
   assert(*pso && "CreatePipelineState failed.");
   result->Release();
   return true;
@@ -276,7 +221,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     CHECK_UNARY(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
     auto root_signature = CreateRootSignature(device.Get(), result);
     CHECK_NE(root_signature, nullptr);
-    auto pso_cs = CreatePipelineState(device.Get(), result, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS, root_signature);
+    auto pso_cs = CreatePipelineStateCs(device.Get(), result, root_signature);
     CHECK_NE(pso_cs, nullptr);
     CHECK_EQ(pso_cs->Release(), 0);
     CHECK_EQ(root_signature->Release(), 0);
