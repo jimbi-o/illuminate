@@ -213,7 +213,10 @@ void ParsePassParamDispatchCs(const nlohmann::json& j, void* dst, ShaderCompiler
   auto allocator = GetTemporalMemoryAllocator();
   auto args_num = GetShaderCompilerArgs(j, "shader_compile_args", &allocator, &wstr_args, &args);
   assert(args_num > 0);
-  assert(shader_compiler->CreateRootSignatureAndPsoCs(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device, &param->rootsig, &param->pso) && "compute shader parse error");
+  if (!shader_compiler->CreateRootSignatureAndPsoCs(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device, &param->rootsig, &param->pso)) {
+    logerror("compute shader parse error");
+    assert(false && "compute shader parse error");
+  }
   param->thread_group_count_x = j.at("thread_group_count_x");
   param->thread_group_count_y = j.at("thread_group_count_y");
 }
@@ -232,23 +235,37 @@ void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCo
   pso_desc.render_target_formats.RTFormats[0] = main_buffer_format.swapchain;
   pso_desc.render_target_formats.NumRenderTargets = 1;
   pso_desc.depth_stencil1.DepthEnable = false;
-  assert(shader_compiler->CreateRootSignatureAndPsoVsPs(shader_code_vs, static_cast<uint32_t>(strlen(shader_code_vs)), args_num_vs, args_vs,
+  if (!shader_compiler->CreateRootSignatureAndPsoVsPs(shader_code_vs, static_cast<uint32_t>(strlen(shader_code_vs)), args_num_vs, args_vs,
                                                         shader_code_ps, static_cast<uint32_t>(strlen(shader_code_ps)), args_num_ps, args_ps,
-                                                        device, &pso_desc, &param->rootsig, &param->pso) && "vs ps parse error");
+                                                      device, &pso_desc, &param->rootsig, &param->pso)) {
+    logerror("vs ps parse error");
+    assert(false && "vs ps parse error");
+  }
 }
 void ReleaseResourceDispatchCs(void* ptr) {
   auto param = static_cast<CsDispatchParams*>(ptr);
-  assert(param->pso->Release() == 0);
-  assert(param->rootsig->Release() == 0);
+  if (param->pso->Release() != 0) {
+    logwarn("ReleaseResourceDispatchCs pso ref left.");
+  }
+  if (param->rootsig->Release() != 0) {
+    logwarn("ReleaseResourceDispatchCs rootsig ref left.");
+  }
 }
 void ReleaseResourceVsPsCopyResource(void* ptr) {
   auto param = static_cast<VsPsCopyResource*>(ptr);
-  assert(param->pso->Release() == 0);
-  assert(param->rootsig->Release() == 0);
+  if (param->pso->Release() != 0) {
+    logwarn("ReleaseResourceVsPsCopyResource pso ref left.");
+  }
+  if (param->rootsig->Release() != 0) {
+    logwarn("ReleaseResourceVsPsCopyResource rootsig ref left.");
+  }
 }
 void PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, const uint32_t render_pass_num, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, RenderPass* dst_render_pass_list) {
   ShaderCompiler shader_compiler;
-  assert(shader_compiler.Init());
+  if (!shader_compiler.Init()) {
+    logerror("shader_compiler.Init failed");
+    assert(false && "shader_compiler.Init failed");
+  }
   for (uint32_t i = 0; i < render_pass_num; i++) {
     auto& src_json = src_render_pass_list[i].at("pass_vars");
     auto& dst_render_pass = dst_render_pass_list[i];
@@ -320,8 +337,14 @@ void ReleaseRenderPassResources(const uint32_t render_pass_num, RenderPass* rend
 }
 auto GetRenderPassFunctions(MemoryAllocationJanitor* allocator) {
   HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(allocator);
-  assert(render_pass_functions.Insert(SID("dispatch cs"), DispatchCs));
-  assert(render_pass_functions.Insert(SID("output to swapchain"), CopyResourceVsPs));
+  if (!render_pass_functions.Insert(SID("dispatch cs"), DispatchCs)) {
+    logerror("failed to insert dispatch cs");
+    assert(false && "failed to insert dispatch cs");
+  }
+  if (!render_pass_functions.Insert(SID("output to swapchain"), CopyResourceVsPs)) {
+    logerror("failed to insert output to swapchain");
+    assert(false && "failed to insert output to swapchain");
+  }
   return render_pass_functions;
 }
 void* D3d12BufferAllocatorAllocCallback(size_t Size, size_t Alignment, [[maybe_unused]] void* pUserData) {
@@ -403,7 +426,6 @@ auto CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_
   return buffer_allocation;
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
-  if (barrier_num == 0) { return; }
   auto allocator = GetTemporalMemoryAllocator();
   auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
@@ -432,6 +454,7 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   command_list->ResourceBarrier(barrier_num, barriers);
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list) {
+  if (barrier_num == 0) { return; }
   auto allocator = GetTemporalMemoryAllocator();
   auto resource_list = AllocateArray<ID3D12Resource*>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {

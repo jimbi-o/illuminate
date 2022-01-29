@@ -36,7 +36,9 @@ class DescriptorCpu {
     for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
       if (descriptor_heap_[i]) {
         auto refval = descriptor_heap_[i]->Release();
-        assert(refval == 0);
+        if (refval != 0) {
+          assert(false && "descriptor_heap_ refefence left");
+        }
       }
     }
   }
