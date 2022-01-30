@@ -74,4 +74,27 @@ void DescriptorGpu::SetDescriptorHeapsToCommandList(const uint32_t command_list_
     command_list[i]->SetDescriptorHeaps(2, heaps);
   }
 }
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyToGpuDescriptor(const uint32_t src_descriptor_num, const uint32_t handle_list_len, const uint32_t* handle_num_list, const D3D12_CPU_DESCRIPTOR_HANDLE* handle_list, const D3D12_DESCRIPTOR_HEAP_TYPE heap_type, D3d12Device* device, DescriptorHeapSetGpu* descriptor) {
+  if (descriptor->current_handle_num + src_descriptor_num > descriptor->total_handle_num) {
+    descriptor->current_handle_num = 0;
+  }
+  D3D12_CPU_DESCRIPTOR_HANDLE dst_handle{descriptor->heap_start_cpu + descriptor->current_handle_num * descriptor->handle_increment_size};
+  assert(handle_num_list[handle_list_len - 1] > 0);
+  if (handle_list_len == 1) {
+    assert(handle_num_list[0] == src_descriptor_num);
+    device->CopyDescriptorsSimple(src_descriptor_num, dst_handle, handle_list[0], heap_type);
+  } else {
+#ifdef BUILD_WITH_TEST
+    uint32_t handle_num_debug = 0;
+    for (uint32_t i = 0; i < handle_list_len; i++) {
+      handle_num_debug += handle_num_list[i];
+    }
+    assert(handle_num_debug == src_descriptor_num);
+#endif
+    device->CopyDescriptors(1, &dst_handle, &src_descriptor_num, handle_list_len, handle_list, handle_num_list, heap_type);
+  }
+  D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle{descriptor->heap_start_gpu + descriptor->current_handle_num * descriptor->handle_increment_size};
+  descriptor->current_handle_num += src_descriptor_num;
+  return gpu_handle;
+}
 }

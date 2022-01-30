@@ -240,7 +240,7 @@ void DispatchCs(D3d12CommandList* command_list, const MainBufferSize& main_buffe
   auto pass_vars = static_cast<const CsDispatchParams*>(pass_vars_ptr);
   command_list->SetComputeRootSignature(pass_vars->rootsig);
   command_list->SetPipelineState(pass_vars->pso);
-  command_list->SetComputeRootDescriptorTable(0, *gpu_handles);
+  command_list->SetComputeRootDescriptorTable(0, gpu_handles[0]);
   command_list->Dispatch(main_buffer_size.swapchain.width / pass_vars->thread_group_count_x, main_buffer_size.swapchain.width / pass_vars->thread_group_count_y, 1);
 }
 void PreZ(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
@@ -269,7 +269,8 @@ void CopyResourceVsPs(D3d12CommandList* command_list, const MainBufferSize& main
   command_list->SetPipelineState(pass_vars->pso);
   command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   command_list->OMSetRenderTargets(1, &cpu_handles[1], true, nullptr);
-  command_list->SetGraphicsRootDescriptorTable(0, *gpu_handles);
+  command_list->SetGraphicsRootDescriptorTable(0, gpu_handles[0]); // srv
+  command_list->SetGraphicsRootDescriptorTable(1, gpu_handles[1]); // sampler
   command_list->DrawInstanced(3, 1, 0, 0);
 }
 auto GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args) {
@@ -583,23 +584,43 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   ExecuteBarrier(command_list, barrier_num, barrier_config, resource_list);
 }
 auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, const RenderPass* render_pass_list, const DescriptorCpu<MemoryAllocationJanitor>& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
-  HashMap<D3D12_GPU_DESCRIPTOR_HANDLE, MemoryAllocationJanitor> gpu_handle_list(allocator);
-  auto total_handle_count = descriptor_gpu->GetViewHandleTotal();
-  uint32_t occupied_handle_num = 0;
+  HashMap<D3D12_GPU_DESCRIPTOR_HANDLE*, MemoryAllocationJanitor> gpu_handle_list(allocator);
+  auto total_handle_count_view = descriptor_gpu->GetViewHandleTotal();
+  uint32_t occupied_handle_num_view = 0;
+  auto total_handle_count_sampler = descriptor_gpu->GetSamplerHandleTotal();
+  uint32_t occupied_handle_num_sampler = 0;
   for (uint32_t i = 0; i < render_pass_num; i++) {
-    auto prev_handle_count = descriptor_gpu->GetViewHandleCount();
     auto& render_pass = render_pass_list[i];
-    if (!gpu_handle_list.Insert(render_pass.name, descriptor_gpu->CopyDescriptors(device, render_pass.buffer_num, render_pass.buffer_list, descriptor_cpu))) {
+    if (!gpu_handle_list.Insert(render_pass.name, AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, 2))) { // 0:view 1:sampler
       logerror("gpu_handle_list.Insert failed. {}", i);
       assert(false && "gpu_handle_list.Insert failed.");
+      continue;
     }
-    auto current_handle_count = descriptor_gpu->GetViewHandleCount();
-    if (prev_handle_count <= current_handle_count) {
-      occupied_handle_num += current_handle_count - prev_handle_count;
-    } else {
-      occupied_handle_num += total_handle_count - prev_handle_count + current_handle_count;
+    auto gpu_handles = *gpu_handle_list.Get(render_pass.name);
+    {
+      // view
+      gpu_handles[0] = descriptor_gpu->CopyViewDescriptors(device, render_pass.buffer_num, render_pass.buffer_list, descriptor_cpu);
+      auto prev_handle_count = descriptor_gpu->GetViewHandleCount();
+      auto current_handle_count = descriptor_gpu->GetViewHandleCount();
+      if (prev_handle_count <= current_handle_count) {
+        occupied_handle_num_view += current_handle_count - prev_handle_count;
+      } else {
+        occupied_handle_num_view += total_handle_count_view - prev_handle_count + current_handle_count;
+      }
+      assert(occupied_handle_num_view <= total_handle_count_view && "increase RenderGraph::gpu_handle_num_view");
     }
-    assert(occupied_handle_num <= total_handle_count && "increase RenderGraph::gpu_handle_num_view");
+    {
+      // sampler
+      gpu_handles[1] = descriptor_gpu->CopySamplerDescriptors(device, render_pass.buffer_num, render_pass.buffer_list, descriptor_cpu);
+      auto prev_handle_count = descriptor_gpu->GetSamplerHandleCount();
+      auto current_handle_count = descriptor_gpu->GetSamplerHandleCount();
+      if (prev_handle_count <= current_handle_count) {
+        occupied_handle_num_sampler += current_handle_count - prev_handle_count;
+      } else {
+        occupied_handle_num_sampler += total_handle_count_sampler - prev_handle_count + current_handle_count;
+      }
+      assert(occupied_handle_num_sampler <= total_handle_count_sampler && "increase RenderGraph::gpu_handle_num_sampler");
+    }
   }
   return gpu_handle_list;
 }
@@ -756,7 +777,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
           tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
         }
         auto gpu_handles = gpu_handle_list.Get(render_pass.name);
-        (**render_pass_functions.Get(render_pass.name))(command_list, main_buffer_size, render_pass.pass_vars, gpu_handles, cpu_handle_list, resource_list);
+        (**render_pass_functions.Get(render_pass.name))(command_list, main_buffer_size, render_pass.pass_vars, *gpu_handles, cpu_handle_list, resource_list);
         tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
       }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
