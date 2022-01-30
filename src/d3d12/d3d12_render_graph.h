@@ -29,6 +29,7 @@ struct BufferConfig {
 struct RenderPassBuffer {
   StrHash buffer_name{};
   ResourceStateType state{};
+  StrHash sampler{};
 };
 struct Barrier {
   StrHash buffer_name{};

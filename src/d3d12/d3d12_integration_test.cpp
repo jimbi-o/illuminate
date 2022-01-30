@@ -171,7 +171,8 @@ auto GetTestJson() {
       "buffer_list": [
         {
           "name": "uav",
-          "state": "srv"
+          "state": "srv",
+          "sampler": "bilinear"
         },
         {
           "name": "swapchain",

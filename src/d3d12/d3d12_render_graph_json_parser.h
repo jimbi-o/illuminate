@@ -148,6 +148,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
           auto& src_buffer = buffer_list[buffer_index];
           dst_buffer.buffer_name = CalcEntityStrHash(src_buffer, "name");
           dst_buffer.state = GetResourceStateType(GetStringView(src_buffer, "state"));
+          dst_buffer.sampler = src_buffer.contains("sampler") ? CalcEntityStrHash(src_buffer, "sampler") : StrHash{};
         }
       } // buffer_list
       if (src_pass.contains("prepass_barrier")) {
