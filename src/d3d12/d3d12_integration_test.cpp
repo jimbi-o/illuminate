@@ -665,6 +665,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       CHECK_UNARY(CreateView(device.Get(), render_graph.buffer_list[i].descriptor_type[j], render_graph.buffer_list[i], buffer.resource, cpu_handle));
     }
   }
+  for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
+    auto cpu_handler = descriptor_cpu.CreateHandle(render_graph.sampler_name[i], DescriptorType::kSampler);
+    CHECK_NE(cpu_handler, nullptr);
+    device.Get()->CreateSampler(&render_graph.sampler_list[i], *cpu_handler);
+  }
   DescriptorGpu descriptor_gpu;
   CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
