@@ -93,16 +93,43 @@ auto GetTestJson() {
       "clear_stencil": 0
     }
   ],
+  "sampler": [
+    {
+      "name": "bilinear",
+      "filter_min": "linear",
+      "filter_mag": "linear",
+      "filter_mip": "point",
+      "address_mode": ["clamp", "clamp"],
+      "mip_lod_bias": 0,
+      "max_anisotropy": 0,
+      "comparison_func": "never",
+      "min_lod": 0,
+      "max_lod": 65535
+    },
+    {
+      "name": "trilinear",
+      "filter_min": "linear",
+      "filter_mag": "linear",
+      "filter_mip": "linear",
+      "address_mode": ["clamp", "clamp", "clamp"],
+      "mip_lod_bias": 0,
+      "max_anisotropy": 0,
+      "comparison_func": "never",
+      "border_color": [0,0,0,0],
+      "min_lod": 0,
+      "max_lod": 65535
+    }
+  ],
   "descriptor_handle_num_per_type": {
     "cbv": 0,
     "srv": 1,
     "uav": 1,
-    "sampler": 0,
+    "sampler": 2,
     "rtv": 0,
     "dsv": 1
   },
   "gpu_handle_num_view":10,
-  "gpu_handle_num_sampler":1,
+  "gpu_handle_num_sampler":4,
   "render_pass": [
     {
       "name": "dispatch cs",
@@ -387,10 +414,14 @@ struct FullscreenTriangleVSOutput {
   float2 texcoord : TEXCOORD0;
 };
 Texture2D src : register(t0);
-#define CopyFullscreenRootsig "DescriptorTable(SRV(t0), visibility=SHADER_VISIBILITY_PIXEL) "
+SamplerState tex_sampler : register(s0);
+#define CopyFullscreenRootsig " \
+DescriptorTable(SRV(t0), visibility=SHADER_VISIBILITY_PIXEL), \
+DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
+"
 [RootSignature(CopyFullscreenRootsig)]
 float4 main(FullscreenTriangleVSOutput input) : SV_TARGET0 {
-  float4 color = src.Load(int3(input.position.x, input.position.y, 0));
+  float4 color = src.Sample(tex_sampler, input.texcoord);
   return color;
 }
 )";

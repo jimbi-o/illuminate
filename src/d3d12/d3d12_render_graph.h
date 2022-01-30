@@ -74,6 +74,9 @@ struct RenderGraph {
   RenderPass* render_pass_list{nullptr};
   uint32_t buffer_num{0};
   BufferConfig* buffer_list{nullptr};
+  uint32_t sampler_num{0};
+  StrHash* sampler_name{nullptr};
+  D3D12_SAMPLER_DESC* sampler_list{nullptr};
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
   uint32_t gpu_handle_num_view{0};
   uint32_t gpu_handle_num_sampler{0};

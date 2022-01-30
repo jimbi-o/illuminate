@@ -28,6 +28,7 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
+void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC* sampler_desc);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
 DescriptorType GetDescriptorType(const nlohmann::json& j);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
@@ -120,7 +121,16 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
     }
   }
-  {
+  if (j.contains("sampler")) {
+    auto& sampler_list = j.at("sampler");
+    r.sampler_num = static_cast<uint32_t>(sampler_list.size());
+    r.sampler_name = AllocateArray<StrHash>(allocator, r.sampler_num);
+    r.sampler_list = AllocateArray<D3D12_SAMPLER_DESC>(allocator, r.sampler_num);
+    for (uint32_t i = 0; i < r.sampler_num; i++) {
+      GetSamplerConfig(sampler_list[i], &r.sampler_name[i], &r.sampler_list[i]);
+    }
+  } // sampler
+  { // pass_list
     auto& render_pass_list = j.at("render_pass");
     r.render_pass_num = static_cast<uint32_t>(render_pass_list.size());
     r.render_pass_list = AllocateArray<RenderPass>(allocator, r.render_pass_num);
