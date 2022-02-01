@@ -223,13 +223,8 @@ auto GetTestJson() {
 }
 )"_json;
 }
-auto GetModelTinyGltf() {
-  using namespace tinygltf;
-  Model model;
-  TinyGLTF loader;
-  std::string err;
-  std::string warn;
-  const auto data_str = R"(
+auto GetTestTinyGltf() {
+  return R"(
 {
   "scene": 0,
   "scenes" : [
@@ -297,17 +292,6 @@ auto GetModelTinyGltf() {
   }
 }
 )";
-  bool ret = loader.LoadASCIIFromString(&model, &err, &warn, data_str, static_cast<uint32_t>(strlen(data_str)), "");
-  if (!warn.empty()) {
-    logwarn("tinygltf:{}", warn.c_str());
-  }
-  if (!err.empty()) {
-    logerror("tinygltf:{}", err.c_str());
-  }
-  if (!ret) {
-    logerror("Failed to parse glTF");
-  }
-  return model;
 }
 struct CsDispatchParams {
   ID3D12RootSignature* rootsig{nullptr};

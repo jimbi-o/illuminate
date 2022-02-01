@@ -28,4 +28,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_header_common.cpp
   d3d12_shader_compiler.h
   d3d12_shader_compiler.cpp
+  d3d12_scene.h
+  d3d12_scene.cpp
   )
