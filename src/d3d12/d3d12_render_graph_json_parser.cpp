@@ -42,6 +42,10 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
     state |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
     val_set = true;
   }
+  if (state_str.compare("common") == 0) {
+    state |= D3D12_RESOURCE_STATE_COMMON;
+    val_set = true;
+  }
   if (!val_set) {
     logerror("invalid resource state specified. {}", state_str.data());
   }
@@ -65,6 +69,12 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   }
   if (format_str.compare("D24_UNORM_S8_UINT") == 0) {
     return DXGI_FORMAT_D24_UNORM_S8_UINT;
+  }
+  if (format_str.compare("R32G32B32_FLOAT") == 0) {
+    return DXGI_FORMAT_R32G32B32_FLOAT;
+  }
+  if (format_str.compare("R32_UINT") == 0) {
+    return DXGI_FORMAT_R32_UINT;
   }
   logerror("invalid format specified. {}", format_str.data());
   assert(false && "invalid format specified");
@@ -112,6 +122,9 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   }
   if (str.compare("copy_dest") == 0) {
     return ResourceStateType::kCopyDst;
+  }
+  if (str.compare("common") == 0) {
+    return ResourceStateType::kCommon;
   }
   assert(false && "invalid ResourceStateType");
   return ResourceStateType::kNum;
@@ -162,13 +175,13 @@ D3D12_TEXTURE_LAYOUT GetTextureLayout(const nlohmann::json& j, const char* entit
   if (str.compare("unknown") == 0) {
     return D3D12_TEXTURE_LAYOUT_UNKNOWN;
   }
-  if (str.compare("rowmajor") == 0) {
+  if (str.compare("row_major") == 0) {
     return D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   }
-  if (str.compare("64kb undefined swizzle") == 0) {
+  if (str.compare("64kb_undefined_swizzle") == 0) {
     return D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE;
   }
-  if (str.compare("64kb standard swizzle") == 0) {
+  if (str.compare("64kb_standard_swizzle") == 0) {
     return D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE;
   }
   assert(false && "invalid texture layout");
@@ -230,10 +243,10 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   if (config->dimension == D3D12_RESOURCE_DIMENSION_BUFFER && config->layout != D3D12_TEXTURE_LAYOUT_ROW_MAJOR) {
     config->layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   }
-  {
+  config->flags = D3D12_RESOURCE_FLAG_NONE;
+  if (j.contains("flags")) {
     auto& flags = j.at("flags");
     auto flag_num = static_cast<uint32_t>(flags.size());
-    config->flags = D3D12_RESOURCE_FLAG_NONE;
     for (uint32_t i = 0; i < flag_num; i++) {
       config->flags |= GetD3d12ResourceFlag(flags[i]);
     }

@@ -1,6 +1,7 @@
 #include "D3D12MemAlloc.h"
 #include "doctest/doctest.h"
 #include <nlohmann/json.hpp>
+#include "tiny_gltf.h"
 #include "d3d12_command_list.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_descriptors.h"
@@ -221,6 +222,92 @@ auto GetTestJson() {
   ]
 }
 )"_json;
+}
+auto GetModelTinyGltf() {
+  using namespace tinygltf;
+  Model model;
+  TinyGLTF loader;
+  std::string err;
+  std::string warn;
+  const auto data_str = R"(
+{
+  "scene": 0,
+  "scenes" : [
+    {
+      "nodes" : [ 0 ]
+    }
+  ],
+  "nodes" : [
+    {
+      "mesh" : 0
+    }
+  ],
+  "meshes" : [
+    {
+      "primitives" : [ {
+        "attributes" : {
+          "POSITION" : 1
+        },
+        "indices" : 0
+      } ]
+    }
+  ],
+  "buffers" : [
+    {
+      "uri" : "data:application/octet-stream;base64,AAABAAIAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAA=",
+      "byteLength" : 44
+    }
+  ],
+  "bufferViews" : [
+    {
+      "buffer" : 0,
+      "byteOffset" : 0,
+      "byteLength" : 6,
+      "target" : 34963
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 8,
+      "byteLength" : 36,
+      "target" : 34962
+    }
+  ],
+  "accessors" : [
+    {
+      "bufferView" : 0,
+      "byteOffset" : 0,
+      "componentType" : 5123,
+      "count" : 3,
+      "type" : "SCALAR",
+      "max" : [ 2 ],
+      "min" : [ 0 ]
+    },
+    {
+      "bufferView" : 1,
+      "byteOffset" : 0,
+      "componentType" : 5126,
+      "count" : 3,
+      "type" : "VEC3",
+      "max" : [ 1.0, 1.0, 0.0 ],
+      "min" : [ 0.0, 0.0, 0.0 ]
+    }
+  ],
+  "asset" : {
+    "version" : "2.0"
+  }
+}
+)";
+  bool ret = loader.LoadASCIIFromString(&model, &err, &warn, data_str, static_cast<uint32_t>(strlen(data_str)), "");
+  if (!warn.empty()) {
+    logwarn("tinygltf:{}", warn.c_str());
+  }
+  if (!err.empty()) {
+    logerror("tinygltf:{}", err.c_str());
+  }
+  if (!ret) {
+    logerror("Failed to parse glTF");
+  }
+  return model;
 }
 struct CsDispatchParams {
   ID3D12RootSignature* rootsig{nullptr};

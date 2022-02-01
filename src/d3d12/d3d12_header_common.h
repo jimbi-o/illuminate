@@ -27,8 +27,7 @@ constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
 }
 enum class DescriptorType : uint8_t { kCbv = 0, kSrv, kUav, kSampler, kRtv, kDsv, kNum, };
 static const auto kDescriptorTypeNum = static_cast<uint32_t>(DescriptorType::kNum);
-enum class ResourceStateType : uint8_t { kCbv = 0, kSrv, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kNum, };
-static const auto kResourceStateTypeNum = static_cast<uint32_t>(ResourceStateType::kNum);
+enum class ResourceStateType : uint8_t { kCbv = 0, kSrv, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kCommon, kNum, };
 constexpr auto ConvertToDescriptorType(const ResourceStateType& state) {
   switch (state) {
     case ResourceStateType::kCbv: { return DescriptorType::kCbv; };
@@ -54,5 +53,6 @@ struct MainBufferFormat {
 };
 uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
+uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT);
 }
 #endif
