@@ -47,13 +47,6 @@ CPMAddPackage(
   VERSION 2.5.0
   DOWNLOAD_ONLY yes
 )
-#using gl.h for tinygltf (GL_FLOAT, etc.)
-CPMAddPackage(
-  NAME opengl
-  GITHUB_REPOSITORY "KhronosGroup/OpenGL-Registry"
-  GIT_TAG 92ab62262a8ee313dfd5bbdbed00acbec96fe80c
-  DOWNLOAD_ONLY yes
-)
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -103,7 +96,6 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${nlohmann_json_SOURCE_DIR}/include"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
   "${tinygltf_SOURCE_DIR}"
-  "${opengl_SOURCE_DIR}/api/GLSC/1.0"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -120,7 +112,6 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
   "${tinygltf_SOURCE_DIR}/tiny_gltf.h"
-  "${opengl_SOURCE_DIR}/api/GLSC/1.0/gl.h"
 )
 add_subdirectory(src)
 
