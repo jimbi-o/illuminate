@@ -313,6 +313,7 @@ void DispatchCs(D3d12CommandList* command_list, const MainBufferSize& main_buffe
   command_list->Dispatch(main_buffer_size.swapchain.width / pass_vars->thread_group_count_x, main_buffer_size.swapchain.width / pass_vars->thread_group_count_y, 1);
 }
 void PreZ(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources, const SceneData& scene_data) {
+  command_list->ClearDepthStencilView(cpu_handles[0], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
   auto pass_vars = static_cast<const ShaderResourceSet*>(pass_vars_ptr);
   auto& width = main_buffer_size.primarybuffer.width;
   auto& height = main_buffer_size.primarybuffer.height;
@@ -388,6 +389,19 @@ void ParsePassParamPreZ(const nlohmann::json& j, void* dst, ShaderCompiler* shad
   assert(args_num > 0);
   ShaderCompiler::PsoDescVsPs pso_desc{};
   pso_desc.depth_stencil_format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+  D3D12_INPUT_ELEMENT_DESC input_element_descs[] = {
+    {
+      .SemanticName = "POSITION",
+      .SemanticIndex = 0,
+      .Format = DXGI_FORMAT_R32G32B32_FLOAT,
+      .InputSlot = 0,
+      .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
+      .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+      .InstanceDataStepRate = 0,
+    },
+  };
+  pso_desc.input_layout.pInputElementDescs = input_element_descs;
+  pso_desc.input_layout.NumElements = 1;
   if (!shader_compiler->CreateRootSignatureAndPsoVs(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device, &pso_desc, &param->rootsig, &param->pso)) {
     logerror("vs parse error");
     assert(false && "vs parse error");
@@ -461,11 +475,22 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
       case SID("prez"): {
         dst_render_pass.pass_vars = allocator->Allocate(sizeof(ShaderResourceSet));
         auto shader_code_vs = R"(
-#define EmptyRootSig ""
-[RootSignature(EmptyRootSig)]
-float4 main(uint id : SV_VertexID) : SV_Position {
-  float4 output;
-  output = 1.0f;
+struct VsInput {
+  float3 position : POSITION;
+};
+#define PrezRootsig "RootFlags("                                    \
+                         "ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | "    \
+                         "DENY_VERTEX_SHADER_ROOT_ACCESS | "        \
+                         "DENY_HULL_SHADER_ROOT_ACCESS | "          \
+                         "DENY_DOMAIN_SHADER_ROOT_ACCESS | "        \
+                         "DENY_GEOMETRY_SHADER_ROOT_ACCESS | "      \
+                         "DENY_PIXEL_SHADER_ROOT_ACCESS | "         \
+                         "DENY_AMPLIFICATION_SHADER_ROOT_ACCESS | " \
+                         "DENY_MESH_SHADER_ROOT_ACCESS"             \
+                         "), "
+[RootSignature(PrezRootsig)]
+float4 main(const VsInput input) : SV_Position {
+  float4 output = float4(input, 1.0f);
   return output;
 }
 )";
@@ -482,8 +507,8 @@ struct FullscreenTriangleVSOutput {
 FullscreenTriangleVSOutput main(uint id : SV_VERTEXID) {
   // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
   FullscreenTriangleVSOutput output;
-  output.texcoord.x = (id == 1) ?  2.0 :  0.0;
-  output.texcoord.y = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
   output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
   return output;
 }

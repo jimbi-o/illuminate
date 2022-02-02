@@ -15,7 +15,7 @@ class ShaderCompiler {
     D3D12_RASTERIZER_DESC rasterizer{
       .FillMode = D3D12_FILL_MODE_SOLID,
       .CullMode = D3D12_CULL_MODE_BACK,
-      .FrontCounterClockwise = false,
+      .FrontCounterClockwise = true,
       .DepthBias = 0,
       .DepthBiasClamp = 0.0f,
       .SlopeScaledDepthBias = 1.0f,
