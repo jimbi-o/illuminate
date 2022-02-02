@@ -82,6 +82,13 @@ auto GetVertexBufferStrideInBytes(const uint32_t tinygltf_type, const uint32_t t
   assert(false && "invalid vertex buffer setup");
   return 0U;
 }
+auto FillResourceData(const tinygltf::Buffer& buffer, const tinygltf::Accessor& accessor, const tinygltf::BufferView& buffer_view, const uint32_t size_in_bytes, ID3D12Resource* resource) {
+  auto dst = MapResource(resource, size_in_bytes);
+  if (dst == nullptr) { return false; }
+  memcpy(dst, &buffer.data[accessor.byteOffset + buffer_view.byteOffset], size_in_bytes);
+  UnmapResource(resource);
+  return true;
+}
 } // namespace anonymous
 SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* const base_dir, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
   tinygltf::Model model;
@@ -153,6 +160,10 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
         d3d12_buffer_view.BufferLocation = buffer_allocation.resource->GetGPUVirtualAddress();
         d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
         d3d12_buffer_view.Format = GetIndexBufferDxgiFormat(accessor.type, accessor.componentType);
+        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation.resource)) {
+          logerror("resource map failed for index buffer {} {} {}", m, p, d3d12_buffer_view.SizeInBytes);
+          assert(false && "resource map failed for index buffer");
+        }
       }
       if (target_primitive.attributes.contains("POSITION")) {
         // vertex buffer POSITION
@@ -184,6 +195,10 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
         d3d12_buffer_view.BufferLocation = buffer_allocation.resource->GetGPUVirtualAddress();
         d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
         d3d12_buffer_view.StrideInBytes = GetVertexBufferStrideInBytes(accessor.type, accessor.componentType);
+        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation.resource)) {
+          logerror("resource map failed for vertex buffer position {} {} {}", m, p, d3d12_buffer_view.SizeInBytes);
+          assert(false && "resource map failed for vertex buffer position");
+        }
       } else {
         logwarn("no position buffer. m:{} p:{} model:{} mesh:{}", m, p, model_index, mesh_index);
       }

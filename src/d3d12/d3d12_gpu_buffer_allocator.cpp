@@ -83,4 +83,20 @@ void ReleaseBufferAllocation(BufferAllocation* b) {
   b->allocation->Release();
   b->resource->Release();
 }
+void* MapResource(ID3D12Resource* resource, const uint32_t size, const uint32_t read_begin, const uint32_t read_end) {
+  D3D12_RANGE read_range{
+    .Begin = read_begin,
+    .End = read_end,
+  };
+  void* ptr{nullptr};
+  auto hr = resource->Map(0, &read_range, &ptr);
+  if (FAILED(hr)) {
+    logerror("MapResource failed. {} {} {} {}", hr, size, read_begin, read_end);
+    return nullptr;
+  }
+  return ptr;
+}
+void UnmapResource(ID3D12Resource* resource) {
+  resource->Unmap(0, nullptr);
+}
 } // namespace illuminate
