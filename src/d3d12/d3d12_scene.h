@@ -4,7 +4,6 @@
 namespace illuminate {
 struct SceneData {
   uint32_t model_num{0};
-  uint32_t mesh_num{0};
   uint32_t* model_mesh_index{nullptr};
   uint32_t* mesh_index_buffer_len{nullptr};
   D3D12_INDEX_BUFFER_VIEW* mesh_index_buffer_view{nullptr};
