@@ -127,7 +127,7 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
     return ResourceStateType::kCommon;
   }
   assert(false && "invalid ResourceStateType");
-  return ResourceStateType::kNum;
+  return ResourceStateType::kCommon;
 }
 namespace {
 D3D12_HEAP_TYPE GetHeapType(const nlohmann::json& j, const char* entity_name) {

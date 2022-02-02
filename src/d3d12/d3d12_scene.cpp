@@ -1,4 +1,5 @@
 #include "d3d12_scene.h"
+#include "gl.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
 namespace {

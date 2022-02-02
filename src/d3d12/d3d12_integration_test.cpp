@@ -8,6 +8,7 @@
 #include "d3d12_device.h"
 #include "d3d12_dxgi_core.h"
 #include "d3d12_render_graph_json_parser.h"
+#include "d3d12_scene.h"
 #include "d3d12_shader_compiler.h"
 #include "d3d12_swapchain.h"
 #include "d3d12_view_util.h"
@@ -303,18 +304,15 @@ struct ShaderResourceSet {
   ID3D12RootSignature* rootsig{nullptr};
   ID3D12PipelineState* pso{nullptr};
 };
-using RenderPassFunction = void (*)(D3d12CommandList*, const MainBufferSize&, const void*, const D3D12_GPU_DESCRIPTOR_HANDLE*, const D3D12_CPU_DESCRIPTOR_HANDLE*, ID3D12Resource**);
-void CopyResource(D3d12CommandList* command_list, [[maybe_unused]]const MainBufferSize& main_buffer_size, [[maybe_unused]]const void* pass_vars, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, [[maybe_unused]]const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, ID3D12Resource** resources) {
-  command_list->CopyResource(resources[1], resources[0]);
-}
-void DispatchCs(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, [[maybe_unused]]const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
+using RenderPassFunction = void (*)(D3d12CommandList*, const MainBufferSize&, const void*, const D3D12_GPU_DESCRIPTOR_HANDLE*, const D3D12_CPU_DESCRIPTOR_HANDLE*, ID3D12Resource**, const SceneData&);
+void DispatchCs(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, [[maybe_unused]]const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources, [[maybe_unused]]const SceneData& scene_data) {
   auto pass_vars = static_cast<const CsDispatchParams*>(pass_vars_ptr);
   command_list->SetComputeRootSignature(pass_vars->rootsig);
   command_list->SetPipelineState(pass_vars->pso);
   command_list->SetComputeRootDescriptorTable(0, gpu_handles[0]);
   command_list->Dispatch(main_buffer_size.swapchain.width / pass_vars->thread_group_count_x, main_buffer_size.swapchain.width / pass_vars->thread_group_count_y, 1);
 }
-void PreZ(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
+void PreZ(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, [[maybe_unused]]const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources, const SceneData& scene_data) {
   auto pass_vars = static_cast<const ShaderResourceSet*>(pass_vars_ptr);
   auto& width = main_buffer_size.primarybuffer.width;
   auto& height = main_buffer_size.primarybuffer.height;
@@ -326,9 +324,18 @@ void PreZ(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size
   command_list->SetPipelineState(pass_vars->pso);
   command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   command_list->OMSetRenderTargets(0, nullptr, true, cpu_handles);
-  command_list->DrawInstanced(0, 1, 0, 0);
+  for (uint32_t i = 0; i < scene_data.model_num; i++) {
+    auto mesh_index = scene_data.model_mesh_index[i];
+    command_list->IASetIndexBuffer(&scene_data.mesh_index_buffer_view[mesh_index]);
+    D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[] = {
+      scene_data.mesh_vertex_buffer_view_position[mesh_index],
+    };
+    command_list->IASetVertexBuffers(0, 1, vertex_buffer_view);
+    command_list->DrawIndexedInstanced(scene_data.mesh_index_buffer_len[mesh_index], 1, 0, 0, 0);
+    // auto material_index = scene_data.model_material_index[i];
+  }
 }
-void CopyResourceVsPs(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources) {
+void CopyResourceVsPs(D3d12CommandList* command_list, const MainBufferSize& main_buffer_size, const void* pass_vars_ptr, const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, [[maybe_unused]]ID3D12Resource** resources, [[maybe_unused]]const SceneData& scene_data) {
   auto pass_vars = static_cast<const ShaderResourceSet*>(pass_vars_ptr);
   auto& width = main_buffer_size.swapchain.width;
   auto& height = main_buffer_size.swapchain.height;
@@ -786,6 +793,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
   }
   auto render_pass_functions = GetRenderPassFunctions(&allocator);
+  auto scene_data = GetSceneFromTinyGltfText(GetTestTinyGltf());
   uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
@@ -848,7 +856,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
           tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
         }
         auto gpu_handles = gpu_handle_list.Get(render_pass.name);
-        (**render_pass_functions.Get(render_pass.name))(command_list, main_buffer_size, render_pass.pass_vars, *gpu_handles, cpu_handle_list, resource_list);
+        (**render_pass_functions.Get(render_pass.name))(command_list, main_buffer_size, render_pass.pass_vars, *gpu_handles, cpu_handle_list, resource_list, scene_data);
         tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
       }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
