@@ -224,6 +224,11 @@ auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) 
   if (str.compare("primary_relative") == 0) {
     return BufferSizeRelativeness::kPrimaryBufferRelative;
   }
+  if (str.compare("absolute") == 0) {
+    return BufferSizeRelativeness::kAbsolute;
+  }
+  logerror("invalid buffer size type {}", name);
+  assert(false && "invalid buffer size type");
   return BufferSizeRelativeness::kAbsolute;
 }
 }

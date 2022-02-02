@@ -77,7 +77,7 @@ auto GetTestJson() {
       "format": "D24_UNORM_S8_UINT",
       "heap_type": "default",
       "dimension": "texture2d",
-      "size_type": "primarybuffer_relative",
+      "size_type": "primary_relative",
       "width": 1.0,
       "height": 1.0,
       "depth_or_array_size": 1,
