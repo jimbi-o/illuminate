@@ -87,7 +87,7 @@ class DescriptorGpu {
   bool Init(D3d12Device* device, const uint32_t handle_num_view, const uint32_t handle_num_sampler);
   void Term();
   template <typename AllocatorCpu>
-  auto CopyDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffer_list, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
+  auto CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffer_list, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
     const auto view_num = GetViewNum(buffer_num, buffer_list);
     if (view_num == 0) {
       return D3D12_GPU_DESCRIPTOR_HANDLE{};
@@ -129,31 +129,35 @@ class DescriptorGpu {
       }
     }
     assert(view_index < view_num && "buffer view count bug");
-    if (descriptor_cbv_srv_uav_.current_handle_num + view_num > descriptor_cbv_srv_uav_.total_handle_num) {
-      descriptor_cbv_srv_uav_.current_handle_num = 0;
-    }
-    D3D12_CPU_DESCRIPTOR_HANDLE dst_handle{descriptor_cbv_srv_uav_.heap_start_cpu + descriptor_cbv_srv_uav_.current_handle_num * descriptor_cbv_srv_uav_.handle_increment_size};
-    assert(handle_num[view_index] > 0);
-    view_index++;
-    if (view_index == 1) {
-      assert(handle_num[0] == view_num);
-      device->CopyDescriptorsSimple(view_num, dst_handle, handles[0], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    } else {
-#ifdef BUILD_WITH_TEST
-      uint32_t handle_num_debug = 0;
-      for (uint32_t i = 0; i < view_index; i++) {
-        handle_num_debug += handle_num[i];
+    return CopyToGpuDescriptor(view_num, view_index + 1, handle_num, handles, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, device, &descriptor_cbv_srv_uav_);
+  }
+  template <typename AllocatorCpu>
+  auto CopySamplerDescriptors(D3d12Device* device, const RenderPass& render_pass, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
+    if (render_pass.sampler_num == 0) { return D3D12_GPU_DESCRIPTOR_HANDLE{}; }
+    assert(render_pass.sampler_num <= descriptor_sampler_.total_handle_num);
+    auto tmp_allocator = GetTemporalMemoryAllocator();
+    uint32_t sampler_index = 0;
+    auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, render_pass.sampler_num);
+    auto handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.sampler_num);
+    for (uint32_t i = 0; i < render_pass.sampler_num; i++) {
+      auto handle = descriptor_cpu.GetHandle(render_pass.sampler_list[i], DescriptorType::kSampler);
+      if (handle == nullptr) { continue; }
+      if (i > 0 && handle_list[sampler_index].ptr + descriptor_sampler_.handle_increment_size == handle->ptr) {
+        handle_num[sampler_index]++;
+        continue;
       }
-      assert(handle_num_debug == view_num);
-#endif
-      device->CopyDescriptors(1, &dst_handle, &view_num, view_index, handles, handle_num, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+      if (i > 0) {
+        sampler_index++;
+      }
+      handle_num[sampler_index] = 1;
+      handle_list[sampler_index].ptr = handle->ptr;
     }
-    D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle{descriptor_cbv_srv_uav_.heap_start_gpu + descriptor_cbv_srv_uav_.current_handle_num * descriptor_cbv_srv_uav_.handle_increment_size};
-    descriptor_cbv_srv_uav_.current_handle_num += view_num;
-    return gpu_handle;
+    return CopyToGpuDescriptor(render_pass.sampler_num, sampler_index + 1, handle_num, handle_list, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, device, &descriptor_sampler_);
   }
   auto GetViewHandleCount() const { return descriptor_cbv_srv_uav_.current_handle_num; }
   auto GetViewHandleTotal() const { return descriptor_cbv_srv_uav_.total_handle_num; }
+  auto GetSamplerHandleCount() const { return descriptor_sampler_.current_handle_num; }
+  auto GetSamplerHandleTotal() const { return descriptor_sampler_.total_handle_num; }
   void SetDescriptorHeapsToCommandList(const uint32_t command_list_num, D3d12CommandList** command_list);
  private:
   struct DescriptorHeapSetGpu {
@@ -165,6 +169,7 @@ class DescriptorGpu {
     uint64_t heap_start_gpu{};
   };
   static DescriptorHeapSetGpu InitDescriptorHeapSetGpu(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t handle_num);
+  static D3D12_GPU_DESCRIPTOR_HANDLE CopyToGpuDescriptor(const uint32_t src_descriptor_num, const uint32_t handle_list_len, const uint32_t* handle_num_list, const D3D12_CPU_DESCRIPTOR_HANDLE* handle_list, const D3D12_DESCRIPTOR_HEAP_TYPE heap_type, D3d12Device* device, DescriptorHeapSetGpu* descriptor);
   DescriptorHeapSetGpu descriptor_cbv_srv_uav_;
   DescriptorHeapSetGpu descriptor_sampler_;
 };

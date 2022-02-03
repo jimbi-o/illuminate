@@ -42,6 +42,10 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
     state |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
     val_set = true;
   }
+  if (state_str.compare("common") == 0) {
+    state |= D3D12_RESOURCE_STATE_COMMON;
+    val_set = true;
+  }
   if (!val_set) {
     logerror("invalid resource state specified. {}", state_str.data());
   }
@@ -66,29 +70,15 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   if (format_str.compare("D24_UNORM_S8_UINT") == 0) {
     return DXGI_FORMAT_D24_UNORM_S8_UINT;
   }
+  if (format_str.compare("R32G32B32_FLOAT") == 0) {
+    return DXGI_FORMAT_R32G32B32_FLOAT;
+  }
+  if (format_str.compare("R32_UINT") == 0) {
+    return DXGI_FORMAT_R32_UINT;
+  }
   logerror("invalid format specified. {}", format_str.data());
   assert(false && "invalid format specified");
   return DXGI_FORMAT_UNKNOWN;
-}
-DescriptorType GetDescriptorType(const nlohmann::json& j) {
-  auto str = j.get<std::string_view>();
-  if (str.compare("cbv") == 0) {
-    return DescriptorType::kCbv;
-  }
-  if (str.compare("srv") == 0) {
-    return DescriptorType::kSrv;
-  }
-  if (str.compare("uav") == 0) {
-    return DescriptorType::kUav;
-  }
-  if (str.compare("rtv") == 0) {
-    return DescriptorType::kRtv;
-  }
-  if (str.compare("dsv") == 0) {
-    return DescriptorType::kDsv;
-  }
-  assert(false && "invalid DescriptorType");
-  return DescriptorType::kNum;
 }
 ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   auto str = j.get<std::string_view>();
@@ -113,8 +103,11 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   if (str.compare("copy_dest") == 0) {
     return ResourceStateType::kCopyDst;
   }
+  if (str.compare("common") == 0) {
+    return ResourceStateType::kCommon;
+  }
   assert(false && "invalid ResourceStateType");
-  return ResourceStateType::kNum;
+  return ResourceStateType::kCommon;
 }
 namespace {
 D3D12_HEAP_TYPE GetHeapType(const nlohmann::json& j, const char* entity_name) {
@@ -162,13 +155,13 @@ D3D12_TEXTURE_LAYOUT GetTextureLayout(const nlohmann::json& j, const char* entit
   if (str.compare("unknown") == 0) {
     return D3D12_TEXTURE_LAYOUT_UNKNOWN;
   }
-  if (str.compare("rowmajor") == 0) {
+  if (str.compare("row_major") == 0) {
     return D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   }
-  if (str.compare("64kb undefined swizzle") == 0) {
+  if (str.compare("64kb_undefined_swizzle") == 0) {
     return D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE;
   }
-  if (str.compare("64kb standard swizzle") == 0) {
+  if (str.compare("64kb_standard_swizzle") == 0) {
     return D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE;
   }
   assert(false && "invalid texture layout");
@@ -211,6 +204,11 @@ auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) 
   if (str.compare("primary_relative") == 0) {
     return BufferSizeRelativeness::kPrimaryBufferRelative;
   }
+  if (str.compare("absolute") == 0) {
+    return BufferSizeRelativeness::kAbsolute;
+  }
+  logerror("invalid buffer size type {}", name);
+  assert(false && "invalid buffer size type");
   return BufferSizeRelativeness::kAbsolute;
 }
 }
@@ -230,10 +228,10 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   if (config->dimension == D3D12_RESOURCE_DIMENSION_BUFFER && config->layout != D3D12_TEXTURE_LAYOUT_ROW_MAJOR) {
     config->layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   }
-  {
+  config->flags = D3D12_RESOURCE_FLAG_NONE;
+  if (j.contains("flags")) {
     auto& flags = j.at("flags");
     auto flag_num = static_cast<uint32_t>(flags.size());
-    config->flags = D3D12_RESOURCE_FLAG_NONE;
     for (uint32_t i = 0; i < flag_num; i++) {
       config->flags |= GetD3d12ResourceFlag(flags[i]);
     }
@@ -258,6 +256,98 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
       }
     }
   }
+}
+D3D12_FILTER_TYPE GetFilterType(const nlohmann::json& j, const char* const name) {
+  if (!j.contains(name)) { return D3D12_FILTER_TYPE_POINT; }
+  auto str = GetStringView(j, name);
+  return (strcmp(str.data(), "linear") == 0) ? D3D12_FILTER_TYPE_LINEAR : D3D12_FILTER_TYPE_POINT;
+}
+D3D12_TEXTURE_ADDRESS_MODE GetAddressMode(const nlohmann::json& j) {
+  auto str = j.get<std::string_view>().data();
+  if (strcmp(str, "wrap") == 0) {
+    return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  }
+  if (strcmp(str, "mirror") == 0) {
+    return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+  }
+  if (strcmp(str, "clamp") == 0) {
+    return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+  }
+  if (strcmp(str, "border") == 0) {
+    return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+  }
+  if (strcmp(str, "mirror_once") == 0) {
+    return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+  }
+  logerror("invalid texture address mode:{}", str);
+  assert(false && "invalid texture address mode");
+  return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+}
+D3D12_COMPARISON_FUNC GetComparisonFunc(const nlohmann::json& j, const char* const name) {
+  if (!j.contains(name)) { return D3D12_COMPARISON_FUNC_NEVER; }
+  auto str = j.at(name).get<std::string_view>().data();
+  if (strcmp(str, "never") == 0) {
+    return D3D12_COMPARISON_FUNC_NEVER;
+  }
+  if (strcmp(str, "less") == 0) {
+    return D3D12_COMPARISON_FUNC_LESS;
+  }
+  if (strcmp(str, "equal") == 0) {
+    return D3D12_COMPARISON_FUNC_EQUAL;
+  }
+  if (strcmp(str, "less_equal") == 0) {
+    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+  }
+  if (strcmp(str, "greater") == 0) {
+    return D3D12_COMPARISON_FUNC_GREATER;
+  }
+  if (strcmp(str, "not_equal") == 0) {
+    return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+  }
+  if (strcmp(str, "greater_equal") == 0) {
+    return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+  }
+  if (strcmp(str, "always") == 0) {
+    return D3D12_COMPARISON_FUNC_ALWAYS;
+  }
+  logerror("invalid comparison func:{}", str);
+  assert(false && "invalid comparison func");
+  return D3D12_COMPARISON_FUNC_NEVER;
+}
+void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC* sampler_desc) {
+  *name = CalcEntityStrHash(j, "name");
+  {
+    auto min_filter = GetFilterType(j, "filter_min");
+    auto mag_filter = GetFilterType(j, "filter_mag");
+    auto mip_filter = GetFilterType(j, "filter_mip");
+    sampler_desc->Filter = D3D12_ENCODE_BASIC_FILTER(min_filter, mag_filter, mip_filter, D3D12_FILTER_REDUCTION_TYPE_STANDARD);
+  }
+  if (j.contains("address_mode")) {
+    auto& address_mode = j.at("address_mode");
+    auto num = static_cast<uint32_t>(address_mode.size());
+    sampler_desc->AddressU = GetAddressMode(address_mode[0]);
+    sampler_desc->AddressV = num > 1 ? GetAddressMode(address_mode[1]) : D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler_desc->AddressW = num > 2 ? GetAddressMode(address_mode[2]) : D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  } else {
+    sampler_desc->AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler_desc->AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler_desc->AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  }
+  sampler_desc->MipLODBias = GetFloat(j, "mip_lod_bias", 0.0f);
+  sampler_desc->MaxAnisotropy = GetNum(j, "max_anisotropy", 16);
+  sampler_desc->ComparisonFunc = GetComparisonFunc(j, "comparison_func");
+  if (j.contains("border_color")) {
+    auto& border_color = j.at("border_color");
+    for (uint32_t i = 0; i < 4; i++) {
+      sampler_desc->BorderColor[i] = border_color[i];
+    }
+  } else {
+    for (uint32_t i = 0; i < 4; i++) {
+      sampler_desc->BorderColor[i] = 0.0f;
+    }
+  }
+  sampler_desc->MinLOD = GetFloat(j, "min_lod", 0.0f);
+  sampler_desc->MaxLOD = GetFloat(j, "max_lod", 65535.0f);
 }
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list) {
   for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {

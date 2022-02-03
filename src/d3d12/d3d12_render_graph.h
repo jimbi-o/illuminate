@@ -23,8 +23,7 @@ struct BufferConfig {
   uint32_t mip_depth{};
   D3D12_RESOURCE_STATES initial_state{};
   D3D12_CLEAR_VALUE clear_value{};
-  uint32_t descriptor_type_num{0};
-  DescriptorType* descriptor_type{nullptr};
+  DescriptorTypeFlag descriptor_type_flags{kDescriptorTypeFlagNone};
 };
 struct RenderPassBuffer {
   StrHash buffer_name{};
@@ -48,9 +47,12 @@ struct RenderPass {
   uint32_t postpass_barrier_num{0};
   Barrier* postpass_barrier{nullptr};
   bool execute{false};
+  bool sends_signal{false};
   uint32_t wait_pass_num{0};
   uint32_t* signal_queue_index{nullptr};
   StrHash* signal_pass_name{nullptr};
+  uint32_t sampler_num{0};
+  StrHash* sampler_list{nullptr};
 };
 struct RenderGraph {
   uint32_t frame_buffer_num{0};
@@ -74,6 +76,9 @@ struct RenderGraph {
   RenderPass* render_pass_list{nullptr};
   uint32_t buffer_num{0};
   BufferConfig* buffer_list{nullptr};
+  uint32_t sampler_num{0};
+  StrHash* sampler_name{nullptr};
+  D3D12_SAMPLER_DESC* sampler_list{nullptr};
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
   uint32_t gpu_handle_num_view{0};
   uint32_t gpu_handle_num_sampler{0};

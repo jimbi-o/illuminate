@@ -28,4 +28,8 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_header_common.cpp
   d3d12_shader_compiler.h
   d3d12_shader_compiler.cpp
-  )
+  d3d12_scene.h
+  d3d12_scene.cpp
+  d3d12_gpu_buffer_allocator.h
+  d3d12_gpu_buffer_allocator.cpp
+)

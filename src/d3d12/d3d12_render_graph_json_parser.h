@@ -28,8 +28,8 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
+void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC* sampler_desc);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
-DescriptorType GetDescriptorType(const nlohmann::json& j);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
@@ -112,15 +112,18 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
     r.buffer_list = AllocateArray<BufferConfig>(allocator, r.buffer_num);
     for (uint32_t i = 0; i < r.buffer_num; i++) {
       GetBufferConfig(buffer_list[i], &r.buffer_list[i]);
-      auto& descriptor_type_list = buffer_list[i].at("descriptor_type");
-      r.buffer_list[i].descriptor_type_num = static_cast<uint32_t>(descriptor_type_list.size());
-      r.buffer_list[i].descriptor_type = AllocateArray<DescriptorType>(allocator, r.buffer_list[i].descriptor_type_num);
-      for (uint32_t d = 0; d < r.buffer_list[i].descriptor_type_num; d++) {
-        r.buffer_list[i].descriptor_type[d] = GetDescriptorType(descriptor_type_list[d]);
-      }
     }
   }
-  {
+  if (j.contains("sampler")) {
+    auto& sampler_list = j.at("sampler");
+    r.sampler_num = static_cast<uint32_t>(sampler_list.size());
+    r.sampler_name = AllocateArray<StrHash>(allocator, r.sampler_num);
+    r.sampler_list = AllocateArray<D3D12_SAMPLER_DESC>(allocator, r.sampler_num);
+    for (uint32_t i = 0; i < r.sampler_num; i++) {
+      GetSamplerConfig(sampler_list[i], &r.sampler_name[i], &r.sampler_list[i]);
+    }
+  } // sampler
+  { // pass_list
     auto& render_pass_list = j.at("render_pass");
     r.render_pass_num = static_cast<uint32_t>(render_pass_list.size());
     r.render_pass_list = AllocateArray<RenderPass>(allocator, r.render_pass_num);
@@ -138,8 +141,21 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
           auto& src_buffer = buffer_list[buffer_index];
           dst_buffer.buffer_name = CalcEntityStrHash(src_buffer, "name");
           dst_buffer.state = GetResourceStateType(GetStringView(src_buffer, "state"));
+          for (uint32_t graph_buffer_index = 0; graph_buffer_index < r.buffer_num; graph_buffer_index++) {
+            if (dst_buffer.buffer_name != r.buffer_list[graph_buffer_index].name) { continue; }
+            r.buffer_list[graph_buffer_index].descriptor_type_flags |= ConvertToDescriptorTypeFlag(dst_buffer.state);
+            break;
+          }
         }
       } // buffer_list
+      if (src_pass.contains("sampler")) {
+        auto& sampler = src_pass.at("sampler");
+        dst_pass.sampler_num = static_cast<uint32_t>(sampler.size());
+        dst_pass.sampler_list = AllocateArray<StrHash>(allocator, dst_pass.sampler_num);
+        for (uint32_t s = 0; s < dst_pass.sampler_num; s++) {
+          dst_pass.sampler_list[s] = CalcStrHash(sampler[s].get<std::string_view>().data());
+        }
+      } // sampler
       if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
         dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());
@@ -169,23 +185,41 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       for (uint32_t k = 0; k < r.render_pass_num; k++) {
         if (i == k) { continue; }
         if (r.render_pass_list[i].signal_pass_name[w] == r.render_pass_list[k].name) {
+          r.render_pass_list[k].sends_signal = true;
           r.render_pass_list[i].signal_queue_index[w] = r.render_pass_list[k].command_queue_index;
           break;
         }
       }
     }
   }
-  if (j.contains("descriptor_handle_num_per_type")) {
-    auto& list = j.at("descriptor_handle_num_per_type");
-    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kCbv)] = GetNum(list, "cbv", 0);
-    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] = GetNum(list, "srv", 0);
-    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kUav)] = GetNum(list, "uav", 0);
-    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)] = GetNum(list, "sampler", 0);
-    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kRtv)] = GetNum(list, "rtv", 0);
-    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kDsv)] = GetNum(list, "dsv", 0);
-  }
-  r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", 1);
-  r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", 1);
+  // descriptor num
+  {
+    const auto cbv_index = static_cast<uint32_t>(DescriptorType::kCbv);
+    const auto srv_index = static_cast<uint32_t>(DescriptorType::kSrv);
+    const auto uav_index = static_cast<uint32_t>(DescriptorType::kUav);
+    const auto rtv_index = static_cast<uint32_t>(DescriptorType::kRtv);
+    const auto dsv_index = static_cast<uint32_t>(DescriptorType::kDsv);
+    for (uint32_t i = 0; i < r.buffer_num; i++) {
+      if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagCbv) {
+        r.descriptor_handle_num_per_type[cbv_index]++;
+      }
+      if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagSrv) {
+        r.descriptor_handle_num_per_type[srv_index]++;
+      }
+      if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagUav) {
+        r.descriptor_handle_num_per_type[uav_index]++;
+      }
+      if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagRtv) {
+        r.descriptor_handle_num_per_type[rtv_index]++;
+      }
+      if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagDsv) {
+        r.descriptor_handle_num_per_type[dsv_index]++;
+      }
+    }
+    r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)] = r.sampler_num;
+    r.gpu_handle_num_view = (r.descriptor_handle_num_per_type[cbv_index] + r.descriptor_handle_num_per_type[srv_index] + r.descriptor_handle_num_per_type[uav_index]) * r.frame_buffer_num;
+    r.gpu_handle_num_sampler = r.sampler_num * r.frame_buffer_num;
+  } // descriptor num
 }
 }
 #endif

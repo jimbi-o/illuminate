@@ -15,7 +15,7 @@ class ShaderCompiler {
     D3D12_RASTERIZER_DESC rasterizer{
       .FillMode = D3D12_FILL_MODE_SOLID,
       .CullMode = D3D12_CULL_MODE_BACK,
-      .FrontCounterClockwise = false,
+      .FrontCounterClockwise = true,
       .DepthBias = 0,
       .DepthBiasClamp = 0.0f,
       .SlopeScaledDepthBias = 1.0f,
@@ -50,7 +50,7 @@ class ShaderCompiler {
       .BackFace = {
         .StencilFailOp = D3D12_STENCIL_OP_KEEP,
         .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
-        .StencilPassOp = D3D12_STENCIL_OP_REPLACE,
+        .StencilPassOp = D3D12_STENCIL_OP_KEEP,
         .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
       },
       .DepthBoundsTestEnable = false,

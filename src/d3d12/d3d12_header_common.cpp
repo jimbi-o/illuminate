@@ -1,4 +1,5 @@
 #include "d3d12_header_common.h"
+#include "d3d12_src_common.h"
 namespace illuminate {
 uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale) {
   float val = 0.0f;
@@ -35,5 +36,13 @@ uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRe
     }
   }
   return static_cast<uint32_t>(val);
+}
+uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT format) {
+  switch (format) {
+    case DXGI_FORMAT_R32G32B32_FLOAT: return 12;
+  }
+  logerror("GetDxgiFormatPerPixelSizeInBytes not implemented yet. {}", format);
+  assert(false && "GetDxgiFormatPerPixelSizeInBytes");
+  return 0;
 }
 }

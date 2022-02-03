@@ -41,6 +41,12 @@ CPMAddPackage(
   GIT_TAG "f78c4fbd38e309b36d7b0a7db3d44267d6ac23c0"
 )
 CPMAddPackage("gh:microsoft/DirectX-Headers#v1.700.10-preview")
+CPMAddPackage(
+  NAME tinygltf
+  GITHUB_REPOSITORY "syoyo/tinygltf"
+  VERSION 2.5.0
+  DOWNLOAD_ONLY yes
+)
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -77,6 +83,10 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
 )
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+  TINYGLTF_NO_STB_IMAGE
+  TINYGLTF_NO_EXTERNAL_IMAGE
+  TINYGLTF_NO_INCLUDE_JSON
+  TINYGLTF_USE_CPP14
   $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>)
 target_include_directories(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -85,6 +95,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${d3d12_SOURCE_DIR}/build/native/include"
   "${nlohmann_json_SOURCE_DIR}/include"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
+  "${tinygltf_SOURCE_DIR}"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -100,6 +111,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp"
   "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
+  "${tinygltf_SOURCE_DIR}/tiny_gltf.h"
 )
 add_subdirectory(src)
 
