@@ -27,6 +27,13 @@ constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
 }
 enum class DescriptorType : uint8_t { kCbv = 0, kSrv, kUav, kSampler, kRtv, kDsv, kNum, };
 static const auto kDescriptorTypeNum = static_cast<uint32_t>(DescriptorType::kNum);
+using DescriptorTypeFlag = uint32_t;
+static const DescriptorTypeFlag kDescriptorTypeFlagNone = 0x00;
+static const DescriptorTypeFlag kDescriptorTypeFlagCbv  = 0x01;
+static const DescriptorTypeFlag kDescriptorTypeFlagSrv  = 0x02;
+static const DescriptorTypeFlag kDescriptorTypeFlagUav  = 0x04;
+static const DescriptorTypeFlag kDescriptorTypeFlagRtv  = 0x08;
+static const DescriptorTypeFlag kDescriptorTypeFlagDsv  = 0x10;
 enum class ResourceStateType : uint8_t { kCbv = 0, kSrv, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kCommon, };
 constexpr auto ConvertToDescriptorType(const ResourceStateType& state) {
   switch (state) {
@@ -37,6 +44,16 @@ constexpr auto ConvertToDescriptorType(const ResourceStateType& state) {
     case ResourceStateType::kDsvWrite: { return DescriptorType::kDsv; };
   }
   return DescriptorType::kNum;
+}
+constexpr auto ConvertToDescriptorTypeFlag(const ResourceStateType& state) {
+  switch (state) {
+    case ResourceStateType::kCbv: { return kDescriptorTypeFlagCbv; };
+    case ResourceStateType::kSrv: { return kDescriptorTypeFlagSrv; };
+    case ResourceStateType::kUav: { return kDescriptorTypeFlagUav; };
+    case ResourceStateType::kRtv: { return kDescriptorTypeFlagRtv; };
+    case ResourceStateType::kDsvWrite: { return kDescriptorTypeFlagDsv; };
+  }
+  return kDescriptorTypeFlagNone;
 }
 enum class BufferSizeRelativeness : uint8_t { kAbsolute, kSwapchainRelative, kPrimaryBufferRelative, };
 struct Size2d {

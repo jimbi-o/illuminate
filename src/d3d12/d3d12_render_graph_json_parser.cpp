@@ -80,26 +80,6 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   assert(false && "invalid format specified");
   return DXGI_FORMAT_UNKNOWN;
 }
-DescriptorType GetDescriptorType(const nlohmann::json& j) {
-  auto str = j.get<std::string_view>();
-  if (str.compare("cbv") == 0) {
-    return DescriptorType::kCbv;
-  }
-  if (str.compare("srv") == 0) {
-    return DescriptorType::kSrv;
-  }
-  if (str.compare("uav") == 0) {
-    return DescriptorType::kUav;
-  }
-  if (str.compare("rtv") == 0) {
-    return DescriptorType::kRtv;
-  }
-  if (str.compare("dsv") == 0) {
-    return DescriptorType::kDsv;
-  }
-  assert(false && "invalid DescriptorType");
-  return DescriptorType::kNum;
-}
 ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   auto str = j.get<std::string_view>();
   if (str.compare("cbv") == 0) {

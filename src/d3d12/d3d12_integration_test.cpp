@@ -69,8 +69,7 @@ auto GetTestJson() {
       "mip_width": 0,
       "mip_height": 0,
       "mip_depth": 0,
-      "initial_state": "uav",
-      "descriptor_type": ["uav", "srv"]
+      "initial_state": "uav"
     },
     {
       "name": "dsv",
@@ -90,7 +89,6 @@ auto GetTestJson() {
       "mip_height": 0,
       "mip_depth": 0,
       "initial_state": "dsv_write",
-      "descriptor_type": ["dsv", "srv"],
       "clear_depth": 1,
       "clear_stencil": 0
     }
@@ -122,16 +120,6 @@ auto GetTestJson() {
       "max_lod": 65535
     }
   ],
-  "descriptor_handle_num_per_type": {
-    "cbv": 0,
-    "srv": 2,
-    "uav": 1,
-    "sampler": 2,
-    "rtv": 0,
-    "dsv": 1
-  },
-  "gpu_handle_num_view":10,
-  "gpu_handle_num_sampler":4,
   "render_pass": [
     {
       "name": "dispatch cs",
@@ -662,6 +650,50 @@ auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, c
   }
   return gpu_handle_list;
 }
+template <typename A>
+auto CreateCpuHandleWithViewImpl(const BufferConfig& buffer_config, const DescriptorType& descriptor_type, ID3D12Resource* resource, DescriptorCpu<A>* descriptor_cpu, D3d12Device* device) {
+  auto cpu_handle = descriptor_cpu->CreateHandle(buffer_config.name, descriptor_type);
+  if (cpu_handle == nullptr) {
+    logwarn("no cpu_handle {} {}", buffer_config.name, descriptor_type);
+    return false;
+  }
+  return CreateView(device, descriptor_type, buffer_config, resource, cpu_handle);
+}
+template <typename A>
+auto CreateCpuHandleWithView(const BufferConfig& buffer_config, ID3D12Resource* resource, DescriptorCpu<A>* descriptor_cpu, D3d12Device* device) {
+  bool ret = true;
+  if (buffer_config.descriptor_type_flags & kDescriptorTypeFlagCbv) {
+    if (!CreateCpuHandleWithViewImpl(buffer_config, DescriptorType::kCbv, resource, descriptor_cpu, device)) {
+      ret = false;
+      logerror("CreateCpuHandleWithViewImpl(cbv) failed.");
+    }
+  }
+  if (buffer_config.descriptor_type_flags & kDescriptorTypeFlagSrv) {
+    if (!CreateCpuHandleWithViewImpl(buffer_config, DescriptorType::kSrv, resource, descriptor_cpu, device)) {
+      ret = false;
+      logerror("CreateCpuHandleWithViewImpl(srv) failed.");
+    }
+  }
+  if (buffer_config.descriptor_type_flags & kDescriptorTypeFlagUav) {
+    if (!CreateCpuHandleWithViewImpl(buffer_config, DescriptorType::kUav, resource, descriptor_cpu, device)) {
+      ret = false;
+      logerror("CreateCpuHandleWithViewImpl(uav) failed.");
+    }
+  }
+  if (buffer_config.descriptor_type_flags & kDescriptorTypeFlagRtv) {
+    if (!CreateCpuHandleWithViewImpl(buffer_config, DescriptorType::kRtv, resource, descriptor_cpu, device)) {
+      ret = false;
+      logerror("CreateCpuHandleWithViewImpl(rtv) failed.");
+    }
+  }
+  if (buffer_config.descriptor_type_flags & kDescriptorTypeFlagDsv) {
+    if (!CreateCpuHandleWithViewImpl(buffer_config, DescriptorType::kDsv, resource, descriptor_cpu, device)) {
+      ret = false;
+      logerror("CreateCpuHandleWithViewImpl(dsv) failed.");
+    }
+  }
+  return ret;
+}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
@@ -718,12 +750,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     CHECK_NE(buffer.allocation, nullptr);
     CHECK_NE(buffer.resource, nullptr);
     CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
-    for (uint32_t j = 0; j < render_graph.buffer_list[i].descriptor_type_num; j++) {
-      CAPTURE(j);
-      auto cpu_handle = descriptor_cpu.CreateHandle(render_graph.buffer_list[i].name, render_graph.buffer_list[i].descriptor_type[j]);
-      CHECK_NE(cpu_handle, nullptr);
-      CHECK_UNARY(CreateView(device.Get(), render_graph.buffer_list[i].descriptor_type[j], render_graph.buffer_list[i], buffer.resource, cpu_handle));
-    }
+    CHECK_UNARY(CreateCpuHandleWithView(render_graph.buffer_list[i], buffer.resource, &descriptor_cpu, device.Get()));
   }
   for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
     auto cpu_handler = descriptor_cpu.CreateHandle(render_graph.sampler_name[i], DescriptorType::kSampler);
