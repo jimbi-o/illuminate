@@ -185,6 +185,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       for (uint32_t k = 0; k < r.render_pass_num; k++) {
         if (i == k) { continue; }
         if (r.render_pass_list[i].signal_pass_name[w] == r.render_pass_list[k].name) {
+          r.render_pass_list[k].sends_signal = true;
           r.render_pass_list[i].signal_queue_index[w] = r.render_pass_list[k].command_queue_index;
           break;
         }

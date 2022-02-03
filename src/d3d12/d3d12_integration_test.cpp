@@ -124,6 +124,7 @@ auto GetTestJson() {
     {
       "name": "dispatch cs",
       "command_queue": "queue_compute",
+      "wait_pass": ["output to swapchain"],
       "execute": true,
       "buffer_list": [
         {
@@ -863,6 +864,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (render_pass.execute) {
         used_command_queue[render_pass.command_queue_index] = true;
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
+      }
+      if (render_pass.sends_signal) {
         auto signal_val = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
         frame_signals[frame_index][render_pass.command_queue_index] = signal_val;
         render_pass_signal.Replace(render_pass.name, std::move(signal_val));
