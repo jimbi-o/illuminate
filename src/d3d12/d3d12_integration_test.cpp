@@ -188,6 +188,13 @@ auto GetTestJson() {
           "split_type": "none",
           "state_before": "uav",
           "state_after": "srv_ps"
+        },
+        {
+          "buffer_name": "dsv",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": "dsv_write",
+          "state_after": "srv_ps"
         }
       ],
       "postpass_barrier": [
@@ -204,6 +211,13 @@ auto GetTestJson() {
           "split_type": "none",
           "state_before": "srv_ps",
           "state_after": "uav"
+        },
+        {
+          "buffer_name": "dsv",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": "srv_ps",
+          "state_after": "dsv_write"
         }
       ],
       "pass_vars": {
@@ -521,14 +535,16 @@ struct FullscreenTriangleVSOutput {
   float2 texcoord : TEXCOORD0;
 };
 Texture2D src : register(t0);
+Texture2D src1;
 SamplerState tex_sampler : register(s0);
 #define CopyFullscreenRootsig " \
-DescriptorTable(SRV(t0), visibility=SHADER_VISIBILITY_PIXEL), \
+DescriptorTable(SRV(t0, numDescriptors=2), visibility=SHADER_VISIBILITY_PIXEL), \
 DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
 "
 [RootSignature(CopyFullscreenRootsig)]
 float4 main(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   float4 color = src.Sample(tex_sampler, input.texcoord);
+  color.r = src1.Sample(tex_sampler, input.texcoord).r;
   return color;
 }
 )";
