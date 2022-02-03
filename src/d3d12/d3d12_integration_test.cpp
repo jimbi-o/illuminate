@@ -298,60 +298,60 @@ struct ShaderResourceSet {
 };
 struct RenderPassArgs {
   D3d12CommandList* command_list;
-  const MainBufferSize& main_buffer_size;
+  const MainBufferSize* main_buffer_size;
   const void* pass_vars_ptr;
   const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles;
   const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles;
   ID3D12Resource** resources;
-  const SceneData& scene_data;
+  const SceneData* scene_data;
 };
-using RenderPassFunction = void (*)(RenderPassArgs&&);
-void DispatchCs(RenderPassArgs&& args) {
-  auto pass_vars = static_cast<const CsDispatchParams*>(args.pass_vars_ptr);
-  args.command_list->SetComputeRootSignature(pass_vars->rootsig);
-  args.command_list->SetPipelineState(pass_vars->pso);
-  args.command_list->SetComputeRootDescriptorTable(0, args.gpu_handles[0]);
-  args.command_list->Dispatch(args.main_buffer_size.swapchain.width / pass_vars->thread_group_count_x, args.main_buffer_size.swapchain.width / pass_vars->thread_group_count_y, 1);
+using RenderPassFunction = void (*)(RenderPassArgs*);
+void DispatchCs(RenderPassArgs* args) {
+  auto pass_vars = static_cast<const CsDispatchParams*>(args->pass_vars_ptr);
+  args->command_list->SetComputeRootSignature(pass_vars->rootsig);
+  args->command_list->SetPipelineState(pass_vars->pso);
+  args->command_list->SetComputeRootDescriptorTable(0, args->gpu_handles[0]);
+  args->command_list->Dispatch(args->main_buffer_size->swapchain.width / pass_vars->thread_group_count_x, args->main_buffer_size->swapchain.width / pass_vars->thread_group_count_y, 1);
 }
-void PreZ(RenderPassArgs&& args) {
-  args.command_list->ClearDepthStencilView(args.cpu_handles[0], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-  auto pass_vars = static_cast<const ShaderResourceSet*>(args.pass_vars_ptr);
-  auto& width = args.main_buffer_size.primarybuffer.width;
-  auto& height = args.main_buffer_size.primarybuffer.height;
-  args.command_list->SetGraphicsRootSignature(pass_vars->rootsig);
+void PreZ(RenderPassArgs* args) {
+  args->command_list->ClearDepthStencilView(args->cpu_handles[0], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+  auto pass_vars = static_cast<const ShaderResourceSet*>(args->pass_vars_ptr);
+  auto& width = args->main_buffer_size->primarybuffer.width;
+  auto& height = args->main_buffer_size->primarybuffer.height;
+  args->command_list->SetGraphicsRootSignature(pass_vars->rootsig);
   D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
-  args.command_list->RSSetViewports(1, &viewport);
+  args->command_list->RSSetViewports(1, &viewport);
   D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
-  args.command_list->RSSetScissorRects(1, &scissor_rect);
-  args.command_list->SetPipelineState(pass_vars->pso);
-  args.command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  args.command_list->OMSetRenderTargets(0, nullptr, true, args.cpu_handles);
-  for (uint32_t i = 0; i < args.scene_data.model_num; i++) {
-    auto mesh_index = args.scene_data.model_mesh_index[i];
-    args.command_list->IASetIndexBuffer(&args.scene_data.mesh_index_buffer_view[mesh_index]);
+  args->command_list->RSSetScissorRects(1, &scissor_rect);
+  args->command_list->SetPipelineState(pass_vars->pso);
+  args->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  args->command_list->OMSetRenderTargets(0, nullptr, true, args->cpu_handles);
+  for (uint32_t i = 0; i < args->scene_data->model_num; i++) {
+    auto mesh_index = args->scene_data->model_mesh_index[i];
+    args->command_list->IASetIndexBuffer(&args->scene_data->mesh_index_buffer_view[mesh_index]);
     D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[] = {
-      args.scene_data.mesh_vertex_buffer_view_position[mesh_index],
+      args->scene_data->mesh_vertex_buffer_view_position[mesh_index],
     };
-    args.command_list->IASetVertexBuffers(0, 1, vertex_buffer_view);
-    args.command_list->DrawIndexedInstanced(args.scene_data.mesh_index_buffer_len[mesh_index], 1, 0, 0, 0);
-    // auto material_index = scene_data.model_material_index[i];
+    args->command_list->IASetVertexBuffers(0, 1, vertex_buffer_view);
+    args->command_list->DrawIndexedInstanced(args->scene_data->mesh_index_buffer_len[mesh_index], 1, 0, 0, 0);
+    // auto material_index = scene_data->model_material_index[i];
   }
 }
-void CopyResourceVsPs(RenderPassArgs&& args) {
-  auto pass_vars = static_cast<const ShaderResourceSet*>(args.pass_vars_ptr);
-  auto& width = args.main_buffer_size.swapchain.width;
-  auto& height = args.main_buffer_size.swapchain.height;
-  args.command_list->SetGraphicsRootSignature(pass_vars->rootsig);
+void CopyResourceVsPs(RenderPassArgs* args) {
+  auto pass_vars = static_cast<const ShaderResourceSet*>(args->pass_vars_ptr);
+  auto& width = args->main_buffer_size->swapchain.width;
+  auto& height = args->main_buffer_size->swapchain.height;
+  args->command_list->SetGraphicsRootSignature(pass_vars->rootsig);
   D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
-  args.command_list->RSSetViewports(1, &viewport);
+  args->command_list->RSSetViewports(1, &viewport);
   D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
-  args.command_list->RSSetScissorRects(1, &scissor_rect);
-  args.command_list->SetPipelineState(pass_vars->pso);
-  args.command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  args.command_list->OMSetRenderTargets(1, &args.cpu_handles[2], true, nullptr);
-  args.command_list->SetGraphicsRootDescriptorTable(0, args.gpu_handles[0]); // srv
-  args.command_list->SetGraphicsRootDescriptorTable(1, args.gpu_handles[1]); // sampler
-  args.command_list->DrawInstanced(3, 1, 0, 0);
+  args->command_list->RSSetScissorRects(1, &scissor_rect);
+  args->command_list->SetPipelineState(pass_vars->pso);
+  args->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  args->command_list->OMSetRenderTargets(1, &args->cpu_handles[2], true, nullptr);
+  args->command_list->SetGraphicsRootDescriptorTable(0, args->gpu_handles[0]); // srv
+  args->command_list->SetGraphicsRootDescriptorTable(1, args->gpu_handles[1]); // sampler
+  args->command_list->DrawInstanced(3, 1, 0, 0);
 }
 auto GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args) {
   auto shader_compile_args = j.at(name);
@@ -781,6 +781,15 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   auto render_pass_functions = GetRenderPassFunctions(&allocator);
   auto scene_data = GetSceneFromTinyGltfText(GetTestTinyGltf(), "", buffer_allocator, &allocator);
+  RenderPassArgs render_pass_args{
+    .command_list = nullptr,
+    .main_buffer_size = &main_buffer_size,
+    .pass_vars_ptr = nullptr,
+    .gpu_handles = nullptr,
+    .cpu_handles = nullptr,
+    .resources = nullptr,
+    .scene_data = &scene_data,
+  };
   uint32_t tmp_memory_max_offset = 0U;
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
@@ -842,8 +851,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
           }
           tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
         }
-        auto gpu_handles = gpu_handle_list.Get(render_pass.name);
-        (**render_pass_functions.Get(render_pass.name))({command_list, main_buffer_size, render_pass.pass_vars, *gpu_handles, cpu_handle_list, resource_list, scene_data});
+        render_pass_args.command_list = command_list;
+        render_pass_args.pass_vars_ptr = render_pass.pass_vars;
+        render_pass_args.gpu_handles = *gpu_handle_list.Get(render_pass.name);
+        render_pass_args.cpu_handles = cpu_handle_list;
+        render_pass_args.resources = resource_list;
+        (**render_pass_functions.Get(render_pass.name))(&render_pass_args);
         tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
       }
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
