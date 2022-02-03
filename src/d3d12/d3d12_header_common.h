@@ -71,6 +71,5 @@ struct MainBufferFormat {
 uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT);
-void SetD3d12Name(ID3D12Object* obj, LPCWSTR name);
 }
 #endif

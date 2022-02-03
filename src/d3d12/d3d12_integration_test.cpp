@@ -741,11 +741,17 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   CHECK_UNARY(dxgi_core.Init()); // NOLINT
   Device device;
   CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
+  auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
+  CHECK_NE(buffer_allocator, nullptr);
   MainBufferSize main_buffer_size{};
   MainBufferFormat main_buffer_format{};
   Window window;
   CommandListSet command_list_set;
   Swapchain swapchain;
+  CommandQueueSignals command_queue_signals;
+  DescriptorCpu<MemoryAllocationJanitor> descriptor_cpu;
+  HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator, 256);
+  DescriptorGpu descriptor_gpu;
   RenderGraph render_graph;
   {
     auto json = GetTestJson();
@@ -774,29 +780,25 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .primarybuffer = render_graph.primarybuffer_format,
     };
     PrepareRenderPassResources(json.at("render_pass"), render_graph.render_pass_num, &allocator, device.Get(), main_buffer_format, render_graph.render_pass_list);
+    command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
+    CHECK_UNARY(descriptor_cpu.Init(device.Get(), render_graph.descriptor_handle_num_per_type, &allocator));
+    const auto& json_buffer_list = json.at("buffer");
+    for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
+      CAPTURE(i);
+      auto buffer = CreateBuffer(render_graph.buffer_list[i], main_buffer_size, buffer_allocator);
+      CHECK_NE(buffer.allocation, nullptr);
+      CHECK_NE(buffer.resource, nullptr);
+      CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
+      CHECK_UNARY(CreateCpuHandleWithView(render_graph.buffer_list[i], buffer.resource, &descriptor_cpu, device.Get()));
+      SetD3d12Name(buffer.resource, json_buffer_list[i].at("name"));
+    }
+    for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
+      auto cpu_handler = descriptor_cpu.CreateHandle(render_graph.sampler_name[i], DescriptorType::kSampler);
+      CHECK_NE(cpu_handler, nullptr);
+      device.Get()->CreateSampler(&render_graph.sampler_list[i], *cpu_handler);
+    }
+    CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
   }
-  CommandQueueSignals command_queue_signals;
-  command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
-  auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
-  CHECK_NE(buffer_allocator, nullptr);
-  DescriptorCpu<MemoryAllocationJanitor> descriptor_cpu;
-  CHECK_UNARY(descriptor_cpu.Init(device.Get(), render_graph.descriptor_handle_num_per_type, &allocator));
-  HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator, 256);
-  for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
-    CAPTURE(i);
-    auto buffer = CreateBuffer(render_graph.buffer_list[i], main_buffer_size, buffer_allocator);
-    CHECK_NE(buffer.allocation, nullptr);
-    CHECK_NE(buffer.resource, nullptr);
-    CHECK_UNARY(buffer_list.Insert(render_graph.buffer_list[i].name, std::move(buffer)));
-    CHECK_UNARY(CreateCpuHandleWithView(render_graph.buffer_list[i], buffer.resource, &descriptor_cpu, device.Get()));
-  }
-  for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
-    auto cpu_handler = descriptor_cpu.CreateHandle(render_graph.sampler_name[i], DescriptorType::kSampler);
-    CHECK_NE(cpu_handler, nullptr);
-    device.Get()->CreateSampler(&render_graph.sampler_list[i], *cpu_handler);
-  }
-  DescriptorGpu descriptor_gpu;
-  CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
   extra_buffer_list.Reserve(SID("swapchain")); // because MemoryAllocationJanitor is a stack allocator, all allocations must be done before frame loop starts.
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);

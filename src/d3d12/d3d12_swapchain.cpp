@@ -92,6 +92,7 @@ bool Swapchain::Init(DxgiFactory* factory, D3d12CommandQueue* command_queue, D3d
         return false;
       }
       resources_[i] = resource;
+      SetD3d12Name(resources_[i], "swapchain" + std::to_string(i));
     }
   }
   // prepare rtv

@@ -45,14 +45,4 @@ uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT format) {
   assert(false && "GetDxgiFormatPerPixelSizeInBytes");
   return 0;
 }
-void SetD3d12Name(ID3D12Object* obj, LPCWSTR name) {
-  if (obj == nullptr) {
-    loginfo(L"obj:{} is null", name);
-    return;
-  }
-  auto hr = obj->SetName(name);
-  if (FAILED(hr)) {
-    logwarn(L"SetName failed. {} {}", hr, name);
-  }
-}
 }

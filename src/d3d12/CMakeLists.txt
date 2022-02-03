@@ -32,4 +32,6 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_scene.cpp
   d3d12_gpu_buffer_allocator.h
   d3d12_gpu_buffer_allocator.cpp
+  d3d12_src_common.h
+  d3d12_src_common.cpp
 )
