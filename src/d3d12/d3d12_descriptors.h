@@ -132,36 +132,27 @@ class DescriptorGpu {
     return CopyToGpuDescriptor(view_num, view_index + 1, handle_num, handles, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, device, &descriptor_cbv_srv_uav_);
   }
   template <typename AllocatorCpu>
-  auto CopySamplerDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffer_list, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
-    uint32_t sampler_num = 0;
-    for (uint32_t i = 0; i < buffer_num; i++) {
-      if (buffer_list[i].sampler) {
-        sampler_num++;
-      }
-    }
-    if (sampler_num == 0) { return D3D12_GPU_DESCRIPTOR_HANDLE{}; }
-    assert(sampler_num <= descriptor_sampler_.total_handle_num);
+  auto CopySamplerDescriptors(D3d12Device* device, const RenderPass& render_pass, const DescriptorCpu<AllocatorCpu>& descriptor_cpu) {
+    if (render_pass.sampler_num == 0) { return D3D12_GPU_DESCRIPTOR_HANDLE{}; }
+    assert(render_pass.sampler_num <= descriptor_sampler_.total_handle_num);
     auto tmp_allocator = GetTemporalMemoryAllocator();
     uint32_t sampler_index = 0;
-    auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, sampler_num);
-    auto handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, sampler_num);
-    bool first_sampler = true;
-    for (uint32_t i = 0; i < buffer_num; i++) {
-      if (!buffer_list[i].sampler) { continue; }
-      auto handle = descriptor_cpu.GetHandle(buffer_list[i].sampler, DescriptorType::kSampler);
+    auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, render_pass.sampler_num);
+    auto handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.sampler_num);
+    for (uint32_t i = 0; i < render_pass.sampler_num; i++) {
+      auto handle = descriptor_cpu.GetHandle(render_pass.sampler_list[i], DescriptorType::kSampler);
       if (handle == nullptr) { continue; }
-      if (!first_sampler && handle_list[sampler_index].ptr + descriptor_sampler_.handle_increment_size == handle->ptr) {
+      if (i > 0 && handle_list[sampler_index].ptr + descriptor_sampler_.handle_increment_size == handle->ptr) {
         handle_num[sampler_index]++;
         continue;
       }
-      if (!first_sampler) {
+      if (i > 0) {
         sampler_index++;
       }
       handle_num[sampler_index] = 1;
       handle_list[sampler_index].ptr = handle->ptr;
-      first_sampler = false;
     }
-    return CopyToGpuDescriptor(sampler_num, sampler_index + 1, handle_num, handle_list, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, device, &descriptor_sampler_);
+    return CopyToGpuDescriptor(render_pass.sampler_num, sampler_index + 1, handle_num, handle_list, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, device, &descriptor_sampler_);
   }
   auto GetViewHandleCount() const { return descriptor_cbv_srv_uav_.current_handle_num; }
   auto GetViewHandleTotal() const { return descriptor_cbv_srv_uav_.total_handle_num; }

@@ -90,7 +90,7 @@ auto GetTestJson() {
       "mip_height": 0,
       "mip_depth": 0,
       "initial_state": "dsv_write",
-      "descriptor_type": ["dsv"],
+      "descriptor_type": ["dsv", "srv"],
       "clear_depth": 1,
       "clear_stencil": 0
     }
@@ -124,7 +124,7 @@ auto GetTestJson() {
   ],
   "descriptor_handle_num_per_type": {
     "cbv": 0,
-    "srv": 1,
+    "srv": 2,
     "uav": 1,
     "sampler": 2,
     "rtv": 0,
@@ -173,14 +173,18 @@ auto GetTestJson() {
       "buffer_list": [
         {
           "name": "uav",
-          "state": "srv",
-          "sampler": "bilinear"
+          "state": "srv"
+        },
+        {
+          "name": "dsv",
+          "state": "srv"
         },
         {
           "name": "swapchain",
           "state": "rtv"
         }
       ],
+      "sampler": ["bilinear"],
       "prepass_barrier": [
         {
           "buffer_name": "swapchain",
@@ -356,7 +360,7 @@ void CopyResourceVsPs(RenderPassArgs&& args) {
   args.command_list->RSSetScissorRects(1, &scissor_rect);
   args.command_list->SetPipelineState(pass_vars->pso);
   args.command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  args.command_list->OMSetRenderTargets(1, &args.cpu_handles[1], true, nullptr);
+  args.command_list->OMSetRenderTargets(1, &args.cpu_handles[2], true, nullptr);
   args.command_list->SetGraphicsRootDescriptorTable(0, args.gpu_handles[0]); // srv
   args.command_list->SetGraphicsRootDescriptorTable(1, args.gpu_handles[1]); // sampler
   args.command_list->DrawInstanced(3, 1, 0, 0);
@@ -645,7 +649,7 @@ auto PrepareGpuHandleList(D3d12Device* device, const uint32_t render_pass_num, c
     }
     {
       // sampler
-      gpu_handles[1] = descriptor_gpu->CopySamplerDescriptors(device, render_pass.buffer_num, render_pass.buffer_list, descriptor_cpu);
+      gpu_handles[1] = descriptor_gpu->CopySamplerDescriptors(device, render_pass, descriptor_cpu);
       auto prev_handle_count = descriptor_gpu->GetSamplerHandleCount();
       auto current_handle_count = descriptor_gpu->GetSamplerHandleCount();
       if (prev_handle_count <= current_handle_count) {

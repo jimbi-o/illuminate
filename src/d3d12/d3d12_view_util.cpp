@@ -88,6 +88,13 @@ auto GetSrvDimension(const D3D12_RESOURCE_DIMENSION dimension, const uint16_t de
   assert(false && "invalid dimension");
   return D3D12_SRV_DIMENSION_UNKNOWN;
 }
+auto GetSrvValidDxgiFormat(const DXGI_FORMAT format) {
+  switch (format) {
+    case DXGI_FORMAT_D32_FLOAT: { return DXGI_FORMAT_R32_FLOAT; }
+    case DXGI_FORMAT_D24_UNORM_S8_UINT: { return DXGI_FORMAT_R24_UNORM_X8_TYPELESS; }
+  }
+  return format;
+}
 bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, const BufferConfig& config, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* handle) {
   switch (descriptor_type) {
     case DescriptorType::kCbv: {
@@ -96,7 +103,7 @@ bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, cons
     }
     case DescriptorType::kSrv: {
       auto desc = D3D12_SHADER_RESOURCE_VIEW_DESC{
-        .Format = config.format,
+        .Format = GetSrvValidDxgiFormat(config.format),
         .ViewDimension = GetSrvDimension(config.dimension, config.depth_or_array_size),
         .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
       };
