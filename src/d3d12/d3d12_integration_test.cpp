@@ -151,7 +151,8 @@ auto GetTestJson() {
       ],
       "pass_vars": {
         "shader": "prez.vs.hlsl",
-        "shader_compile_args":["-T", "vs_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+        "shader_compile_args":["-T", "vs_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "stencil_val": 255
       }
     },
     {
@@ -307,6 +308,11 @@ struct CsDispatchParams {
   uint32_t thread_group_count_x{0};
   uint32_t thread_group_count_y{0};
 };
+struct PrezResourceSet {
+  ID3D12RootSignature* rootsig{nullptr};
+  ID3D12PipelineState* pso{nullptr};
+  uint32_t stencil_val;
+};
 struct ShaderResourceSet {
   ID3D12RootSignature* rootsig{nullptr};
   ID3D12PipelineState* pso{nullptr};
@@ -330,7 +336,7 @@ void DispatchCs(RenderPassArgs* args) {
 }
 void PreZ(RenderPassArgs* args) {
   args->command_list->ClearDepthStencilView(args->cpu_handles[0], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-  auto pass_vars = static_cast<const ShaderResourceSet*>(args->pass_vars_ptr);
+  auto pass_vars = static_cast<const PrezResourceSet*>(args->pass_vars_ptr);
   auto& width = args->main_buffer_size->primarybuffer.width;
   auto& height = args->main_buffer_size->primarybuffer.height;
   args->command_list->SetGraphicsRootSignature(pass_vars->rootsig);
@@ -341,6 +347,7 @@ void PreZ(RenderPassArgs* args) {
   args->command_list->SetPipelineState(pass_vars->pso);
   args->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   args->command_list->OMSetRenderTargets(0, nullptr, true, args->cpu_handles);
+  args->command_list->OMSetStencilRef(pass_vars->stencil_val);
   for (uint32_t i = 0; i < args->scene_data->model_num; i++) {
     auto mesh_index = args->scene_data->model_mesh_index[i];
     args->command_list->IASetIndexBuffer(&args->scene_data->mesh_index_buffer_view[mesh_index]);
@@ -396,7 +403,7 @@ void ParsePassParamDispatchCs(const nlohmann::json& j, void* dst, ShaderCompiler
   param->thread_group_count_y = j.at("thread_group_count_y");
 }
 void ParsePassParamPreZ(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const char* shader_code) {
-  auto param = static_cast<ShaderResourceSet*>(dst);
+  auto param = static_cast<PrezResourceSet*>(dst);
   *param = {};
   std::wstring* wstr_args{nullptr};
   const wchar_t** args{nullptr};
@@ -416,12 +423,14 @@ void ParsePassParamPreZ(const nlohmann::json& j, void* dst, ShaderCompiler* shad
       .InstanceDataStepRate = 0,
     },
   };
+  pso_desc.depth_stencil1.StencilEnable = true;
   pso_desc.input_layout.pInputElementDescs = input_element_descs;
   pso_desc.input_layout.NumElements = 1;
   if (!shader_compiler->CreateRootSignatureAndPsoVs(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device, &pso_desc, &param->rootsig, &param->pso)) {
     logerror("vs parse error");
     assert(false && "vs parse error");
   }
+  param->stencil_val = GetNum(j, "stencil_val", 0);
 }
 void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const MainBufferFormat& main_buffer_format, const char* shader_code_vs, const char* shader_code_ps) {
   auto param = static_cast<ShaderResourceSet*>(dst);
@@ -448,6 +457,15 @@ void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCo
 }
 void ReleaseResourceDispatchCs(void* ptr) {
   auto param = static_cast<CsDispatchParams*>(ptr);
+  if (param->pso->Release() != 0) {
+    logwarn("ReleaseResourceDispatchCs pso ref left.");
+  }
+  if (param->rootsig->Release() != 0) {
+    logwarn("ReleaseResourceDispatchCs rootsig ref left.");
+  }
+}
+void ReleaseResourcePreZ(void* ptr) {
+  auto param = static_cast<PrezResourceSet*>(ptr);
   if (param->pso->Release() != 0) {
     logwarn("ReleaseResourceDispatchCs pso ref left.");
   }
@@ -489,7 +507,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
         break;
       }
       case SID("prez"): {
-        dst_render_pass.pass_vars = allocator->Allocate(sizeof(ShaderResourceSet));
+        dst_render_pass.pass_vars = allocator->Allocate(sizeof(PrezResourceSet));
         auto shader_code_vs = R"(
 struct VsInput {
   float3 position : POSITION;
@@ -563,7 +581,10 @@ void ReleaseRenderPassResources(const uint32_t render_pass_num, RenderPass* rend
         ReleaseResourceDispatchCs(render_pass.pass_vars);
         break;
       }
-      case SID("prez"):
+      case SID("prez"): {
+        ReleaseResourcePreZ(render_pass.pass_vars);
+        break;
+      }
       case SID("output to swapchain"): {
         ReleaseResourceShaderResourceSet(render_pass.pass_vars);
         break;
