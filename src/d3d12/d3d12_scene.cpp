@@ -156,7 +156,7 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
         };
         auto& buffer_allocation = scene_data.buffer_allocation[buffer_allocation_index_base];
         buffer_allocation = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        SetD3d12Name(buffer_allocation.resource, "IB_mesh" + std::to_string(mesh_index));
+        SetD3d12Name(buffer_allocation.resource, "mesh_ib" + std::to_string(mesh_index));
         auto& d3d12_buffer_view = scene_data.mesh_index_buffer_view[mesh_index];
         d3d12_buffer_view.BufferLocation = buffer_allocation.resource->GetGPUVirtualAddress();
         d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
@@ -193,7 +193,7 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
         };
         auto& buffer_allocation = scene_data.buffer_allocation[buffer_allocation_index_base + 1];
         buffer_allocation = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        SetD3d12Name(buffer_allocation.resource, "VBPOS_mesh" + std::to_string(mesh_index));
+        SetD3d12Name(buffer_allocation.resource, "mesh_pos" + std::to_string(mesh_index));
         d3d12_buffer_view.BufferLocation = buffer_allocation.resource->GetGPUVirtualAddress();
         d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
         d3d12_buffer_view.StrideInBytes = GetVertexBufferStrideInBytes(accessor.type, accessor.componentType);
