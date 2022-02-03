@@ -399,6 +399,8 @@ void ParsePassParamDispatchCs(const nlohmann::json& j, void* dst, ShaderCompiler
     logerror("compute shader parse error");
     assert(false && "compute shader parse error");
   }
+  SetD3d12Name(param->rootsig, "rootsig_cs");
+  SetD3d12Name(param->pso, "pso_cs");
   param->thread_group_count_x = j.at("thread_group_count_x");
   param->thread_group_count_y = j.at("thread_group_count_y");
 }
@@ -430,6 +432,8 @@ void ParsePassParamPreZ(const nlohmann::json& j, void* dst, ShaderCompiler* shad
     logerror("vs parse error");
     assert(false && "vs parse error");
   }
+  SetD3d12Name(param->rootsig, "rootsig_prez");
+  SetD3d12Name(param->pso, "pso_prez");
   param->stencil_val = GetNum(j, "stencil_val", 0);
 }
 void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCompiler* shader_compiler, D3d12Device* device, const MainBufferFormat& main_buffer_format, const char* shader_code_vs, const char* shader_code_ps) {
@@ -454,6 +458,8 @@ void ParsePassParamVsPsCopyResource(const nlohmann::json& j, void* dst, ShaderCo
     logerror("vs ps parse error");
     assert(false && "vs ps parse error");
   }
+  SetD3d12Name(param->rootsig, "rootsig_swapchain");
+  SetD3d12Name(param->pso, "pso_swapchain");
 }
 void ReleaseResourceDispatchCs(void* ptr) {
   auto param = static_cast<CsDispatchParams*>(ptr);
