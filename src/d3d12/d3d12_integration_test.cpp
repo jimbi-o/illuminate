@@ -520,6 +520,10 @@ void InitImgui(RenderPassInitParams* init_params) {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
   ImGui_ImplWin32_Init(init_params->hwnd);
   ImGui_ImplDX12_Init(init_params->device, init_params->frame_buffer_num, init_params->main_buffer_format.swapchain, nullptr/*descriptor heap not used in single viewport mode*/, *cpu_handle_font, {}/*gpu_handle updated every frame before rendering*/);
+  if (!ImGui_ImplDX12_CreateDeviceObjects()) {
+    logerror("ImGui_ImplDX12_CreateDeviceObjects failed.");
+    assert(false);
+  }
 }
 void ReleaseResourceDispatchCs(void* ptr) {
   auto param = static_cast<CsDispatchParams*>(ptr);
