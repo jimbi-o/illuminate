@@ -34,3 +34,4 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_src_common.h
   d3d12_src_common.cpp
 )
+add_subdirectory(render_pass)
