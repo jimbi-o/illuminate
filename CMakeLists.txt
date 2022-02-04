@@ -48,6 +48,12 @@ CPMAddPackage(
   DOWNLOAD_ONLY yes
 )
 CPMAddPackage("gh:ocornut/imgui#v1.86")
+CPMAddPackage(
+  NAME WinPixEventRuntime
+  URL https://www.nuget.org/api/v2/package/WinPixEventRuntime/1.0.220124001
+  VERSION 1.0.220124001
+  DOWNLOAD_ONLY yes
+)
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -74,6 +80,7 @@ set_target_properties(spdlog PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<T
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   spdlog
   D3D12MemoryAllocator
+  "${WinPixEventRuntime_SOURCE_DIR}/bin/x64/WinPixEventRuntime.lib"
   $<$<CONFIG:Debug>:dxguid.lib>
 )
 
@@ -98,6 +105,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
   "${tinygltf_SOURCE_DIR}"
   "${imgui_SOURCE_DIR}"
+  "${WinPixEventRuntime_SOURCE_DIR}/Include/"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -115,6 +123,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
   "${tinygltf_SOURCE_DIR}/tiny_gltf.h"
   "${imgui_SOURCE_DIR}/imgui.h"
+  "${WinPixEventRuntime_SOURCE_DIR}/Include/WinPixEventRuntime/pix3.h"
 )
 add_subdirectory(src)
 
@@ -122,6 +131,7 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
   "${dxc_SOURCE_DIR}/bin/x64/dxil.dll"
   "${dxc_SOURCE_DIR}/bin/x64/dxcompiler.dll"
+  "${WinPixEventRuntime_SOURCE_DIR}/bin/x64/WinPixEventRuntime.dll"
   "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/"
 )
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD

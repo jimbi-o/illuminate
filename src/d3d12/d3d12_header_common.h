@@ -3,6 +3,7 @@
 #include "../header_common.h"
 #include <dxgi1_6.h>
 #include <d3d12.h>
+#include "WinPixEventRuntime/pix3.h"
 namespace illuminate {
 using DxgiFactory = IDXGIFactory7;
 using DxgiAdapter = IDXGIAdapter4;

@@ -53,6 +53,7 @@ class RenderPassPrez {
     }
   }
   static void Exec(RenderPassArgs* args) {
+    PIXScopedEvent(args->command_list, 0, "prez");
     args->command_list->ClearDepthStencilView(args->cpu_handles[0], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
     auto& width = args->main_buffer_size->primarybuffer.width;
