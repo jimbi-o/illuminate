@@ -47,6 +47,7 @@ CPMAddPackage(
   VERSION 2.5.0
   DOWNLOAD_ONLY yes
 )
+CPMAddPackage("gh:ocornut/imgui#v1.86")
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -96,6 +97,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${nlohmann_json_SOURCE_DIR}/include"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
   "${tinygltf_SOURCE_DIR}"
+  "${imgui_SOURCE_DIR}"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -112,6 +114,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
   "${tinygltf_SOURCE_DIR}/tiny_gltf.h"
+  "${imgui_SOURCE_DIR}/imgui.h"
 )
 add_subdirectory(src)
 

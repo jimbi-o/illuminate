@@ -3,6 +3,10 @@
 #include "d3d12_src_common.h"
 namespace illuminate {
 uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32_t num, StrHash* list) {
+  if (!j.contains(name)) {
+    logwarn("{} not containted in FindIndex json. {}", name, num);
+    return 0U;
+  }
   auto hash = CalcEntityStrHash(j, name);
   for (uint32_t i = 0; i < num; i++) {
     if (list[i] == hash) { return i; }
@@ -108,6 +112,31 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   }
   assert(false && "invalid ResourceStateType");
   return ResourceStateType::kCommon;
+}
+DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name) {
+  assert(j.contains(name));
+  auto str = j.at(name).get<std::string_view>();
+  if (str.compare("cbv") == 0) {
+    return DescriptorType::kCbv;
+  }
+  if (str.compare("srv") == 0) {
+    return DescriptorType::kSrv;
+  }
+  if (str.compare("uav") == 0) {
+    return DescriptorType::kUav;
+  }
+  if (str.compare("sampler") == 0) {
+    return DescriptorType::kSampler;
+  }
+  if (str.compare("rtv") == 0) {
+    return DescriptorType::kRtv;
+  }
+  if (str.compare("dsv") == 0) {
+    return DescriptorType::kDsv;
+  }
+  logerror("invalid DescriptorType {}", name);
+  assert(false && "invalid DescriptorType");
+  return DescriptorType::kNum;
 }
 namespace {
 D3D12_HEAP_TYPE GetHeapType(const nlohmann::json& j, const char* entity_name) {

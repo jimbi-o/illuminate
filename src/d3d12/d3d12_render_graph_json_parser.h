@@ -31,6 +31,7 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC* sampler_desc);
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
+DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -75,12 +76,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
       r.command_list_num_per_queue[i] = command_queues[i].at("command_list_num");
     }
-  }
-  {
-    auto& allocators = j.at("command_allocator");
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT)] = GetNum(allocators, "direct", 0);
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE)] = GetNum(allocators, "compute", 0);
-    r.command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY)] = GetNum(allocators, "copy", 0);
   }
   {
     auto& swapchain = j.at("swapchain");
@@ -178,6 +173,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
           dst_pass.signal_pass_name[p] = CalcStrHash(wait_pass[p].get<std::string_view>().data());
         }
       }
+      dst_pass.need_command_list = GetBool(src_pass, "need_command_list", true);
     } // pass
   } // pass_list
   for (uint32_t i = 0; i < r.render_pass_num; i++) {
@@ -192,6 +188,18 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
     }
   }
+  // descriptors without resources
+  if (j.contains("descriptor")) {
+    const auto& descriptor = j.at("descriptor");
+    r.descriptor_num = static_cast<uint32_t>(descriptor.size());
+    r.descriptor_name = AllocateArray<StrHash>(allocator, r.descriptor_num);
+    r.descriptor_type = AllocateArray<DescriptorType>(allocator, r.descriptor_num);
+    for (uint32_t i = 0; i < r.descriptor_num; i++) {
+      r.descriptor_name[i] = CalcEntityStrHash(descriptor[i], "name");
+      r.descriptor_type[i] = GetDescriptorType(descriptor[i], "type");
+      r.descriptor_handle_num_per_type[static_cast<uint32_t>(r.descriptor_type[i])]++;
+    }
+  } // descriptors without resources
   // descriptor num
   {
     const auto cbv_index = static_cast<uint32_t>(DescriptorType::kCbv);
@@ -217,9 +225,31 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
     }
     r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)] = r.sampler_num;
-    r.gpu_handle_num_view = (r.descriptor_handle_num_per_type[cbv_index] + r.descriptor_handle_num_per_type[srv_index] + r.descriptor_handle_num_per_type[uav_index]) * r.frame_buffer_num;
-    r.gpu_handle_num_sampler = r.sampler_num * r.frame_buffer_num;
   } // descriptor num
+  // command allocator num
+  {
+    const auto index_direct = GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    const auto index_compute = GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    const auto index_copy = GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY);
+    for (uint32_t i = 0; i < r.render_pass_num; i++) {
+      const auto& pass = r.render_pass_list[i];
+      if (!pass.execute) { continue; }
+      switch (r.command_queue_type[pass.command_queue_index]) {
+        case D3D12_COMMAND_LIST_TYPE_DIRECT: {
+          r.command_allocator_num_per_queue_type[index_direct]++;
+          break;
+        }
+        case D3D12_COMMAND_LIST_TYPE_COMPUTE: {
+          r.command_allocator_num_per_queue_type[index_compute]++;
+          break;
+        }
+        case D3D12_COMMAND_LIST_TYPE_COPY: {
+          r.command_allocator_num_per_queue_type[index_copy]++;
+          break;
+        }
+      }
+    }
+  } // command allocator num
 }
 }
 #endif

@@ -53,6 +53,7 @@ struct RenderPass {
   StrHash* signal_pass_name{nullptr};
   uint32_t sampler_num{0};
   StrHash* sampler_list{nullptr};
+  bool need_command_list{true};
 };
 struct RenderGraph {
   uint32_t frame_buffer_num{0};
@@ -80,8 +81,9 @@ struct RenderGraph {
   StrHash* sampler_name{nullptr};
   D3D12_SAMPLER_DESC* sampler_list{nullptr};
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
-  uint32_t gpu_handle_num_view{0};
-  uint32_t gpu_handle_num_sampler{0};
+  uint32_t descriptor_num{0};
+  StrHash* descriptor_name{nullptr};
+  DescriptorType* descriptor_type{nullptr};
 };
 }
 #endif
