@@ -11,7 +11,8 @@ struct SceneData {
   D3D12_INDEX_BUFFER_VIEW* mesh_index_buffer_view{nullptr};
   D3D12_VERTEX_BUFFER_VIEW* mesh_vertex_buffer_view_position{nullptr};
   uint32_t buffer_allocation_num{0};
-  BufferAllocation* buffer_allocation{nullptr};
+  BufferAllocation* buffer_allocation_upload{nullptr};
+  BufferAllocation* buffer_allocation_default{nullptr};
 };
 class MemoryAllocationJanitor;
 SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* const base_dir, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator);

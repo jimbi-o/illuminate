@@ -44,6 +44,12 @@ auto GetTestJson() {
       "type": "compute",
       "priority": "normal",
       "command_list_num": 1
+    },
+    {
+      "name": "queue_copy",
+      "type": "copy",
+      "priority": "normal",
+      "command_list_num": 1
     }
   ],
   "swapchain": {
@@ -696,6 +702,20 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   auto render_pass_functions = GetRenderPassFunctions(&allocator);
   auto scene_data = GetSceneFromTinyGltfText(GetTestTinyGltf(), "", buffer_allocator, &allocator);
+  {
+    const uint32_t command_queue_index = 2;
+    auto command_list = command_list_set.GetCommandList(device.Get(), command_queue_index);
+    for (uint32_t i = 0; i < scene_data.buffer_allocation_num; i++) {
+      command_list->CopyResource(scene_data.buffer_allocation_default[i].resource, scene_data.buffer_allocation_upload[i].resource);
+    }
+    command_list_set.ExecuteCommandList(command_queue_index);
+    auto signal_val = command_queue_signals.SucceedSignal(command_queue_index);
+    for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
+      if (i != command_queue_index) {
+        CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(command_queue_index, i, signal_val));
+      }
+    }
+  }
   RenderPassArgs render_pass_args{
     .command_list = nullptr,
     .main_buffer_size = &main_buffer_size,
@@ -713,6 +733,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
+    if (scene_data.buffer_allocation_upload[0].resource && frame_index == 0 && i > 0) {
+      for (uint32_t j = 0; j < scene_data.buffer_allocation_num; j++) {
+        ReleaseBufferAllocation(&scene_data.buffer_allocation_upload[j]);
+        scene_data.buffer_allocation_upload[j].resource = nullptr;
+        scene_data.buffer_allocation_upload[j].allocation = nullptr;
+      }
+    }
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();

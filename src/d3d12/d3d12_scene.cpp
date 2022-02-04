@@ -104,7 +104,8 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
   scene_data.mesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
   scene_data.mesh_vertex_buffer_view_position = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
   scene_data.buffer_allocation_num = mesh_num * kMeshBufferTypeNum;
-  scene_data.buffer_allocation = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
+  scene_data.buffer_allocation_upload  = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
+  scene_data.buffer_allocation_default = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
   uint32_t model_index = 0;
   uint32_t mesh_index = 0;
   for (uint32_t m = 0; m < model.meshes.size(); m++) {
@@ -154,14 +155,16 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
             .Depth = 0,
           },
         };
-        auto& buffer_allocation = scene_data.buffer_allocation[buffer_allocation_index_base];
-        buffer_allocation = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        SetD3d12Name(buffer_allocation.resource, "mesh_ib" + std::to_string(mesh_index));
+        auto buffer_allocation_upload  = &scene_data.buffer_allocation_upload[buffer_allocation_index_base];
+        *buffer_allocation_upload = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+        auto buffer_allocation_default = &scene_data.buffer_allocation_default[buffer_allocation_index_base];
+        *buffer_allocation_default = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+        SetD3d12Name(buffer_allocation_default->resource, "mesh_ib" + std::to_string(mesh_index));
         auto& d3d12_buffer_view = scene_data.mesh_index_buffer_view[mesh_index];
-        d3d12_buffer_view.BufferLocation = buffer_allocation.resource->GetGPUVirtualAddress();
+        d3d12_buffer_view.BufferLocation = buffer_allocation_default->resource->GetGPUVirtualAddress();
         d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
         d3d12_buffer_view.Format = GetIndexBufferDxgiFormat(accessor.type, accessor.componentType);
-        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation.resource)) {
+        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation_upload->resource)) {
           logerror("resource map failed for index buffer {} {} {}", m, p, d3d12_buffer_view.SizeInBytes);
           assert(false && "resource map failed for index buffer");
         }
@@ -191,13 +194,15 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
             .Depth = 0,
           },
         };
-        auto& buffer_allocation = scene_data.buffer_allocation[buffer_allocation_index_base + 1];
-        buffer_allocation = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        SetD3d12Name(buffer_allocation.resource, "mesh_pos" + std::to_string(mesh_index));
-        d3d12_buffer_view.BufferLocation = buffer_allocation.resource->GetGPUVirtualAddress();
+        auto buffer_allocation_upload  = &scene_data.buffer_allocation_upload[buffer_allocation_index_base + 1];
+        *buffer_allocation_upload = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+        auto buffer_allocation_default = &scene_data.buffer_allocation_default[buffer_allocation_index_base + 1];
+        *buffer_allocation_default = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+        SetD3d12Name(buffer_allocation_default->resource, "mesh_pos" + std::to_string(mesh_index));
+        d3d12_buffer_view.BufferLocation = buffer_allocation_default->resource->GetGPUVirtualAddress();
         d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
         d3d12_buffer_view.StrideInBytes = GetVertexBufferStrideInBytes(accessor.type, accessor.componentType);
-        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation.resource)) {
+        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation_upload->resource)) {
           logerror("resource map failed for vertex buffer position {} {} {}", m, p, d3d12_buffer_view.SizeInBytes);
           assert(false && "resource map failed for vertex buffer position");
         }
@@ -211,7 +216,10 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
 }
 void ReleaseSceneData(SceneData* scene_data) {
   for (uint32_t i = 0; i < scene_data->buffer_allocation_num; i++) {
-    ReleaseBufferAllocation(&scene_data->buffer_allocation[i]);
+    if (scene_data->buffer_allocation_upload[i].resource) {
+      ReleaseBufferAllocation(&scene_data->buffer_allocation_upload[i]);
+    }
+    ReleaseBufferAllocation(&scene_data->buffer_allocation_default[i]);
   }
 }
 } // namespace illuminate
