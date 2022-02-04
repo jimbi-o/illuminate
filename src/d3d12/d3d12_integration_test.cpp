@@ -139,6 +139,7 @@ auto GetTestJson() {
     {
       "name": "dispatch cs",
       "command_queue": "queue_compute",
+      "wait_pass": ["output to swapchain"],
       "execute": true,
       "buffer_list": [
         {
@@ -919,7 +920,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     auto& render_pass = render_graph.render_pass_list[i];
     if (render_pass.sends_signal) {
-      render_pass_signal.Reserve(render_pass.name);
+      render_pass_signal.Insert(render_pass.name, 0);
     }
   }
   auto render_pass_functions = GetRenderPassFunctions(&allocator);
