@@ -45,7 +45,8 @@ class RenderPassPostprocess {
   }
   static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
   }
-  static void Render(RenderPassFuncArgsRender* args) {
+  static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
+  static auto Render(RenderPassFuncArgsRender* args) {
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
     auto& width = args->main_buffer_size->swapchain.width;
     auto& height = args->main_buffer_size->swapchain.height;

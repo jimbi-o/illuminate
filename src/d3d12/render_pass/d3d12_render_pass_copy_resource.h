@@ -16,7 +16,7 @@ class RenderPassCopyResource {
     return param;
   }
   static void Term([[maybe_unused]]void* ptr) {}
-  static auto Update(RenderPassFuncArgsUpdate* args) {
+  static void Update(RenderPassFuncArgsUpdate* args) {
     auto param = static_cast<Param*>(args->pass_vars_ptr);
     if (param->state != State::kUploading) { return; }
     if (param->initial_frame_index != args->frame_index) { return; }
@@ -27,15 +27,18 @@ class RenderPassCopyResource {
     }
     param->state = State::kDone;
   }
+  static auto IsRenderNeeded(const void* args) {
+    auto param = static_cast<const Param*>(args);
+    return param->state == State::kUpload;
+  }
   static auto Render(RenderPassFuncArgsRender* args) {
     auto param = static_cast<Param*>(args->pass_vars_ptr);
-    if (param->state != State::kUpload) { return false; }
+    assert(param->state == State::kUpload);
     for (uint32_t i = 0; i < args->scene_data->buffer_allocation_num; i++) {
       args->command_list->CopyResource(args->scene_data->buffer_allocation_default[i].resource, args->scene_data->buffer_allocation_upload[i].resource);
     }
     param->initial_frame_index = args->frame_index;
     param->state = State::kUploading;
-    return true;
   }
  private:
   RenderPassCopyResource() = delete;

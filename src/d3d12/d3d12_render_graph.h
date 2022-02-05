@@ -52,7 +52,6 @@ struct RenderPass {
   StrHash* signal_pass_name{nullptr};
   uint32_t sampler_num{0};
   StrHash* sampler_list{nullptr};
-  bool need_command_list{true};
 };
 struct RenderGraph {
   uint32_t frame_buffer_num{0};

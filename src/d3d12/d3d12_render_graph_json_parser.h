@@ -173,7 +173,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
           dst_pass.signal_pass_name[p] = CalcStrHash(wait_pass[p].get<std::string_view>().data());
         }
       }
-      dst_pass.need_command_list = GetBool(src_pass, "need_command_list", true);
     } // pass
   } // pass_list
   for (uint32_t i = 0; i < r.render_pass_num; i++) {

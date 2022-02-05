@@ -30,6 +30,7 @@ class RenderPassImgui {
   }
   static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
   }
+  static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
   static auto Render(RenderPassFuncArgsRender* args) {
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -39,7 +40,6 @@ class RenderPassImgui {
     ImGui::Render();
     args->command_list->OMSetRenderTargets(1, &args->cpu_handles[1], true, nullptr);
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), args->command_list);
-    return true;
   }
  private:
   static void RegisterGUI();

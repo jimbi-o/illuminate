@@ -444,6 +444,7 @@ void ReleaseRenderPassResources(HashMap<void*, MemoryAllocationJanitor>* render_
   RenderPassPrez::Term(*render_pass_vars->Get(SID("prez")));
   RenderPassPostprocess::Term(*render_pass_vars->Get(SID("output to swapchain")));
   RenderPassImgui::Term(*render_pass_vars->Get(SID("imgui")));
+  RenderPassCopyResource::Term(*render_pass_vars->Get(SID("copy resource")));
 }
 void RenderPassUpdate(const RenderPass& render_pass, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
   RenderPassFuncArgsUpdate args{
@@ -454,25 +455,50 @@ void RenderPassUpdate(const RenderPass& render_pass, HashMap<void*, MemoryAlloca
   switch (render_pass.name) {
     case SID("dispatch cs"): {
       RenderPassCsDispatch::Update(&args);
-      break;
+      return;
     }
     case SID("prez"): {
       RenderPassPrez::Update(&args);
-      break;
+      return;
     }
     case SID("output to swapchain"): {
       RenderPassPostprocess::Update(&args);
-      break;
+      return;
     }
     case SID("imgui"): {
       RenderPassImgui::Update(&args);
-      break;
+      return;
     }
     case SID("copy resource"): {
       RenderPassCopyResource::Update(&args);
-      break;
+      return;
     }
   }
+  logerror("Update not registered {}", render_pass.name);
+  assert(false && "Update not registered");
+}
+auto IsRenderNeeded(const RenderPass& render_pass, const HashMap<void*, MemoryAllocationJanitor>& render_pass_vars) {
+  auto args = *render_pass_vars.Get(render_pass.name);
+  switch (render_pass.name) {
+    case SID("dispatch cs"): {
+      return RenderPassCsDispatch::IsRenderNeeded(args);
+    }
+    case SID("prez"): {
+      return RenderPassPrez::IsRenderNeeded(args);
+    }
+    case SID("output to swapchain"): {
+      return RenderPassPostprocess::IsRenderNeeded(args);
+    }
+    case SID("imgui"): {
+      return RenderPassImgui::IsRenderNeeded(args);
+    }
+    case SID("copy resource"): {
+      return RenderPassCopyResource::IsRenderNeeded(args);
+    }
+  }
+  logerror("IsRenderNeeded not registered {}", render_pass.name);
+  assert(false && "IsRenderNeeded not registered");
+  return false;
 }
 auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list, const D3D12_CPU_DESCRIPTOR_HANDLE& swapchain_rtv_handle, const MainBufferSize& main_buffer_size, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars, D3d12CommandList* command_list, HashMap<D3D12_GPU_DESCRIPTOR_HANDLE*, MemoryAllocationJanitor>* gpu_handle_list, SceneData* scene_data, const uint32_t frame_index) {
   auto tmp_allocator = GetTemporalMemoryAllocator();
@@ -507,25 +533,27 @@ auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu<MemoryAllocat
   switch (render_pass.name) {
     case SID("dispatch cs"): {
       RenderPassCsDispatch::Render(&args);
-      break;
+      return;
     }
     case SID("prez"): {
       RenderPassPrez::Render(&args);
-      break;
+      return;
     }
     case SID("output to swapchain"): {
       RenderPassPostprocess::Render(&args);
-      break;
+      return;
     }
     case SID("imgui"): {
       RenderPassImgui::Render(&args);
-      break;
+      return;
     }
     case SID("copy resource"): {
       RenderPassCopyResource::Render(&args);
-      break;
+      return;
     }
   }
+  logerror("Render not registered {}", render_pass.name);
+  assert(false && "Render not registered");
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
   auto allocator = GetTemporalMemoryAllocator();
@@ -555,7 +583,7 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   }
   command_list->ResourceBarrier(barrier_num, barriers);
 }
-void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list) {
+auto ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list) {
   if (barrier_num == 0) { return; }
   auto allocator = GetTemporalMemoryAllocator();
   auto resource_list = AllocateArray<ID3D12Resource*>(&allocator, barrier_num);
@@ -791,8 +819,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
         CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(render_pass.signal_queue_index[l], render_pass.command_queue_index, *render_pass_signal.Get(render_pass.signal_pass_name[l])));
       }
-      auto command_list = render_pass.need_command_list ? prev_command_list[render_pass.command_queue_index] : nullptr;
-      if (render_pass.need_command_list && command_list == nullptr) {
+      if (render_pass.prepass_barrier_num == 0 && render_pass.postpass_barrier_num == 0 && !IsRenderNeeded(render_pass, render_pass_vars)) { continue; }
+      auto command_list = prev_command_list[render_pass.command_queue_index];
+      if (command_list == nullptr) {
         command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
         prev_command_list[render_pass.command_queue_index] = command_list;
       }
