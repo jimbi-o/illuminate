@@ -8,8 +8,7 @@ class RenderPassPostprocess {
     ID3D12RootSignature* rootsig{nullptr};
     ID3D12PipelineState* pso{nullptr};
   };
-  template <typename A>
-  static Param* Init(RenderPassInitArgs<A>* args) {
+  static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     auto allocator = GetTemporalMemoryAllocator();
@@ -44,7 +43,9 @@ class RenderPassPostprocess {
       logwarn("ReleaseResourceDispatchCs rootsig ref left.");
     }
   }
-  static void Exec(RenderPassArgs* args) {
+  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
+  }
+  static void Render(RenderPassFuncArgsRender* args) {
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
     auto& width = args->main_buffer_size->swapchain.width;
     auto& height = args->main_buffer_size->swapchain.height;

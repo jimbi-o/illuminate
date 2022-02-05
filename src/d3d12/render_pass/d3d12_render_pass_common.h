@@ -6,8 +6,7 @@
 #include "../d3d12_shader_compiler.h"
 #include "../d3d12_src_common.h"
 namespace illuminate {
-template <typename A>
-struct RenderPassInitArgs {
+struct RenderPassFuncArgsInit {
   const nlohmann::json* json{nullptr};
   const char* shader_code{nullptr};
   ShaderCompiler* shader_compiler{nullptr};
@@ -16,9 +15,14 @@ struct RenderPassInitArgs {
   const MainBufferFormat& main_buffer_format{};
   HWND hwnd{nullptr};
   uint32_t frame_buffer_num{0};
-  A* allocator{nullptr};
+  MemoryAllocationJanitor* allocator{nullptr};
 };
-struct RenderPassArgs {
+struct RenderPassFuncArgsUpdate {
+  void* pass_vars_ptr{nullptr};
+  SceneData* scene_data{nullptr};
+  uint32_t frame_index{0};
+};
+struct RenderPassFuncArgsRender {
   D3d12CommandList* command_list{nullptr};
   const MainBufferSize* main_buffer_size{nullptr};
   void* pass_vars_ptr{nullptr};
@@ -28,7 +32,9 @@ struct RenderPassArgs {
   SceneData* scene_data{nullptr};
   uint32_t frame_index{0};
 };
-using RenderPassFunction = void (*)(RenderPassArgs*);
+using RenderPassInitFunction = void* (*)(RenderPassFuncArgsInit*);
+using RenderPassUpdateFunction = void (*)(RenderPassFuncArgsUpdate*);
+using RenderPassRenderFunction = void (*)(RenderPassFuncArgsRender*);
 uint32_t GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args);
 }
 #endif

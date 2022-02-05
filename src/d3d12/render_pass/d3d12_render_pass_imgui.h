@@ -7,10 +7,11 @@
 namespace illuminate {
 class RenderPassImguiUpdate {
  public:
-  template <typename A>
-  static void* Init([[maybe_unused]]RenderPassInitArgs<A>* args) { return nullptr; }
+  static void* Init([[maybe_unused]]RenderPassFuncArgsInit* args) { return nullptr; }
   static void Term([[maybe_unused]]void* ptr) {}
-  static void Exec(RenderPassArgs* args) {
+  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
+  }
+  static void Render(RenderPassFuncArgsRender* args) {
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::GetIO().Fonts->SetTexID((ImTextureID)args->gpu_handles[0].ptr);
@@ -21,8 +22,7 @@ class RenderPassImguiUpdate {
 };
 class RenderPassImguiRender {
  public:
-  template <typename A>
-  static void* Init(RenderPassInitArgs<A>* args) {
+  static void* Init(RenderPassFuncArgsInit* args) {
     auto cpu_handle_font = args->descriptor_cpu->GetHandle(SID("imgui_font"), DescriptorType::kSrv);
     assert(cpu_handle_font);
     IMGUI_CHECKVERSION();
@@ -43,7 +43,9 @@ class RenderPassImguiRender {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
   }
-  static void Exec(RenderPassArgs* args) {
+  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
+  }
+  static void Render(RenderPassFuncArgsRender* args) {
     ImGui::Text("Hello, world %d", 123);
     ImGui::Render();
     args->command_list->OMSetRenderTargets(1, &args->cpu_handles[0], true, nullptr);

@@ -9,8 +9,7 @@ class RenderPassPrez {
     ID3D12PipelineState* pso{nullptr};
     uint32_t stencil_val;
   };
-  template <typename A>
-  static Param* Init(RenderPassInitArgs<A>* args) {
+  static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     std::wstring* wstr_shader_args{nullptr};
@@ -52,7 +51,9 @@ class RenderPassPrez {
       logwarn("ReleaseResourceDispatchCs rootsig ref left.");
     }
   }
-  static void Exec(RenderPassArgs* args) {
+  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
+  }
+  static void Render(RenderPassFuncArgsRender* args) {
     PIXScopedEvent(args->command_list, 0, "prez");
     args->command_list->ClearDepthStencilView(args->cpu_handles[0], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);

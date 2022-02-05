@@ -20,6 +20,7 @@
 #include "render_pass/d3d12_render_pass_copy_resource.h"
 namespace illuminate {
 namespace {
+static const uint32_t kRenderPassTableSize = 33;
 auto GetTestJson() {
   return R"(
 {
@@ -344,16 +345,11 @@ auto GetTestTinyGltf() {
 }
 )";
 }
-void PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, const uint32_t render_pass_num, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, RenderPass* dst_render_pass_list) {
-  ShaderCompiler shader_compiler;
-  if (!shader_compiler.Init()) {
-    logerror("shader_compiler.Init failed");
-    assert(false && "shader_compiler.Init failed");
-  }
-  RenderPassInitArgs render_pass_init_args{
-    .json = nullptr,
-    .shader_code = nullptr,
-    .shader_compiler = &shader_compiler,
+bool InitRenderPass(ShaderCompiler* shader_compiler, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, D3d12Device* device, const MainBufferFormat& main_buffer_format, HWND hwnd, const uint32_t frame_buffer_num, MemoryAllocationJanitor* allocator, const HashMap<const nlohmann::json*, MemoryAllocationJanitor>& render_pass_json_list, const char* const shader_code, const StrHash& render_pass_sid, RenderPassInitFunction init_func, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars) {
+  RenderPassFuncArgsInit render_pass_init_args{
+    .json = *render_pass_json_list.Get(render_pass_sid),
+    .shader_code = shader_code,
+    .shader_compiler = shader_compiler,
     .descriptor_cpu = descriptor_cpu,
     .device = device,
     .main_buffer_format = main_buffer_format,
@@ -361,12 +357,21 @@ void PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, cons
     .frame_buffer_num = frame_buffer_num,
     .allocator = allocator,
   };
+  return render_pass_vars->Insert(render_pass_sid, init_func(&render_pass_init_args));
+}
+auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, const uint32_t render_pass_num, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, RenderPass* dst_render_pass_list) {
+  ShaderCompiler shader_compiler;
+  if (!shader_compiler.Init()) {
+    logerror("shader_compiler.Init failed");
+    assert(false && "shader_compiler.Init failed");
+  }
+  HashMap<const nlohmann::json*, MemoryAllocationJanitor> render_pass_json_list(allocator);
   for (uint32_t i = 0; i < render_pass_num; i++) {
-    render_pass_init_args.json = src_render_pass_list[i].contains("pass_vars") ? &src_render_pass_list[i].at("pass_vars") : nullptr;
-    auto& dst_render_pass = dst_render_pass_list[i];
-    switch (dst_render_pass.name) {
-      case SID("dispatch cs"): {
-        auto shader_code_cs = R"(
+    render_pass_json_list.Insert(dst_render_pass_list[i].name, src_render_pass_list[i].contains("pass_vars") ? &src_render_pass_list[i].at("pass_vars") : nullptr);
+  }
+  HashMap<void*, MemoryAllocationJanitor> render_pass_vars(allocator, kRenderPassTableSize);
+  {
+    auto shader_code_cs = R"(
 RWTexture2D<float4> uav : register(u0);
 #define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
 [RootSignature(FillScreenCsRootsig)]
@@ -375,12 +380,11 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
 }
 )";
-        render_pass_init_args.shader_code = shader_code_cs;
-        dst_render_pass.pass_vars = RenderPassCsDispatch::Init(&render_pass_init_args);
-        break;
-      }
-      case SID("prez"): {
-        auto shader_code_vs = R"(
+    CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
+                               shader_code_cs, SID("dispatch cs"), RenderPassCsDispatch::Init, &render_pass_vars));
+  }
+  {
+    auto shader_code_vs = R"(
 struct VsInput {
   float3 position : POSITION;
 };
@@ -400,12 +404,11 @@ float4 main(const VsInput input) : SV_Position {
   return output;
 }
 )";
-        render_pass_init_args.shader_code = shader_code_vs;
-        dst_render_pass.pass_vars = RenderPassPrez::Init(&render_pass_init_args);
-        break;
-      }
-      case SID("output to swapchain"): {
-        auto shader_code_vs_ps = R"(
+    CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
+                               shader_code_vs, SID("prez"), RenderPassPrez::Init, &render_pass_vars));
+  }
+  {
+    auto shader_code_vs_ps = R"(
 struct FullscreenTriangleVSOutput {
   float4 position : SV_POSITION;
   float2 texcoord : TEXCOORD0;
@@ -432,72 +435,113 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   return color;
 }
 )";
-        render_pass_init_args.shader_code = shader_code_vs_ps;
-        dst_render_pass.pass_vars = RenderPassPostprocess::Init(&render_pass_init_args);
-        break;
-      }
-      case SID("imgui"): {
-        dst_render_pass.pass_vars = RenderPassImguiRender::Init(&render_pass_init_args);
-        break;
-      }
-      case SID("copy resource"): {
-        dst_render_pass.pass_vars = RenderPassCopyResource::Init(&render_pass_init_args);
-        break;
-      }
-    }
+    CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
+                               shader_code_vs_ps, SID("output to swapchain"), RenderPassPostprocess::Init, &render_pass_vars));
   }
+  CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
+                             nullptr, SID("imgui"), RenderPassImguiRender::Init, &render_pass_vars));
+  CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
+                             nullptr, SID("imgui_newframe"), RenderPassImguiUpdate::Init, &render_pass_vars));
+  CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
+                             nullptr, SID("copy resource"), RenderPassCopyResource::Init, &render_pass_vars));
   shader_compiler.Term();
+  return render_pass_vars;
 }
-void ReleaseRenderPassResources(const uint32_t render_pass_num, RenderPass* render_pass_list) {
-  for (uint32_t i = 0; i < render_pass_num; i++) {
-    const auto& render_pass = render_pass_list[i];
-    switch (render_pass.name) {
-      case SID("dispatch cs"): {
-        RenderPassCsDispatch::Term(render_pass.pass_vars);
-        break;
-      }
-      case SID("prez"): {
-        RenderPassPrez::Term(render_pass.pass_vars);
-        break;
-      }
-      case SID("output to swapchain"): {
-        RenderPassPostprocess::Term(render_pass.pass_vars);
-        break;
-      }
-      case SID("imgui"): {
-        RenderPassImguiRender::Term(render_pass.pass_vars);
-        break;
-      }
+void ReleaseRenderPassResources(HashMap<void*, MemoryAllocationJanitor>* render_pass_vars) {
+  RenderPassCsDispatch::Term(*render_pass_vars->Get(SID("dispatch cs")));
+  RenderPassPrez::Term(*render_pass_vars->Get(SID("prez")));
+  RenderPassPostprocess::Term(*render_pass_vars->Get(SID("output to swapchain")));
+  RenderPassImguiRender::Term(*render_pass_vars->Get(SID("imgui")));
+}
+void RenderPassUpdate(const RenderPass& render_pass, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
+  RenderPassFuncArgsUpdate args{
+    .pass_vars_ptr = *render_pass_vars->Get(render_pass.name),
+    .scene_data = scene_data,
+    .frame_index = frame_index,
+  };
+  switch (render_pass.name) {
+    case SID("dispatch cs"): {
+      RenderPassCsDispatch::Update(&args);
+      break;
+    }
+    case SID("prez"): {
+      RenderPassPrez::Update(&args);
+      break;
+    }
+    case SID("output to swapchain"): {
+      RenderPassPostprocess::Update(&args);
+      break;
+    }
+    case SID("imgui_newframe"): {
+      RenderPassImguiUpdate::Update(&args);
+      break;
+    }
+    case SID("imgui"): {
+      RenderPassImguiRender::Update(&args);
+      break;
+    }
+    case SID("copy resource"): {
+      RenderPassCopyResource::Update(&args);
+      break;
     }
   }
 }
-auto GetRenderPassFunctions(MemoryAllocationJanitor* allocator) {
-  HashMap<RenderPassFunction, MemoryAllocationJanitor> render_pass_functions(allocator, 64);
-  if (!render_pass_functions.Insert(SID("dispatch cs"), RenderPassCsDispatch::Exec)) {
-    logerror("failed to insert dispatch cs");
-    assert(false && "failed to insert dispatch cs");
+auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list, const D3D12_CPU_DESCRIPTOR_HANDLE& swapchain_rtv_handle, const MainBufferSize& main_buffer_size, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars, D3d12CommandList* command_list, HashMap<D3D12_GPU_DESCRIPTOR_HANDLE*, MemoryAllocationJanitor>* gpu_handle_list, SceneData* scene_data, const uint32_t frame_index) {
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto resource_list = AllocateArray<ID3D12Resource*>(&tmp_allocator, render_pass.buffer_num);
+  auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.buffer_num);
+  for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
+    auto& buffer = render_pass.buffer_list[b];
+    auto buffer_allocation = buffer_list.Get(buffer.buffer_name);
+    if (buffer_allocation != nullptr) {
+      resource_list[b] = buffer_allocation->resource;
+    } else {
+      auto resource = extra_buffer_list.Get(buffer.buffer_name);
+      resource_list[b] = resource ? *resource : nullptr;
+    }
+    const auto descriptor_type = ConvertToDescriptorType(buffer.state);
+    if (descriptor_type != DescriptorType::kNum) {
+      cpu_handle_list[b] = (buffer.buffer_name != SID("swapchain")) ? *descriptor_cpu->GetHandle(buffer.buffer_name, descriptor_type) : swapchain_rtv_handle;
+    } else {
+      cpu_handle_list[b] = {};
+    }
   }
-  if (!render_pass_functions.Insert(SID("prez"), RenderPassPrez::Exec)) {
-    logerror("failed to insert prez");
-    assert(false && "failed to insert prez");
+  RenderPassFuncArgsRender args{
+    .command_list = command_list,
+    .main_buffer_size = &main_buffer_size,
+    .pass_vars_ptr = *render_pass_vars->Get(render_pass.name),
+    .gpu_handles = *gpu_handle_list->Get(render_pass.name),
+    .cpu_handles = cpu_handle_list,
+    .resources = resource_list,
+    .scene_data = scene_data,
+    .frame_index = frame_index,
+  };
+  switch (render_pass.name) {
+    case SID("dispatch cs"): {
+      RenderPassCsDispatch::Render(&args);
+      break;
+    }
+    case SID("prez"): {
+      RenderPassPrez::Render(&args);
+      break;
+    }
+    case SID("output to swapchain"): {
+      RenderPassPostprocess::Render(&args);
+      break;
+    }
+    case SID("imgui_newframe"): {
+      RenderPassImguiUpdate::Render(&args);
+      break;
+    }
+    case SID("imgui"): {
+      RenderPassImguiRender::Render(&args);
+      break;
+    }
+    case SID("copy resource"): {
+      RenderPassCopyResource::Render(&args);
+      break;
+    }
   }
-  if (!render_pass_functions.Insert(SID("output to swapchain"), RenderPassPostprocess::Exec)) {
-    logerror("failed to insert output to swapchain");
-    assert(false && "failed to insert output to swapchain");
-  }
-  if (!render_pass_functions.Insert(SID("imgui_newframe"), RenderPassImguiUpdate::Exec)) {
-    logerror("failed to insert imgui_newframe");
-    assert(false && "failed to insert imgui_newframe");
-  }
-  if (!render_pass_functions.Insert(SID("imgui"), RenderPassImguiRender::Exec)) {
-    logerror("failed to insert imgui");
-    assert(false && "failed to insert imgui");
-  }
-  if (!render_pass_functions.Insert(SID("copy resource"), RenderPassCopyResource::Exec)) {
-    logerror("failed to insert copy resource");
-    assert(false && "failed to insert copy resource");
-  }
-  return render_pass_functions;
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
   auto allocator = GetTemporalMemoryAllocator();
@@ -644,6 +688,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator, 256);
   DescriptorGpu descriptor_gpu;
   RenderGraph render_graph;
+  HashMap<void*, MemoryAllocationJanitor> render_pass_vars;
   {
     auto json = GetTestJson();
     ParseRenderGraphJson(json, &allocator, &render_graph);
@@ -693,7 +738,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     const auto gpu_handle_num_view = (render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kCbv)] + render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] + render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kUav)]) * render_graph.frame_buffer_num;
     const auto gpu_handle_num_sampler = render_graph.sampler_num * render_graph.frame_buffer_num;
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), gpu_handle_num_view, gpu_handle_num_sampler));
-    PrepareRenderPassResources(json.at("render_pass"), render_graph.render_pass_num, &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, render_graph.render_pass_list);
+    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), render_graph.render_pass_num, &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, render_graph.render_pass_list);
   }
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
   extra_buffer_list.Reserve(SID("swapchain")); // because MemoryAllocationJanitor is a stack allocator, all allocations must be done before frame loop starts.
@@ -715,19 +760,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       render_pass_signal.Insert(render_pass.name, 0);
     }
   }
-  auto render_pass_functions = GetRenderPassFunctions(&allocator);
   auto scene_data = GetSceneFromTinyGltfText(GetTestTinyGltf(), "", buffer_allocator, &allocator);
-  RenderPassArgs render_pass_args{
-    .command_list = nullptr,
-    .main_buffer_size = &main_buffer_size,
-    .pass_vars_ptr = nullptr,
-    .gpu_handles = nullptr,
-    .cpu_handles = nullptr,
-    .resources = nullptr,
-    .scene_data = &scene_data,
-    .frame_index = 0,
-  };
-  uint32_t tmp_memory_max_offset = 0U;
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
@@ -735,7 +768,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
-    render_pass_args.frame_index = frame_index;
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
@@ -765,6 +797,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         assert(false  && "increase RenderGraph::gpu_handle_num_view");
       }
     }
+    // update
+    for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
+      RenderPassUpdate(render_graph.render_pass_list[k], &render_pass_vars, &scene_data, frame_index);
+    }
+    // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       const auto& render_pass = render_graph.render_pass_list[k];
       for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
@@ -779,35 +816,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
-      {
-        auto render_pass_allocator = GetTemporalMemoryAllocator();
-        auto resource_list = AllocateArray<ID3D12Resource*>(&render_pass_allocator, render_pass.buffer_num);
-        auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&render_pass_allocator, render_pass.buffer_num);
-        for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
-          auto& buffer = render_pass.buffer_list[b];
-          auto buffer_allocation = buffer_list.Get(buffer.buffer_name);
-          if (buffer_allocation != nullptr) {
-            resource_list[b] = buffer_allocation->resource;
-          } else {
-            auto resource = extra_buffer_list.Get(buffer.buffer_name);
-            resource_list[b] = resource ? *resource : nullptr;
-          }
-          const auto descriptor_type = ConvertToDescriptorType(buffer.state);
-          if (descriptor_type != DescriptorType::kNum) {
-            cpu_handle_list[b] = (buffer.buffer_name != SID("swapchain")) ? *descriptor_cpu.GetHandle(buffer.buffer_name, descriptor_type) : swapchain.GetRtvHandle();
-          } else {
-            cpu_handle_list[b] = {};
-          }
-          tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
-        }
-        render_pass_args.command_list = command_list;
-        render_pass_args.pass_vars_ptr = render_pass.pass_vars;
-        render_pass_args.gpu_handles = *gpu_handle_list.Get(render_pass.name);
-        render_pass_args.cpu_handles = cpu_handle_list;
-        render_pass_args.resources = resource_list;
-        (**render_pass_functions.Get(render_pass.name))(&render_pass_args);
-        tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
-      }
+      RenderPassRender(render_graph.render_pass_list[k], &descriptor_cpu, buffer_list, extra_buffer_list, swapchain.GetRtvHandle(), main_buffer_size, &render_pass_vars, command_list, &gpu_handle_list, &scene_data, frame_index); // TODO check ret bool for exec + signal (with barrier execs)
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
@@ -821,11 +830,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     } // render pass
     swapchain.Present();
-    tmp_memory_max_offset = std::max(GetTemporalMemoryOffset(), tmp_memory_max_offset);
   }
   command_queue_signals.WaitAll(device.Get());
   ReleaseSceneData(&scene_data);
-  ReleaseRenderPassResources(render_graph.render_pass_num, render_graph.render_pass_list);
+  ReleaseRenderPassResources(&render_pass_vars);
   swapchain.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();
@@ -838,6 +846,5 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   window.Term();
   device.Term();
   dxgi_core.Term();
-  loginfo("memory global:{} temp:{}", gSystemMemoryAllocator->GetOffset(), tmp_memory_max_offset);
   gSystemMemoryAllocator->Reset();
 }

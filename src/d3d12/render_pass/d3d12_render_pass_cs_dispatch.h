@@ -10,8 +10,7 @@ class RenderPassCsDispatch {
     uint32_t thread_group_count_x{0};
     uint32_t thread_group_count_y{0};
   };
-  template <typename A>
-  static Param* Init(RenderPassInitArgs<A>* args) {
+  static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     std::wstring* wstr_shader_args{nullptr};
@@ -38,7 +37,9 @@ class RenderPassCsDispatch {
       logwarn("ReleaseResourceDispatchCs rootsig ref left.");
     }
   }
-  static void Exec(RenderPassArgs* args) {
+  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
+  }
+  static void Render(RenderPassFuncArgsRender* args) {
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
     args->command_list->SetComputeRootSignature(pass_vars->rootsig);
     args->command_list->SetPipelineState(pass_vars->pso);
