@@ -829,7 +829,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
-      RenderPassRender(render_graph.render_pass_list[k], &descriptor_cpu, buffer_list, extra_buffer_list, swapchain.GetRtvHandle(), main_buffer_size, &render_pass_vars, command_list, &gpu_handle_list, &scene_data, frame_index); // TODO check ret bool for exec + signal (with barrier execs)
+      RenderPassRender(render_graph.render_pass_list[k], &descriptor_cpu, buffer_list, extra_buffer_list, swapchain.GetRtvHandle(), main_buffer_size, &render_pass_vars, command_list, &gpu_handle_list, &scene_data, frame_index);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
