@@ -5,22 +5,7 @@
 #include "backends/imgui_impl_win32.h"
 #include "backends/imgui_impl_dx12.h"
 namespace illuminate {
-class RenderPassImguiUpdate {
- public:
-  static void* Init([[maybe_unused]]RenderPassFuncArgsInit* args) { return nullptr; }
-  static void Term([[maybe_unused]]void* ptr) {}
-  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
-  }
-  static void Render(RenderPassFuncArgsRender* args) {
-    ImGui_ImplDX12_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::GetIO().Fonts->SetTexID((ImTextureID)args->gpu_handles[0].ptr);
-    ImGui::NewFrame();
-  }
- private:
-  RenderPassImguiUpdate() = delete;
-};
-class RenderPassImguiRender {
+class RenderPassImgui {
  public:
   static void* Init(RenderPassFuncArgsInit* args) {
     auto cpu_handle_font = args->descriptor_cpu->GetHandle(SID("imgui_font"), DescriptorType::kSrv);
@@ -45,14 +30,20 @@ class RenderPassImguiRender {
   }
   static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
   }
-  static void Render(RenderPassFuncArgsRender* args) {
-    ImGui::Text("Hello, world %d", 123);
+  static auto Render(RenderPassFuncArgsRender* args) {
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::GetIO().Fonts->SetTexID((ImTextureID)args->gpu_handles[0].ptr);
+    ImGui::NewFrame();
+    RegisterGUI();
     ImGui::Render();
-    args->command_list->OMSetRenderTargets(1, &args->cpu_handles[0], true, nullptr);
+    args->command_list->OMSetRenderTargets(1, &args->cpu_handles[1], true, nullptr);
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), args->command_list);
+    return true;
   }
  private:
-  RenderPassImguiRender() = delete;
+  static void RegisterGUI();
+  RenderPassImgui() = delete;
 };
 }
 #endif

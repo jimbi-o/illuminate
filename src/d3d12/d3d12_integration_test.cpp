@@ -136,16 +136,6 @@ auto GetTestJson() {
   ],
   "render_pass": [
     {
-      "name": "imgui_newframe",
-      "need_command_list": false,
-      "buffer_list": [
-        {
-          "name": "imgui_font",
-          "state": "srv"
-        }
-      ]
-    },
-    {
       "name": "copy resource",
       "command_queue": "queue_copy",
       "execute": true
@@ -256,6 +246,10 @@ auto GetTestJson() {
       "command_queue": "queue_graphics",
       "execute": true,
       "buffer_list": [
+        {
+          "name": "imgui_font",
+          "state": "srv"
+        },
         {
           "name": "swapchain",
           "state": "rtv"
@@ -439,9 +433,7 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
                                shader_code_vs_ps, SID("output to swapchain"), RenderPassPostprocess::Init, &render_pass_vars));
   }
   CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
-                             nullptr, SID("imgui"), RenderPassImguiRender::Init, &render_pass_vars));
-  CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
-                             nullptr, SID("imgui_newframe"), RenderPassImguiUpdate::Init, &render_pass_vars));
+                             nullptr, SID("imgui"), RenderPassImgui::Init, &render_pass_vars));
   CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
                              nullptr, SID("copy resource"), RenderPassCopyResource::Init, &render_pass_vars));
   shader_compiler.Term();
@@ -451,7 +443,7 @@ void ReleaseRenderPassResources(HashMap<void*, MemoryAllocationJanitor>* render_
   RenderPassCsDispatch::Term(*render_pass_vars->Get(SID("dispatch cs")));
   RenderPassPrez::Term(*render_pass_vars->Get(SID("prez")));
   RenderPassPostprocess::Term(*render_pass_vars->Get(SID("output to swapchain")));
-  RenderPassImguiRender::Term(*render_pass_vars->Get(SID("imgui")));
+  RenderPassImgui::Term(*render_pass_vars->Get(SID("imgui")));
 }
 void RenderPassUpdate(const RenderPass& render_pass, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
   RenderPassFuncArgsUpdate args{
@@ -472,12 +464,8 @@ void RenderPassUpdate(const RenderPass& render_pass, HashMap<void*, MemoryAlloca
       RenderPassPostprocess::Update(&args);
       break;
     }
-    case SID("imgui_newframe"): {
-      RenderPassImguiUpdate::Update(&args);
-      break;
-    }
     case SID("imgui"): {
-      RenderPassImguiRender::Update(&args);
+      RenderPassImgui::Update(&args);
       break;
     }
     case SID("copy resource"): {
@@ -529,12 +517,8 @@ auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu<MemoryAllocat
       RenderPassPostprocess::Render(&args);
       break;
     }
-    case SID("imgui_newframe"): {
-      RenderPassImguiUpdate::Render(&args);
-      break;
-    }
     case SID("imgui"): {
-      RenderPassImguiRender::Render(&args);
+      RenderPassImgui::Render(&args);
       break;
     }
     case SID("copy resource"): {

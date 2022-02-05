@@ -34,7 +34,7 @@ struct RenderPassFuncArgsRender {
 };
 using RenderPassInitFunction = void* (*)(RenderPassFuncArgsInit*);
 using RenderPassUpdateFunction = void (*)(RenderPassFuncArgsUpdate*);
-using RenderPassRenderFunction = void (*)(RenderPassFuncArgsRender*);
+using RenderPassRenderFunction = bool (*)(RenderPassFuncArgsRender*);
 uint32_t GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args);
 }
 #endif

@@ -39,12 +39,13 @@ class RenderPassCsDispatch {
   }
   static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
   }
-  static void Render(RenderPassFuncArgsRender* args) {
+  static auto Render(RenderPassFuncArgsRender* args) {
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
     args->command_list->SetComputeRootSignature(pass_vars->rootsig);
     args->command_list->SetPipelineState(pass_vars->pso);
     args->command_list->SetComputeRootDescriptorTable(0, args->gpu_handles[0]);
     args->command_list->Dispatch(args->main_buffer_size->swapchain.width / pass_vars->thread_group_count_x, args->main_buffer_size->swapchain.width / pass_vars->thread_group_count_y, 1);
+    return true;
   }
  private:
   RenderPassCsDispatch() = delete;

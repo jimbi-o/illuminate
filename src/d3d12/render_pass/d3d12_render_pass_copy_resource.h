@@ -4,7 +4,7 @@
 namespace illuminate {
 class RenderPassCopyResource {
  public:
-  enum class State :uint8_t { kUpload = 0, kUploading, kDone, };
+  enum class State : uint8_t { kUpload = 0, kUploading, kDone, };
   struct Param {
     uint32_t initial_frame_index{};
     State state;
