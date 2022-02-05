@@ -138,6 +138,22 @@ DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const nam
   assert(false && "invalid DescriptorType");
   return DescriptorType::kNum;
 }
+D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags) {
+  D3D12_RESOURCE_FLAGS flag{D3D12_RESOURCE_FLAG_NONE};
+  if (descriptor_type_flags & kDescriptorTypeFlagRtv) {
+    flag |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+  }
+  if (descriptor_type_flags & kDescriptorTypeFlagDsv) {
+    flag |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    if ((descriptor_type_flags & kDescriptorTypeFlagSrv) == 0) {
+      flag |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    }
+  }
+  if (descriptor_type_flags & kDescriptorTypeFlagUav) {
+    flag |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  }
+  return flag;
+}
 namespace {
 D3D12_HEAP_TYPE GetHeapType(const nlohmann::json& j, const char* entity_name) {
   if (!j.contains(entity_name)) {
@@ -196,35 +212,6 @@ D3D12_TEXTURE_LAYOUT GetTextureLayout(const nlohmann::json& j, const char* entit
   assert(false && "invalid texture layout");
   return D3D12_TEXTURE_LAYOUT_UNKNOWN;
 }
-D3D12_RESOURCE_FLAGS GetD3d12ResourceFlag(const nlohmann::json& j) {
-  auto str = j.get<std::string_view>();
-  if (str.compare("rtv") == 0) {
-    return D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-  }
-  if (str.compare("dsv") == 0) {
-    return D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-  }
-  if (str.compare("uav") == 0) {
-    return D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-  }
-  if (str.compare("no shader resource") == 0) {
-    return D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-  }
-  if (str.compare("cross adapter") == 0) {
-    return D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
-  }
-  if (str.compare("simultaneous access") == 0) {
-    return D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
-  }
-  if (str.compare("video decode") == 0) {
-    return D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY;
-  }
-  if (str.compare("video encode") == 0) {
-    return D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY;
-  }
-  assert(false && "invalid resource flag");
-  return D3D12_RESOURCE_FLAG_NONE;
-}
 auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) {
   auto str = GetStringView(j, name);
   if (str.compare("swapchain_relative") == 0) {
@@ -258,13 +245,6 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
     config->layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   }
   config->flags = D3D12_RESOURCE_FLAG_NONE;
-  if (j.contains("flags")) {
-    auto& flags = j.at("flags");
-    auto flag_num = static_cast<uint32_t>(flags.size());
-    for (uint32_t i = 0; i < flag_num; i++) {
-      config->flags |= GetD3d12ResourceFlag(flags[i]);
-    }
-  }
   config->mip_width = GetNum(j, "mip_width", 0);
   config->mip_height = GetNum(j, "mip_height", 0);
   config->mip_depth = GetNum(j, "mip_depth", 0);

@@ -32,6 +32,7 @@ void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC
 void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
 DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name);
+D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -175,6 +176,9 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
     } // pass
   } // pass_list
+  for (uint32_t i = 0; i < r.buffer_num; i++) {
+    r.buffer_list[i].flags = GetD3d12ResourceFlags(r.buffer_list[i].descriptor_type_flags);
+  }
   for (uint32_t i = 0; i < r.render_pass_num; i++) {
     for (uint32_t w = 0; w < r.render_pass_list[i].wait_pass_num; w++) {
       for (uint32_t k = 0; k < r.render_pass_num; k++) {
