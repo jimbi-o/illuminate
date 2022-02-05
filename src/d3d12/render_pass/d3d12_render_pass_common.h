@@ -19,13 +19,14 @@ struct RenderPassInitArgs {
   A* allocator{nullptr};
 };
 struct RenderPassArgs {
-  D3d12CommandList* command_list;
-  const MainBufferSize* main_buffer_size;
-  const void* pass_vars_ptr;
-  const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles;
-  const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles;
-  ID3D12Resource** resources;
-  const SceneData* scene_data;
+  D3d12CommandList* command_list{nullptr};
+  const MainBufferSize* main_buffer_size{nullptr};
+  void* pass_vars_ptr{nullptr};
+  const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles{nullptr};
+  const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles{nullptr};
+  ID3D12Resource** resources{nullptr};
+  SceneData* scene_data{nullptr};
+  uint32_t frame_index{0};
 };
 using RenderPassFunction = void (*)(RenderPassArgs*);
 uint32_t GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args);

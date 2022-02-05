@@ -17,6 +17,7 @@
 #include "render_pass/d3d12_render_pass_imgui.h"
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_prez.h"
+#include "render_pass/d3d12_render_pass_copy_resource.h"
 namespace illuminate {
 namespace {
 auto GetTestJson() {
@@ -144,6 +145,11 @@ auto GetTestJson() {
       ]
     },
     {
+      "name": "copy resource",
+      "command_queue": "queue_copy",
+      "execute": true
+    },
+    {
       "name": "dispatch cs",
       "command_queue": "queue_compute",
       "wait_pass": ["output to swapchain"],
@@ -164,6 +170,7 @@ auto GetTestJson() {
     {
       "name": "prez",
       "command_queue": "queue_graphics",
+      "wait_pass": ["copy resource"],
       "execute": true,
       "buffer_list": [
         {
@@ -433,6 +440,10 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
         dst_render_pass.pass_vars = RenderPassImguiRender::Init(&render_pass_init_args);
         break;
       }
+      case SID("copy resource"): {
+        dst_render_pass.pass_vars = RenderPassCopyResource::Init(&render_pass_init_args);
+        break;
+      }
     }
   }
   shader_compiler.Term();
@@ -481,6 +492,10 @@ auto GetRenderPassFunctions(MemoryAllocationJanitor* allocator) {
   if (!render_pass_functions.Insert(SID("imgui"), RenderPassImguiRender::Exec)) {
     logerror("failed to insert imgui");
     assert(false && "failed to insert imgui");
+  }
+  if (!render_pass_functions.Insert(SID("copy resource"), RenderPassCopyResource::Exec)) {
+    logerror("failed to insert copy resource");
+    assert(false && "failed to insert copy resource");
   }
   return render_pass_functions;
 }
@@ -702,20 +717,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   auto render_pass_functions = GetRenderPassFunctions(&allocator);
   auto scene_data = GetSceneFromTinyGltfText(GetTestTinyGltf(), "", buffer_allocator, &allocator);
-  {
-    const uint32_t command_queue_index = 2;
-    auto command_list = command_list_set.GetCommandList(device.Get(), command_queue_index);
-    for (uint32_t i = 0; i < scene_data.buffer_allocation_num; i++) {
-      command_list->CopyResource(scene_data.buffer_allocation_default[i].resource, scene_data.buffer_allocation_upload[i].resource);
-    }
-    command_list_set.ExecuteCommandList(command_queue_index);
-    auto signal_val = command_queue_signals.SucceedSignal(command_queue_index);
-    for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
-      if (i != command_queue_index) {
-        CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(command_queue_index, i, signal_val));
-      }
-    }
-  }
   RenderPassArgs render_pass_args{
     .command_list = nullptr,
     .main_buffer_size = &main_buffer_size,
@@ -724,6 +725,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     .cpu_handles = nullptr,
     .resources = nullptr,
     .scene_data = &scene_data,
+    .frame_index = 0,
   };
   uint32_t tmp_memory_max_offset = 0U;
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
@@ -733,13 +735,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
-    if (scene_data.buffer_allocation_upload[0].resource && frame_index == 0 && i > 0) {
-      for (uint32_t j = 0; j < scene_data.buffer_allocation_num; j++) {
-        ReleaseBufferAllocation(&scene_data.buffer_allocation_upload[j]);
-        scene_data.buffer_allocation_upload[j].resource = nullptr;
-        scene_data.buffer_allocation_upload[j].allocation = nullptr;
-      }
-    }
+    render_pass_args.frame_index = frame_index;
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
@@ -779,7 +775,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
         prev_command_list[render_pass.command_queue_index] = command_list;
       }
-      if (command_list) {
+      if (command_list && render_graph.command_queue_type[render_pass.command_queue_index] != D3D12_COMMAND_LIST_TYPE_COPY) {
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
