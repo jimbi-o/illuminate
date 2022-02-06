@@ -235,7 +235,11 @@ auto GetTestJson() {
         "shader_vs": "test.vs.hlsl",
         "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
         "shader_ps": "test.ps.hlsl",
-        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "size_type": "swapchain_relative",
+        "rtv_index": 2,
+        "use_views": true,
+        "use_sampler": true
       }
     },
     {

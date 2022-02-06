@@ -7,6 +7,10 @@ class RenderPassPostprocess {
   struct Param {
     ID3D12RootSignature* rootsig{nullptr};
     ID3D12PipelineState* pso{nullptr};
+    BufferSizeRelativeness size_type{BufferSizeRelativeness::kPrimaryBufferRelative};
+    uint32_t rtv_index{0};
+    bool use_views{true};
+    bool use_sampler{true};
   };
   static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
@@ -32,6 +36,12 @@ class RenderPassPostprocess {
     }
     SetD3d12Name(param->rootsig, "rootsig_swapchain");
     SetD3d12Name(param->pso, "pso_swapchain");
+    if (args->json->contains("size_type")) {
+      param->size_type = (args->json->at("size_type").get<std::string_view>().compare("swapchain_relative") == 0) ? BufferSizeRelativeness::kSwapchainRelative : BufferSizeRelativeness::kPrimaryBufferRelative;
+    }
+    param->rtv_index = GetNum(*args->json, "rtv_index", 0);
+    param->use_views = GetBool(*args->json, "use_views", true);
+    param->use_sampler = GetBool(*args->json, "use_sampler", true);
     return param;
   }
   static void Term(void* ptr) {
@@ -48,8 +58,9 @@ class RenderPassPostprocess {
   static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
   static auto Render(RenderPassFuncArgsRender* args) {
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
-    auto& width = args->main_buffer_size->swapchain.width;
-    auto& height = args->main_buffer_size->swapchain.height;
+    auto& buffer_size = (pass_vars->size_type == BufferSizeRelativeness::kPrimaryBufferRelative) ? args->main_buffer_size->primarybuffer : args->main_buffer_size->swapchain;
+    auto& width = buffer_size.width;
+    auto& height = buffer_size.height;
     args->command_list->SetGraphicsRootSignature(pass_vars->rootsig);
     D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
     args->command_list->RSSetViewports(1, &viewport);
@@ -57,9 +68,13 @@ class RenderPassPostprocess {
     args->command_list->RSSetScissorRects(1, &scissor_rect);
     args->command_list->SetPipelineState(pass_vars->pso);
     args->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    args->command_list->OMSetRenderTargets(1, &args->cpu_handles[2], true, nullptr);
-    args->command_list->SetGraphicsRootDescriptorTable(0, args->gpu_handles[0]); // srv
-    args->command_list->SetGraphicsRootDescriptorTable(1, args->gpu_handles[1]); // sampler
+    args->command_list->OMSetRenderTargets(1, &args->cpu_handles[pass_vars->rtv_index], true, nullptr);
+    if (pass_vars->use_views) {
+      args->command_list->SetGraphicsRootDescriptorTable(0, args->gpu_handles[0]);
+    }
+    if (pass_vars->use_sampler) {
+      args->command_list->SetGraphicsRootDescriptorTable(1, args->gpu_handles[1]);
+    }
     args->command_list->DrawInstanced(3, 1, 0, 0);
   }
  private:
