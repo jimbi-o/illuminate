@@ -14,6 +14,15 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32
   logwarn("FindIndex: {} not found. {}", name, num);
   return ~0U;
 }
+uint32_t FindIndex(const nlohmann::json& j, const char* const entity_name, const StrHash& name) {
+  const auto num = static_cast<uint32_t>(j.size());
+  for (uint32_t i = 0; i < num; i++) {
+    if (CalcEntityStrHash(j[i], entity_name) == name) { return i; }
+  }
+  logwarn("FindIndex {} not found. {} {}", entity_name, name, num);
+  assert(false&& "FindIndex not found (2)");
+  return ~0U;
+}
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name) {
   auto state_str = j.at(entity_name).get<std::string_view>();
   D3D12_RESOURCE_STATES state{};

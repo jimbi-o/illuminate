@@ -20,7 +20,6 @@
 #include "render_pass/d3d12_render_pass_copy_resource.h"
 namespace illuminate {
 namespace {
-static const uint32_t kRenderPassTableSize = 33;
 auto GetTestJson() {
   return R"(
 {
@@ -337,11 +336,16 @@ auto GetTestTinyGltf() {
 }
 )";
 }
-bool InitRenderPass(ShaderCompiler* shader_compiler, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, D3d12Device* device, const MainBufferFormat& main_buffer_format, HWND hwnd, const uint32_t frame_buffer_num, MemoryAllocationJanitor* allocator, const HashMap<const nlohmann::json*, MemoryAllocationJanitor>& render_pass_json_list, const char* const shader_code, const StrHash& render_pass_sid, RenderPassInitFunction init_func, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars) {
-  RenderPassFuncArgsInit render_pass_init_args{
-    .json = *render_pass_json_list.Get(render_pass_sid),
-    .shader_code = shader_code,
-    .shader_compiler = shader_compiler,
+auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num) {
+  ShaderCompiler shader_compiler;
+  if (!shader_compiler.Init()) {
+    logerror("shader_compiler.Init failed");
+    assert(false && "shader_compiler.Init failed");
+  }
+  RenderPassFuncArgsInit args{
+    .json = nullptr,
+    .shader_code = nullptr,
+    .shader_compiler = &shader_compiler,
     .descriptor_cpu = descriptor_cpu,
     .device = device,
     .main_buffer_format = main_buffer_format,
@@ -349,19 +353,7 @@ bool InitRenderPass(ShaderCompiler* shader_compiler, DescriptorCpu<MemoryAllocat
     .frame_buffer_num = frame_buffer_num,
     .allocator = allocator,
   };
-  return render_pass_vars->Insert(render_pass_sid, init_func(&render_pass_init_args));
-}
-auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, const uint32_t render_pass_num, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, RenderPass* dst_render_pass_list) {
-  ShaderCompiler shader_compiler;
-  if (!shader_compiler.Init()) {
-    logerror("shader_compiler.Init failed");
-    assert(false && "shader_compiler.Init failed");
-  }
-  HashMap<const nlohmann::json*, MemoryAllocationJanitor> render_pass_json_list(allocator);
-  for (uint32_t i = 0; i < render_pass_num; i++) {
-    render_pass_json_list.Insert(dst_render_pass_list[i].name, src_render_pass_list[i].contains("pass_vars") ? &src_render_pass_list[i].at("pass_vars") : nullptr);
-  }
-  HashMap<void*, MemoryAllocationJanitor> render_pass_vars(allocator, kRenderPassTableSize);
+  auto render_pass_vars = AllocateArray<void*>(allocator, static_cast<uint32_t>(src_render_pass_list.size()));
   {
     auto shader_code_cs = R"(
 RWTexture2D<float4> uav : register(u0);
@@ -372,8 +364,11 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
 }
 )";
-    CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
-                               shader_code_cs, SID("dispatch cs"), RenderPassCsDispatch::Init, &render_pass_vars));
+    const auto index = FindIndex(src_render_pass_list, "name", SID("dispatch cs"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_cs;
+    render_pass_vars[index] = RenderPassCsDispatch::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
     auto shader_code_vs = R"(
@@ -396,8 +391,11 @@ float4 main(const VsInput input) : SV_Position {
   return output;
 }
 )";
-    CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
-                               shader_code_vs, SID("prez"), RenderPassPrez::Init, &render_pass_vars));
+    const auto index = FindIndex(src_render_pass_list, "name", SID("prez"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs;
+    render_pass_vars[index] = RenderPassPrez::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
     auto shader_code_vs_ps = R"(
@@ -427,26 +425,47 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   return color;
 }
 )";
-    CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
-                               shader_code_vs_ps, SID("output to swapchain"), RenderPassPostprocess::Init, &render_pass_vars));
+    const auto index = FindIndex(src_render_pass_list, "name", SID("output to swapchain"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
   }
-  CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
-                             nullptr, SID("imgui"), RenderPassImgui::Init, &render_pass_vars));
-  CHECK_UNARY(InitRenderPass(&shader_compiler, descriptor_cpu, device, main_buffer_format, hwnd, frame_buffer_num, allocator, render_pass_json_list,
-                             nullptr, SID("copy resource"), RenderPassCopyResource::Init, &render_pass_vars));
+  {
+    const auto index = FindIndex(src_render_pass_list, "name", SID("imgui"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = nullptr;
+    render_pass_vars[index] = RenderPassImgui::Init(&args);
+    CHECK_EQ(render_pass_vars[index], nullptr);
+  }
+  {
+    const auto index = FindIndex(src_render_pass_list, "name", SID("copy resource"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = nullptr;
+    render_pass_vars[index] = RenderPassCopyResource::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
+  }
   shader_compiler.Term();
   return render_pass_vars;
 }
-void ReleaseRenderPassResources(HashMap<void*, MemoryAllocationJanitor>* render_pass_vars) {
-  RenderPassCsDispatch::Term(*render_pass_vars->Get(SID("dispatch cs")));
-  RenderPassPrez::Term(*render_pass_vars->Get(SID("prez")));
-  RenderPassPostprocess::Term(*render_pass_vars->Get(SID("output to swapchain")));
-  RenderPassImgui::Term(*render_pass_vars->Get(SID("imgui")));
-  RenderPassCopyResource::Term(*render_pass_vars->Get(SID("copy resource")));
+auto FindIndex(const uint32_t render_pass_num, const RenderPass* render_pass_list, const StrHash& name) {
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    if (render_pass_list[i].name == name) { return i; }
+  }
+  logerror("render pass not found {} {}", render_pass_num, name);
+  assert(false && "render pass not found");
+  return ~0U;
 }
-void RenderPassUpdate(const RenderPass& render_pass, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
+void ReleaseRenderPassResources(const uint32_t render_pass_num, const RenderPass* render_pass_list, void** render_pass_vars) {
+  RenderPassCsDispatch::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("dispatch cs"))]);
+  RenderPassPrez::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("prez"))]);
+  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("output to swapchain"))]);
+  RenderPassImgui::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("imgui"))]);
+  RenderPassCopyResource::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("copy resource"))]);
+}
+void RenderPassUpdate(const RenderPass& render_pass, void** render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
   RenderPassFuncArgsUpdate args{
-    .pass_vars_ptr = *render_pass_vars->Get(render_pass.name),
+    .pass_vars_ptr = render_pass_vars[render_pass.index],
     .scene_data = scene_data,
     .frame_index = frame_index,
   };
@@ -475,8 +494,8 @@ void RenderPassUpdate(const RenderPass& render_pass, HashMap<void*, MemoryAlloca
   logerror("Update not registered {}", render_pass.name);
   assert(false && "Update not registered");
 }
-auto IsRenderNeeded(const RenderPass& render_pass, const HashMap<void*, MemoryAllocationJanitor>& render_pass_vars) {
-  auto args = *render_pass_vars.Get(render_pass.name);
+auto IsRenderNeeded(const RenderPass& render_pass, void** render_pass_vars) {
+  auto args = render_pass_vars[render_pass.index];
   switch (render_pass.name) {
     case SID("dispatch cs"): {
       return RenderPassCsDispatch::IsRenderNeeded(args);
@@ -498,7 +517,7 @@ auto IsRenderNeeded(const RenderPass& render_pass, const HashMap<void*, MemoryAl
   assert(false && "IsRenderNeeded not registered");
   return false;
 }
-auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list, const D3D12_CPU_DESCRIPTOR_HANDLE& swapchain_rtv_handle, const MainBufferSize& main_buffer_size, HashMap<void*, MemoryAllocationJanitor>* render_pass_vars, D3d12CommandList* command_list, HashMap<D3D12_GPU_DESCRIPTOR_HANDLE*, MemoryAllocationJanitor>* gpu_handle_list, SceneData* scene_data, const uint32_t frame_index) {
+auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu, const HashMap<BufferAllocation, MemoryAllocationJanitor>& buffer_list, const HashMap<ID3D12Resource*, MemoryAllocationJanitor>& extra_buffer_list, const D3D12_CPU_DESCRIPTOR_HANDLE& swapchain_rtv_handle, const MainBufferSize& main_buffer_size, void** render_pass_vars, D3d12CommandList* command_list, HashMap<D3D12_GPU_DESCRIPTOR_HANDLE*, MemoryAllocationJanitor>* gpu_handle_list, SceneData* scene_data, const uint32_t frame_index) {
   auto tmp_allocator = GetTemporalMemoryAllocator();
   auto resource_list = AllocateArray<ID3D12Resource*>(&tmp_allocator, render_pass.buffer_num);
   auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.buffer_num);
@@ -521,7 +540,7 @@ auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu<MemoryAllocat
   RenderPassFuncArgsRender args{
     .command_list = command_list,
     .main_buffer_size = &main_buffer_size,
-    .pass_vars_ptr = *render_pass_vars->Get(render_pass.name),
+    .pass_vars_ptr = render_pass_vars[render_pass.index],
     .gpu_handles = *gpu_handle_list->Get(render_pass.name),
     .cpu_handles = cpu_handle_list,
     .resources = resource_list,
@@ -698,7 +717,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   HashMap<BufferAllocation, MemoryAllocationJanitor> buffer_list(&allocator, 256);
   DescriptorGpu descriptor_gpu;
   RenderGraph render_graph;
-  HashMap<void*, MemoryAllocationJanitor> render_pass_vars;
+  void** render_pass_vars{nullptr};
   {
     auto json = GetTestJson();
     ParseRenderGraphJson(json, &allocator, &render_graph);
@@ -748,7 +767,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     const auto gpu_handle_num_view = (render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kCbv)] + render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] + render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kUav)]) * render_graph.frame_buffer_num;
     const auto gpu_handle_num_sampler = render_graph.sampler_num * render_graph.frame_buffer_num;
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), gpu_handle_num_view, gpu_handle_num_sampler));
-    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), render_graph.render_pass_num, &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, render_graph.render_pass_list);
+    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num);
   }
   HashMap<ID3D12Resource*, MemoryAllocationJanitor> extra_buffer_list(&allocator);
   extra_buffer_list.Reserve(SID("swapchain")); // because MemoryAllocationJanitor is a stack allocator, all allocations must be done before frame loop starts.
@@ -809,7 +828,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     // update
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
-      RenderPassUpdate(render_graph.render_pass_list[k], &render_pass_vars, &scene_data, frame_index);
+      RenderPassUpdate(render_graph.render_pass_list[k], render_pass_vars, &scene_data, frame_index);
     }
     // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
@@ -827,7 +846,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, extra_buffer_list);
-      RenderPassRender(render_graph.render_pass_list[k], &descriptor_cpu, buffer_list, extra_buffer_list, swapchain.GetRtvHandle(), main_buffer_size, &render_pass_vars, command_list, &gpu_handle_list, &scene_data, frame_index);
+      RenderPassRender(render_graph.render_pass_list[k], &descriptor_cpu, buffer_list, extra_buffer_list, swapchain.GetRtvHandle(), main_buffer_size, render_pass_vars, command_list, &gpu_handle_list, &scene_data, frame_index);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, extra_buffer_list);
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
@@ -844,7 +863,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   command_queue_signals.WaitAll(device.Get());
   ReleaseSceneData(&scene_data);
-  ReleaseRenderPassResources(&render_pass_vars);
+  ReleaseRenderPassResources(render_graph.render_pass_num, render_graph.render_pass_list, render_pass_vars);
   swapchain.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();

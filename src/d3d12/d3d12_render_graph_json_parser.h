@@ -25,6 +25,7 @@ inline auto GetVal(const nlohmann::json& j, const char* const name, const T& def
   return j.contains(name) ? j.at(name).get<T>() : default_val;
 }
 uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32_t num, StrHash* list);
+uint32_t FindIndex(const nlohmann::json& j, const char* const entity_name, const StrHash& name);
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
@@ -127,6 +128,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       auto& dst_pass = r.render_pass_list[i];
       auto& src_pass = render_pass_list[i];
       dst_pass.name = CalcEntityStrHash(src_pass, "name");
+      dst_pass.index = i;
       dst_pass.command_queue_index = FindIndex(src_pass, "command_queue", r.command_queue_num, r.command_queue_name);
       if (src_pass.contains("buffer_list")) {
         auto& buffer_list = src_pass.at("buffer_list");
