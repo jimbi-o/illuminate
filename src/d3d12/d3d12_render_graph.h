@@ -34,8 +34,9 @@ struct Barrier {
   uint32_t buffer_index{};
   D3D12_RESOURCE_BARRIER_TYPE type{};
   D3D12_RESOURCE_BARRIER_FLAGS flag{}; // split begin/end/none
-  ResourceStateType state_before{};
-  ResourceStateType state_after{};
+  D3D12_RESOURCE_STATES state_before{};
+  D3D12_RESOURCE_STATES state_after{};
+  ResourceStateType next_user_state{};
 };
 struct RenderPass {
   StrHash name{};

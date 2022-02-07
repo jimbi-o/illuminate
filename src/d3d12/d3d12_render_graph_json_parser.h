@@ -35,6 +35,7 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j);
 DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name);
 D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);
 void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D12_CLEAR_VALUE* clear_value);
+ResourceStateType GetNextUserState(const RenderGraph& r, const uint32_t start_pass_index, const uint32_t buffer_index);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -270,6 +271,40 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
     }
   } // command allocator num
+  // barrier transition
+  {
+    auto tmp_allocator = GetTemporalMemoryAllocator();
+    auto buffer_state = AllocateArray<D3D12_RESOURCE_STATES>(&tmp_allocator, r.buffer_num);
+    for (uint32_t i = 0; i < r.buffer_num; i++) {
+      buffer_state[i] = ConvertToD3d12ResourceState(r.buffer_list[i].initial_state);
+    }
+    const auto& json_render_pass_list = j.at("render_pass");
+    for (uint32_t i = 0; i < r.render_pass_num; i++) {
+      if (json_render_pass_list[i].contains("prepass_barrier")) {
+        for (uint32_t barrier_index = 0; barrier_index < r.render_pass_list[i].prepass_barrier_num; barrier_index++) {
+          const auto& json_barrier_config = json_render_pass_list[i].at("prepass_barrier")[barrier_index];
+          auto& barrier_config = r.render_pass_list[i].prepass_barrier[barrier_index];
+          if (!json_barrier_config.contains("state_before")) {
+            barrier_config.state_before = buffer_state[barrier_config.buffer_index];
+          }
+          buffer_state[barrier_config.buffer_index] = barrier_config.state_after;
+          barrier_config.next_user_state = GetNextUserState(r, i, barrier_config.buffer_index);
+        }
+      }
+      if (json_render_pass_list[i].contains("postpass_barrier")) {
+        for (uint32_t barrier_index = 0; barrier_index < r.render_pass_list[i].postpass_barrier_num; barrier_index++) {
+          const auto& json_barrier_config = json_render_pass_list[i].at("postpass_barrier")[barrier_index];
+          auto& barrier_config = r.render_pass_list[i].postpass_barrier[barrier_index];
+          if (!json_barrier_config.contains("state_before")) {
+            barrier_config.state_before = buffer_state[barrier_config.buffer_index];
+          }
+          buffer_state[barrier_config.buffer_index] = barrier_config.state_after;
+          barrier_config.next_user_state = GetNextUserState(r, i + 1, barrier_config.buffer_index);
+        }
+      }
+    }
+  } // barrier transition
+  // do not allocate from allocator below this line.
 }
 }
 #endif

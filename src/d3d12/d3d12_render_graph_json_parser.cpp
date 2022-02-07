@@ -365,8 +365,20 @@ void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, 
     } // flag
     switch (dst_barrier.type) {
       case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
-        dst_barrier.state_before = GetResourceStateType(src_barrier, "state_before");
-        dst_barrier.state_after  = GetResourceStateType(src_barrier, "state_after");
+        dst_barrier.state_before = D3D12_RESOURCE_STATE_COMMON;
+        dst_barrier.state_after  = D3D12_RESOURCE_STATE_COMMON;
+        if (src_barrier.contains("state_before")) {
+          const auto& state_before = src_barrier.at("state_before");
+          for (const auto& state : state_before) {
+            dst_barrier.state_before |= ConvertToD3d12ResourceState(GetResourceStateType(state));
+          }
+        }
+        {
+          const auto& state_after = src_barrier.at("state_after");
+          for (const auto& state : state_after) {
+            dst_barrier.state_after |= ConvertToD3d12ResourceState(GetResourceStateType(state));
+          }
+        }
         break;
       }
       case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
@@ -402,5 +414,15 @@ void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D
   for (uint32_t i = 0; i < 4; i++) {
     clear_value->Color[i] = 0.0f;
   }
+}
+ResourceStateType GetNextUserState(const RenderGraph& r, const uint32_t start_pass_index, const uint32_t buffer_index) {
+  for (uint32_t next_index = start_pass_index; next_index < r.render_pass_num; next_index++) {
+    for (uint32_t b_index = 0; b_index < r.render_pass_list[next_index].buffer_num; b_index++) {
+      if (r.render_pass_list[next_index].buffer_list[b_index].buffer_index == buffer_index) {
+        return r.render_pass_list[next_index].buffer_list[b_index].state;
+      }
+    }
+  }
+  return r.buffer_list[buffer_index].initial_state;
 }
 }

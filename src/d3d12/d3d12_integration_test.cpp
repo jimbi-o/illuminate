@@ -199,22 +199,20 @@ auto GetTestJson() {
           "buffer_name": "swapchain",
           "type": "transition",
           "split_type": "none",
-          "state_before": "present",
-          "state_after": "rtv"
+          "state_before": ["present"],
+          "state_after": ["rtv"]
         },
         {
           "buffer_name": "uav",
           "type": "transition",
           "split_type": "none",
-          "state_before": "uav",
-          "state_after": "srv_ps"
+          "state_after": ["srv_ps"]
         },
         {
           "buffer_name": "dsv",
           "type": "transition",
           "split_type": "none",
-          "state_before": "dsv_write",
-          "state_after": "srv_ps"
+          "state_after": ["srv_ps"]
         }
       ],
       "postpass_barrier": [
@@ -222,15 +220,13 @@ auto GetTestJson() {
           "buffer_name": "uav",
           "type": "transition",
           "split_type": "none",
-          "state_before": "srv_ps",
-          "state_after": "uav"
+          "state_after": ["uav"]
         },
         {
           "buffer_name": "dsv",
           "type": "transition",
           "split_type": "none",
-          "state_before": "srv_ps",
-          "state_after": "dsv_write"
+          "state_after": ["dsv_write"]
         }
       ],
       "pass_vars": {
@@ -263,8 +259,7 @@ auto GetTestJson() {
           "buffer_name": "swapchain",
           "type": "transition",
           "split_type": "none",
-          "state_before": "rtv",
-          "state_after": "present"
+          "state_after": ["present"]
         }
       ]
     }
@@ -585,8 +580,8 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
       case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
         barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         barrier.Transition.pResource   = resource[i];
-        barrier.Transition.StateBefore = ConvertToD3d12ResourceState(config.state_before);
-        barrier.Transition.StateAfter  = ConvertToD3d12ResourceState(config.state_after);
+        barrier.Transition.StateBefore = config.state_before;
+        barrier.Transition.StateAfter  = config.state_after;
         break;
       }
       case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
@@ -606,7 +601,7 @@ auto ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   auto allocator = GetTemporalMemoryAllocator();
   auto resource_list = AllocateArray<ID3D12Resource*>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
-    resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, barrier_config[i].state_before);
+    resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, barrier_config[i].next_user_state);
   }
   ExecuteBarrier(command_list, barrier_num, barrier_config, resource_list);
 }

@@ -28,7 +28,7 @@ D3D12MA::Allocator* GetBufferAllocator(DxgiAdapter* adapter, D3d12Device* device
   }
   return allocator;
 }
-D3D12_RESOURCE_DESC1 ConvertToD3d12ResouceDesc1(const BufferConfig& config, const MainBufferSize& main_buffer_size) {
+D3D12_RESOURCE_DESC1 ConvertToD3d12ResourceDesc1(const BufferConfig& config, const MainBufferSize& main_buffer_size) {
   return {
     .Dimension = config.dimension,
     .Alignment = config.alignment,
@@ -80,7 +80,7 @@ BufferAllocation CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOU
   return buffer_allocation;
 }
 void CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* allocator, D3D12MA::Allocation** allocation, ID3D12Resource** resource) {
-  auto resource_desc = ConvertToD3d12ResouceDesc1(config, main_buffer_size);
+  auto resource_desc = ConvertToD3d12ResourceDesc1(config, main_buffer_size);
   auto clear_value = (resource_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER && (resource_desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)) != 0) ? &config.clear_value : nullptr;
   CreateBuffer(config.heap_type, ConvertToD3d12ResourceState(config.initial_state), resource_desc, clear_value, allocator, allocation, resource);
 }
