@@ -8,15 +8,15 @@ namespace illuminate {
 class RenderPassImgui {
  public:
   static void* Init(RenderPassFuncArgsInit* args) {
-    auto cpu_handle_font = args->descriptor_cpu->GetHandle(SID("imgui_font"), DescriptorType::kSrv);
-    assert(cpu_handle_font);
+    const auto imgui_font_buffer_index = *(args->descriptor_only_buffer_index->Get(SID("imgui_font")));
+    auto cpu_handle_font = args->descriptor_cpu->GetHandle(imgui_font_buffer_index, DescriptorType::kSrv);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     ImGui_ImplWin32_Init(args->hwnd);
-    ImGui_ImplDX12_Init(args->device, args->frame_buffer_num, args->main_buffer_format.swapchain, nullptr/*descriptor heap not used in single viewport mode*/, *cpu_handle_font, {}/*gpu_handle updated every frame before rendering*/);
+    ImGui_ImplDX12_Init(args->device, args->frame_buffer_num, args->main_buffer_format.swapchain, nullptr/*descriptor heap not used in single viewport mode*/, cpu_handle_font, {}/*gpu_handle updated every frame before rendering*/);
     if (!ImGui_ImplDX12_CreateDeviceObjects()) {
       logerror("ImGui_ImplDX12_CreateDeviceObjects failed.");
       assert(false);

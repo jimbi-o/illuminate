@@ -29,11 +29,12 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const entity_name, const
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
-void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC* sampler_desc);
-void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list);
+void GetSamplerConfig(const nlohmann::json& j, D3D12_SAMPLER_DESC* sampler_desc);
+void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, const uint32_t barrier_num, Barrier* barrier_list);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
 DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name);
 D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);
+void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D12_CLEAR_VALUE* clear_value);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -108,16 +109,16 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
     r.buffer_num = static_cast<uint32_t>(buffer_list.size());
     r.buffer_list = AllocateArray<BufferConfig>(allocator, r.buffer_num);
     for (uint32_t i = 0; i < r.buffer_num; i++) {
+      r.buffer_list[i].buffer_index = i;
       GetBufferConfig(buffer_list[i], &r.buffer_list[i]);
     }
   }
   if (j.contains("sampler")) {
     auto& sampler_list = j.at("sampler");
     r.sampler_num = static_cast<uint32_t>(sampler_list.size());
-    r.sampler_name = AllocateArray<StrHash>(allocator, r.sampler_num);
     r.sampler_list = AllocateArray<D3D12_SAMPLER_DESC>(allocator, r.sampler_num);
     for (uint32_t i = 0; i < r.sampler_num; i++) {
-      GetSamplerConfig(sampler_list[i], &r.sampler_name[i], &r.sampler_list[i]);
+      GetSamplerConfig(sampler_list[i], &r.sampler_list[i]);
     }
   } // sampler
   { // pass_list
@@ -134,58 +135,84 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
         auto& buffer_list = src_pass.at("buffer_list");
         dst_pass.buffer_num = static_cast<uint32_t>(buffer_list.size());
         dst_pass.buffer_list = AllocateArray<RenderPassBuffer>(allocator, dst_pass.buffer_num);
+        const auto& graph_buffer_list = j.at("buffer");
         for (uint32_t buffer_index = 0; buffer_index < dst_pass.buffer_num; buffer_index++) {
           auto& dst_buffer = dst_pass.buffer_list[buffer_index];
           auto& src_buffer = buffer_list[buffer_index];
-          dst_buffer.buffer_name = CalcEntityStrHash(src_buffer, "name");
           dst_buffer.state = GetResourceStateType(GetStringView(src_buffer, "state"));
+          auto buffer_name = GetStringView(src_buffer, "name");
           for (uint32_t graph_buffer_index = 0; graph_buffer_index < r.buffer_num; graph_buffer_index++) {
-            if (dst_buffer.buffer_name != r.buffer_list[graph_buffer_index].name) { continue; }
-            r.buffer_list[graph_buffer_index].descriptor_type_flags |= ConvertToDescriptorTypeFlag(dst_buffer.state);
-            break;
+            if (GetStringView(graph_buffer_list[graph_buffer_index], "name").compare(buffer_name) == 0) {
+              dst_buffer.buffer_index = graph_buffer_index;
+              r.buffer_list[graph_buffer_index].descriptor_type_flags |= ConvertToDescriptorTypeFlag(dst_buffer.state);
+              break;
+            }
           }
         }
       } // buffer_list
       if (src_pass.contains("sampler")) {
         auto& sampler = src_pass.at("sampler");
         dst_pass.sampler_num = static_cast<uint32_t>(sampler.size());
-        dst_pass.sampler_list = AllocateArray<StrHash>(allocator, dst_pass.sampler_num);
+        dst_pass.sampler_index_list = AllocateArray<uint32_t>(allocator, dst_pass.sampler_num);
+        const auto& graph_sampler_list = j.at("sampler");
         for (uint32_t s = 0; s < dst_pass.sampler_num; s++) {
-          dst_pass.sampler_list[s] = CalcStrHash(sampler[s].get<std::string_view>().data());
+          auto sampler_name = sampler[s].get<std::string_view>().data();
+          for (uint32_t graph_s = 0; graph_s < r.sampler_num; graph_s++) {
+            if (GetStringView(graph_sampler_list[graph_s], "name").compare(sampler_name) == 0) {
+              dst_pass.sampler_index_list[s] = graph_s;
+              break;
+            }
+          }
         }
       } // sampler
       if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
         dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());
         dst_pass.prepass_barrier = AllocateArray<Barrier>(allocator, dst_pass.prepass_barrier_num);
-        GetBarrierList(prepass_barrier, dst_pass.prepass_barrier_num, dst_pass.prepass_barrier);
+        GetBarrierList(prepass_barrier, j.at("buffer"), dst_pass.prepass_barrier_num, dst_pass.prepass_barrier);
       }
       if (src_pass.contains("postpass_barrier")) {
         auto& postpass_barrier = src_pass.at("postpass_barrier");
         dst_pass.postpass_barrier_num = static_cast<uint32_t>(postpass_barrier.size());
         dst_pass.postpass_barrier = AllocateArray<Barrier>(allocator, dst_pass.postpass_barrier_num);
-        GetBarrierList(postpass_barrier, dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
+        GetBarrierList(postpass_barrier, j.at("buffer"), dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
       } // barriers
       dst_pass.execute = GetBool(src_pass, "execute", false);
+    } // pass
+    for (uint32_t i = 0; i < r.render_pass_num; i++) { // wait_pass
+      auto& dst_pass = r.render_pass_list[i];
+      auto& src_pass = render_pass_list[i];
       if (src_pass.contains("wait_pass")) {
         auto& wait_pass = src_pass.at("wait_pass");
         dst_pass.wait_pass_num = static_cast<uint32_t>(wait_pass.size());
         dst_pass.signal_queue_index = AllocateArray<uint32_t>(allocator, dst_pass.wait_pass_num);
-        dst_pass.signal_pass_name = AllocateArray<StrHash>(allocator, dst_pass.wait_pass_num);
+        dst_pass.signal_pass_index = AllocateArray<uint32_t>(allocator, dst_pass.wait_pass_num);
         for (uint32_t p = 0; p < dst_pass.wait_pass_num; p++) {
-          dst_pass.signal_pass_name[p] = CalcStrHash(wait_pass[p].get<std::string_view>().data());
+          const auto str = wait_pass[p].get<std::string_view>().data();
+          const auto hash = CalcStrHash(str);
+          for (uint32_t graph_index = 0; graph_index < r.render_pass_num; graph_index++) {
+            if (dst_pass.index == graph_index) { continue; }
+            if (r.render_pass_list[graph_index].name == hash) {
+              dst_pass.signal_pass_index[p] = graph_index;
+              break;
+            }
+          }
         }
       }
-    } // pass
+    } // wait_pass
   } // pass_list
-  for (uint32_t i = 0; i < r.buffer_num; i++) {
-    r.buffer_list[i].flags = GetD3d12ResourceFlags(r.buffer_list[i].descriptor_type_flags);
+  {
+    auto& json_buffer_list = j.at("buffer");
+    for (uint32_t i = 0; i < r.buffer_num; i++) {
+      r.buffer_list[i].flags = GetD3d12ResourceFlags(r.buffer_list[i].descriptor_type_flags);
+      SetClearColor(r.buffer_list[i].flags, json_buffer_list[i], &r.buffer_list[i].clear_value);
+    }
   }
   for (uint32_t i = 0; i < r.render_pass_num; i++) {
     for (uint32_t w = 0; w < r.render_pass_list[i].wait_pass_num; w++) {
       for (uint32_t k = 0; k < r.render_pass_num; k++) {
         if (i == k) { continue; }
-        if (r.render_pass_list[i].signal_pass_name[w] == r.render_pass_list[k].name) {
+        if (r.render_pass_list[i].signal_pass_index[w] == k) {
           r.render_pass_list[k].sends_signal = true;
           r.render_pass_list[i].signal_queue_index[w] = r.render_pass_list[k].command_queue_index;
           break;
@@ -193,18 +220,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
     }
   }
-  // descriptors without resources
-  if (j.contains("descriptor")) {
-    const auto& descriptor = j.at("descriptor");
-    r.descriptor_num = static_cast<uint32_t>(descriptor.size());
-    r.descriptor_name = AllocateArray<StrHash>(allocator, r.descriptor_num);
-    r.descriptor_type = AllocateArray<DescriptorType>(allocator, r.descriptor_num);
-    for (uint32_t i = 0; i < r.descriptor_num; i++) {
-      r.descriptor_name[i] = CalcEntityStrHash(descriptor[i], "name");
-      r.descriptor_type[i] = GetDescriptorType(descriptor[i], "type");
-      r.descriptor_handle_num_per_type[static_cast<uint32_t>(r.descriptor_type[i])]++;
-    }
-  } // descriptors without resources
   // descriptor num
   {
     const auto cbv_index = static_cast<uint32_t>(DescriptorType::kCbv);

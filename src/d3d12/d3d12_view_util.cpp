@@ -95,7 +95,7 @@ auto GetSrvValidDxgiFormat(const DXGI_FORMAT format) {
   }
   return format;
 }
-bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, const BufferConfig& config, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* handle) {
+bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, const BufferConfig& config, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE& handle) {
   switch (descriptor_type) {
     case DescriptorType::kCbv: {
       assert(false && "CreateView cbv not implemented");
@@ -199,7 +199,7 @@ bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, cons
           break;
         }
       }
-      device->CreateShaderResourceView(resource, &desc, *handle);
+      device->CreateShaderResourceView(resource, &desc, handle);
       return true;
     }
     case DescriptorType::kUav: {
@@ -261,7 +261,7 @@ bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, cons
           break;
         }
       }
-      device->CreateUnorderedAccessView(resource, nullptr, &desc, *handle);
+      device->CreateUnorderedAccessView(resource, nullptr, &desc, handle);
       return true;
     }
     case DescriptorType::kRtv: {
@@ -319,7 +319,7 @@ bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, cons
           break;
         }
       }
-      device->CreateDepthStencilView(resource, &desc, *handle);
+      device->CreateDepthStencilView(resource, &desc, handle);
       return true;
     }
   }

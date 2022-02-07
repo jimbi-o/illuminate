@@ -23,48 +23,6 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const entity_name, const
   assert(false&& "FindIndex not found (2)");
   return ~0U;
 }
-D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name) {
-  auto state_str = j.at(entity_name).get<std::string_view>();
-  D3D12_RESOURCE_STATES state{};
-  bool val_set = false;
-  if (state_str.compare("present") == 0) {
-    state |= D3D12_RESOURCE_STATE_PRESENT;
-    val_set = true;
-  }
-  if (state_str.compare("rtv") == 0) {
-    state |= D3D12_RESOURCE_STATE_RENDER_TARGET;
-    val_set = true;
-  }
-  if (state_str.compare("uav") == 0) {
-    state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    val_set = true;
-  }
-  if (state_str.compare("copy_source") == 0) {
-    state |= D3D12_RESOURCE_STATE_COPY_SOURCE;
-    val_set = true;
-  }
-  if (state_str.compare("copy_dest") == 0) {
-    state |= D3D12_RESOURCE_STATE_COPY_DEST;
-    val_set = true;
-  }
-  if (state_str.compare("srv_ps") == 0) {
-    state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    val_set = true;
-  }
-  if (state_str.compare("dsv_write") == 0) {
-    state |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    val_set = true;
-  }
-  if (state_str.compare("common") == 0) {
-    state |= D3D12_RESOURCE_STATE_COMMON;
-    val_set = true;
-  }
-  if (!val_set) {
-    logerror("invalid resource state specified. {}", state_str.data());
-  }
-  assert(val_set && "invalid resource state specified");
-  return state;
-}
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name) {
   if (!j.contains(entity_name)) {
     logwarn("entity not found. {}", entity_name);
@@ -98,8 +56,11 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   if (str.compare("cbv") == 0) {
     return ResourceStateType::kCbv;
   }
-  if (str.compare("srv") == 0) {
-    return ResourceStateType::kSrv;
+  if (str.compare("srv_ps") == 0) {
+    return ResourceStateType::kSrvPs;
+  }
+  if (str.compare("srv_non_ps") == 0) {
+    return ResourceStateType::kSrvNonPs;
   }
   if (str.compare("uav") == 0) {
     return ResourceStateType::kUav;
@@ -119,8 +80,16 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   if (str.compare("common") == 0) {
     return ResourceStateType::kCommon;
   }
+  if (str.compare("present") == 0) {
+    return ResourceStateType::kPresent;
+  }
+  logerror("invalid ResourceStateType {}", str);
   assert(false && "invalid ResourceStateType");
   return ResourceStateType::kCommon;
+}
+ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* const name) {
+  assert(j.contains(name));
+  return GetResourceStateType(j.at(name));
 }
 DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name) {
   assert(j.contains(name));
@@ -238,7 +207,11 @@ auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) 
 }
 }
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
-  config->name = CalcEntityStrHash(j, "name");
+  if (j.contains("descriptor_only") && j.at("descriptor_only") == true) {
+    config->descriptor_only = true;
+    return;
+  }
+  config->descriptor_only = false;
   config->heap_type = GetHeapType(j, "heap_type");
   config->dimension = GetDimension(j, "dimension");
   config->size_type = GetBufferSizeRelativeness(j, "size_type");
@@ -257,23 +230,8 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->mip_width = GetNum(j, "mip_width", 0);
   config->mip_height = GetNum(j, "mip_height", 0);
   config->mip_depth = GetNum(j, "mip_depth", 0);
-  config->initial_state = GetD3d12ResourceState(j, "initial_state");
+  config->initial_state = GetResourceStateType(j, "initial_state");
   config->clear_value.Format = config->format;
-  if (config->flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-    config->clear_value.DepthStencil.Depth = GetVal<FLOAT>(j, "clear_depth", 1.0f);
-    config->clear_value.DepthStencil.Stencil = GetVal<UINT8>(j, "clear_stencil", 0);
-  } else {
-    if (j.contains("clear_color")) {
-      auto& color = j.at("clear_color");
-      for (uint32_t i = 0; i < 4; i++) {
-        config->clear_value.Color[i] = color[i];
-      }
-    } else {
-      for (uint32_t i = 0; i < 4; i++) {
-        config->clear_value.Color[i] = 0.0f;
-      }
-    }
-  }
 }
 D3D12_FILTER_TYPE GetFilterType(const nlohmann::json& j, const char* const name) {
   if (!j.contains(name)) { return D3D12_FILTER_TYPE_POINT; }
@@ -332,8 +290,7 @@ D3D12_COMPARISON_FUNC GetComparisonFunc(const nlohmann::json& j, const char* con
   assert(false && "invalid comparison func");
   return D3D12_COMPARISON_FUNC_NEVER;
 }
-void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC* sampler_desc) {
-  *name = CalcEntityStrHash(j, "name");
+void GetSamplerConfig(const nlohmann::json& j, D3D12_SAMPLER_DESC* sampler_desc) {
   {
     auto min_filter = GetFilterType(j, "filter_min");
     auto mag_filter = GetFilterType(j, "filter_mag");
@@ -367,11 +324,20 @@ void GetSamplerConfig(const nlohmann::json& j, StrHash* name, D3D12_SAMPLER_DESC
   sampler_desc->MinLOD = GetFloat(j, "min_lod", 0.0f);
   sampler_desc->MaxLOD = GetFloat(j, "max_lod", 65535.0f);
 }
-void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier* barrier_list) {
+void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, const uint32_t barrier_num, Barrier* barrier_list) {
   for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {
     auto& dst_barrier = barrier_list[barrier_index];
     auto& src_barrier = j[barrier_index];
-    dst_barrier.buffer_name = CalcEntityStrHash(src_barrier, "buffer_name");
+    {
+      auto buffer_name = GetStringView(src_barrier, "buffer_name");
+      const auto num = static_cast<uint32_t>(buffer_json.size());
+      for (uint32_t i = 0; i < num; i++) {
+        if (buffer_name.compare(GetStringView(buffer_json[i], "name")) == 0) {
+          dst_barrier.buffer_index = i;
+          break;
+        }
+      }
+    }
     {
       auto type_str = GetStringView(src_barrier, "type");
       if (type_str.compare("transition") == 0) {
@@ -399,8 +365,8 @@ void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier
     } // flag
     switch (dst_barrier.type) {
       case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
-        dst_barrier.state_before = GetD3d12ResourceState(src_barrier, "state_before");
-        dst_barrier.state_after  = GetD3d12ResourceState(src_barrier, "state_after");
+        dst_barrier.state_before = GetResourceStateType(src_barrier, "state_before");
+        dst_barrier.state_after  = GetResourceStateType(src_barrier, "state_after");
         break;
       }
       case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
@@ -416,6 +382,25 @@ void GetBarrierList(const nlohmann::json& j, const uint32_t barrier_num, Barrier
         break;
       }
     } // switch
+  }
+}
+void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D12_CLEAR_VALUE* clear_value) {
+  if (flag & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
+    if (j.contains("clear_color")) {
+      auto& color = j.at("clear_color");
+      for (uint32_t i = 0; i < 4; i++) {
+        clear_value->Color[i] = color[i];
+      }
+      return;
+    }
+  }
+  if (flag & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
+    clear_value->DepthStencil.Depth = GetVal<FLOAT>(j, "clear_depth", 1.0f);
+    clear_value->DepthStencil.Stencil = GetVal<UINT8>(j, "clear_stencil", 0);
+    return;
+  }
+  for (uint32_t i = 0; i < 4; i++) {
+    clear_value->Color[i] = 0.0f;
   }
 }
 }

@@ -195,7 +195,7 @@ SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* cons
           },
         };
         auto buffer_allocation_upload  = &scene_data.buffer_allocation_upload[buffer_allocation_index_base + 1];
-        *buffer_allocation_upload = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+        *buffer_allocation_upload = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
         auto buffer_allocation_default = &scene_data.buffer_allocation_default[buffer_allocation_index_base + 1];
         *buffer_allocation_default = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
         SetD3d12Name(buffer_allocation_default->resource, "mesh_pos" + std::to_string(mesh_index));

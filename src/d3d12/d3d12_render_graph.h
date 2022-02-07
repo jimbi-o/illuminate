@@ -4,7 +4,7 @@
 #include "illuminate/core/strid.h"
 namespace illuminate {
 struct BufferConfig {
-  StrHash name{};
+  uint32_t buffer_index{};
   D3D12_HEAP_TYPE heap_type{};
   D3D12_RESOURCE_DIMENSION dimension{};
   uint32_t alignment{};
@@ -21,20 +21,21 @@ struct BufferConfig {
   uint32_t mip_width{};
   uint32_t mip_height{};
   uint32_t mip_depth{};
-  D3D12_RESOURCE_STATES initial_state{};
+  ResourceStateType initial_state{};
   D3D12_CLEAR_VALUE clear_value{};
   DescriptorTypeFlag descriptor_type_flags{kDescriptorTypeFlagNone};
+  bool descriptor_only{false};
 };
 struct RenderPassBuffer {
-  StrHash buffer_name{};
+  uint32_t buffer_index{~0U};
   ResourceStateType state{};
 };
 struct Barrier {
-  StrHash buffer_name{};
+  uint32_t buffer_index{};
   D3D12_RESOURCE_BARRIER_TYPE type{};
   D3D12_RESOURCE_BARRIER_FLAGS flag{}; // split begin/end/none
-  D3D12_RESOURCE_STATES state_before{};
-  D3D12_RESOURCE_STATES state_after{};
+  ResourceStateType state_before{};
+  ResourceStateType state_after{};
 };
 struct RenderPass {
   StrHash name{};
@@ -50,9 +51,9 @@ struct RenderPass {
   bool sends_signal{false};
   uint32_t wait_pass_num{0};
   uint32_t* signal_queue_index{nullptr};
-  StrHash* signal_pass_name{nullptr};
+  uint32_t* signal_pass_index{nullptr};
   uint32_t sampler_num{0};
-  StrHash* sampler_list{nullptr};
+  uint32_t* sampler_index_list{nullptr};
 };
 struct RenderGraph {
   uint32_t frame_buffer_num{0};
@@ -77,12 +78,8 @@ struct RenderGraph {
   uint32_t buffer_num{0};
   BufferConfig* buffer_list{nullptr};
   uint32_t sampler_num{0};
-  StrHash* sampler_name{nullptr};
   D3D12_SAMPLER_DESC* sampler_list{nullptr};
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
-  uint32_t descriptor_num{0};
-  StrHash* descriptor_name{nullptr};
-  DescriptorType* descriptor_type{nullptr};
 };
 }
 #endif

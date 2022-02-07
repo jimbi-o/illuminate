@@ -10,12 +10,13 @@ struct RenderPassFuncArgsInit {
   const nlohmann::json* json{nullptr};
   const char* shader_code{nullptr};
   ShaderCompiler* shader_compiler{nullptr};
-  DescriptorCpu<MemoryAllocationJanitor>* descriptor_cpu{nullptr};
+  DescriptorCpu* descriptor_cpu{nullptr};
   D3d12Device* device{nullptr};
   const MainBufferFormat& main_buffer_format{};
   HWND hwnd{nullptr};
   uint32_t frame_buffer_num{0};
   MemoryAllocationJanitor* allocator{nullptr};
+  const HashMap<uint32_t, MemoryAllocationJanitor>* descriptor_only_buffer_index{nullptr};
 };
 struct RenderPassFuncArgsUpdate {
   void* pass_vars_ptr{nullptr};

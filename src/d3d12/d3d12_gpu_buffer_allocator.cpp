@@ -50,7 +50,8 @@ D3D12_RESOURCE_DESC1 ConvertToD3d12ResouceDesc1(const BufferConfig& config, cons
     },
   };
 }
-BufferAllocation CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES initial_state, D3D12_RESOURCE_DESC1& resource_desc, const D3D12_CLEAR_VALUE* clear_value, D3D12MA::Allocator* allocator) {
+namespace {
+void CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES initial_state, D3D12_RESOURCE_DESC1& resource_desc, const D3D12_CLEAR_VALUE* clear_value, D3D12MA::Allocator* allocator, D3D12MA::Allocation** allocation, ID3D12Resource** resource) {
   using namespace D3D12MA;
   ALLOCATION_DESC allocation_desc{
     .Flags = ALLOCATION_FLAG_NONE,
@@ -58,26 +59,35 @@ BufferAllocation CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOU
     .ExtraHeapFlags = D3D12_HEAP_FLAG_NONE,
     .CustomPool = nullptr,
   };
-  BufferAllocation buffer_allocation{};
-  auto hr = allocator->CreateResource2(&allocation_desc, &resource_desc, initial_state, clear_value, nullptr, &buffer_allocation.allocation, IID_PPV_ARGS(&buffer_allocation.resource));
+  auto hr = allocator->CreateResource2(&allocation_desc, &resource_desc, initial_state, clear_value, nullptr, allocation, IID_PPV_ARGS(resource));
   if (FAILED(hr)) {
     logerror("failed to create resource. {}", hr);
     assert(false && "failed to create resource");
-    if (buffer_allocation.allocation) {
-      buffer_allocation.allocation->Release();
-      buffer_allocation.allocation = nullptr;
+    if (*allocation) {
+      (*allocation)->Release();
+      (*allocation) = nullptr;
     }
-    if (buffer_allocation.resource) {
-      buffer_allocation.resource->Release();
-      buffer_allocation.resource = nullptr;
+    if (*resource) {
+      (*resource)->Release();
+      (*resource) = nullptr;
     }
   }
+}
+} // namespace anonymous
+BufferAllocation CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES initial_state, D3D12_RESOURCE_DESC1& resource_desc, const D3D12_CLEAR_VALUE* clear_value, D3D12MA::Allocator* allocator) {
+  BufferAllocation buffer_allocation{};
+  CreateBuffer(heap_type, initial_state, resource_desc, clear_value, allocator, &buffer_allocation.allocation, &buffer_allocation.resource);
   return buffer_allocation;
 }
-BufferAllocation CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* allocator) {
+void CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* allocator, D3D12MA::Allocation** allocation, ID3D12Resource** resource) {
   auto resource_desc = ConvertToD3d12ResouceDesc1(config, main_buffer_size);
   auto clear_value = (resource_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER && (resource_desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)) != 0) ? &config.clear_value : nullptr;
-  return CreateBuffer(config.heap_type, config.initial_state, resource_desc, clear_value, allocator);
+  CreateBuffer(config.heap_type, ConvertToD3d12ResourceState(config.initial_state), resource_desc, clear_value, allocator, allocation, resource);
+}
+BufferAllocation CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* allocator) {
+  BufferAllocation buffer_allocation{};
+  CreateBuffer(config, main_buffer_size, allocator, &buffer_allocation.allocation, &buffer_allocation.resource);
+  return buffer_allocation;
 }
 void ReleaseBufferAllocation(BufferAllocation* b) {
   b->allocation->Release();
@@ -98,5 +108,25 @@ void* MapResource(ID3D12Resource* resource, const uint32_t size, const uint32_t 
 }
 void UnmapResource(ID3D12Resource* resource) {
   resource->Unmap(0, nullptr);
+}
+void ReleaseBuffers(BufferList* buffer_list) {
+  for (uint32_t i = 0; i < buffer_list->buffer_allocation_num; i++) {
+    if (buffer_list->buffer_allocation_list[i]) {
+      buffer_list->buffer_allocation_list[i]->Release();
+    }
+    if (buffer_list->resource_list[i]) {
+      buffer_list->resource_list[i]->Release();
+    }
+  }
+}
+ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const ResourceStateType state) {
+  if (state == ResourceStateType::kSrvPs || state == ResourceStateType::kSrvNonPs) {
+    return buffer_list.resource_list[buffer_list.buffer_index_readable[buffer_index]];
+  }
+  return buffer_list.resource_list[buffer_list.buffer_index_writable[buffer_index]];
+}
+void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list) {
+  buffer_list->resource_list[buffer_list->buffer_index_writable[buffer_index]] = resource;
+  buffer_list->resource_list[buffer_list->buffer_index_readable[buffer_index]] = resource;
 }
 } // namespace illuminate
