@@ -29,6 +29,9 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
     return DXGI_FORMAT_UNKNOWN;
   }
   auto format_str = GetStringView(j, entity_name);
+  if (format_str.compare("UNKNOWN") == 0) {
+    return DXGI_FORMAT_UNKNOWN;
+  }
   if (format_str.compare("R16G16B16A16_FLOAT") == 0) {
     return DXGI_FORMAT_R16G16B16A16_FLOAT;
   }
@@ -232,6 +235,7 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->mip_depth = GetNum(j, "mip_depth", 0);
   config->initial_state = GetResourceStateType(j, "initial_state");
   config->clear_value.Format = config->format;
+  config->pingpong = GetBool(j, "pingpong", false);
 }
 D3D12_FILTER_TYPE GetFilterType(const nlohmann::json& j, const char* const name) {
   if (!j.contains(name)) { return D3D12_FILTER_TYPE_POINT; }

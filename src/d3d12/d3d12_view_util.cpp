@@ -88,6 +88,36 @@ auto GetSrvDimension(const D3D12_RESOURCE_DIMENSION dimension, const uint16_t de
   assert(false && "invalid dimension");
   return D3D12_SRV_DIMENSION_UNKNOWN;
 }
+auto GetRtvDimension(const D3D12_RESOURCE_DIMENSION dimension, const uint16_t depth_or_array_size) {
+  switch (dimension) {
+    case D3D12_RESOURCE_DIMENSION_UNKNOWN: {
+      assert(false && "D3D12_RESOURCE_DIMENSION_UNKNOWN selected");
+      return D3D12_RTV_DIMENSION_UNKNOWN;
+    }
+    case D3D12_RESOURCE_DIMENSION_BUFFER: {
+      return D3D12_RTV_DIMENSION_BUFFER;
+    }
+    case D3D12_RESOURCE_DIMENSION_TEXTURE1D: {
+      if (depth_or_array_size > 1) {
+        return D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+      }
+      return D3D12_RTV_DIMENSION_TEXTURE1D;
+    }
+    case D3D12_RESOURCE_DIMENSION_TEXTURE2D: {
+      if (depth_or_array_size > 1) {
+        return D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+      }
+      return D3D12_RTV_DIMENSION_TEXTURE2D;
+    }
+    case D3D12_RESOURCE_DIMENSION_TEXTURE3D: {
+      return D3D12_RTV_DIMENSION_TEXTURE3D;
+    }
+  }
+  // cubemap?
+  logerror("GetRtvDimension invalid dimension {} {}", dimension, depth_or_array_size);
+  assert(false && "invalid dimension");
+  return D3D12_RTV_DIMENSION_UNKNOWN;
+}
 auto GetSrvValidDxgiFormat(const DXGI_FORMAT format) {
   switch (format) {
     case DXGI_FORMAT_D32_FLOAT: { return DXGI_FORMAT_R32_FLOAT; }
@@ -98,8 +128,12 @@ auto GetSrvValidDxgiFormat(const DXGI_FORMAT format) {
 bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, const BufferConfig& config, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE& handle) {
   switch (descriptor_type) {
     case DescriptorType::kCbv: {
-      assert(false && "CreateView cbv not implemented");
-      return false;
+      D3D12_CONSTANT_BUFFER_VIEW_DESC desc{
+        .BufferLocation = resource->GetGPUVirtualAddress(),
+        .SizeInBytes = static_cast<uint32_t>(config.width),
+      };
+      device->CreateConstantBufferView(&desc, handle);
+      return true;
     }
     case DescriptorType::kSrv: {
       auto desc = D3D12_SHADER_RESOURCE_VIEW_DESC{
@@ -265,8 +299,75 @@ bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, cons
       return true;
     }
     case DescriptorType::kRtv: {
-      assert(false && "CreateView rtv not implemented");
-      return false;
+      D3D12_RENDER_TARGET_VIEW_DESC desc{
+        .Format = config.format,
+        .ViewDimension = GetRtvDimension(config.dimension, config.depth_or_array_size),
+      };
+      switch (desc.ViewDimension) {
+        case D3D12_RTV_DIMENSION_UNKNOWN: {
+          assert(false && "invalid rtv view dimension");
+          break;
+        }
+        case D3D12_RTV_DIMENSION_BUFFER: {
+          assert(false && "D3D12_RTV_DIMENSION_BUFFER not implemented");
+          break;
+        }
+        case D3D12_RTV_DIMENSION_TEXTURE1D: {
+          desc.Texture1D = {
+            .MipSlice = 0,
+          };
+          break;
+        }
+        case D3D12_RTV_DIMENSION_TEXTURE1DARRAY: {
+          desc.Texture1DArray = {
+            .MipSlice = 0,
+            .FirstArraySlice = 0,
+            .ArraySize = config.depth_or_array_size,
+          };
+          break;
+        }
+        case D3D12_RTV_DIMENSION_TEXTURE2D: {
+          desc.Texture2D = {
+            .MipSlice = 0,
+            .PlaneSlice = 0,
+          };
+          break;
+        }
+        case D3D12_RTV_DIMENSION_TEXTURE2DARRAY: {
+          desc.Texture2DArray = {
+            .MipSlice = 0,
+            .FirstArraySlice = 0,
+            .ArraySize = config.depth_or_array_size,
+            .PlaneSlice = 0,
+          };
+          break;
+        }
+        case D3D12_RTV_DIMENSION_TEXTURE2DMS: {
+          desc.Texture2DMS = {};
+          break;
+        }
+        case D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY: {
+          desc.Texture2DMSArray = {
+            .FirstArraySlice = 0,
+            .ArraySize = config.depth_or_array_size,
+          };
+          break;
+        }
+        case D3D12_RTV_DIMENSION_TEXTURE3D: {
+          desc.Texture3D = {
+            .MipSlice = 0,
+            .FirstWSlice = 0,
+            .WSize = config.depth_or_array_size,
+          };
+          break;
+        }
+        default: {
+          assert(false && "invalid rtv ViewDimension");
+          break;
+        }
+      }
+      device->CreateRenderTargetView(resource, &desc, handle);
+      return true;
     }
     case DescriptorType::kDsv: {
       D3D12_DEPTH_STENCIL_VIEW_DESC desc{

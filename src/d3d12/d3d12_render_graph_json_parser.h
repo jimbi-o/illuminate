@@ -271,6 +271,11 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       }
     }
   } // command allocator num
+  //
+  {
+    r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", 1024);
+    r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", 16);
+  }
   // barrier transition
   {
     auto tmp_allocator = GetTemporalMemoryAllocator();

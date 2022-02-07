@@ -25,6 +25,7 @@ struct BufferConfig {
   D3D12_CLEAR_VALUE clear_value{};
   DescriptorTypeFlag descriptor_type_flags{kDescriptorTypeFlagNone};
   bool descriptor_only{false};
+  bool pingpong{false};
 };
 struct RenderPassBuffer {
   uint32_t buffer_index{~0U};
@@ -81,6 +82,8 @@ struct RenderGraph {
   uint32_t sampler_num{0};
   D3D12_SAMPLER_DESC* sampler_list{nullptr};
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
+  uint32_t gpu_handle_num_view{0};
+  uint32_t gpu_handle_num_sampler{0};
 };
 }
 #endif

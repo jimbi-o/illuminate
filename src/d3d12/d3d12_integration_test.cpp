@@ -78,6 +78,43 @@ auto GetTestJson() {
       "initial_state": "uav"
     },
     {
+      "name": "pingpong",
+      "pingpong": true,
+      "format": "R8G8B8A8_UNORM",
+      "heap_type": "default",
+      "dimension": "texture2d",
+      "size_type": "primary_relative",
+      "width": 1.0,
+      "height": 1.0,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "unknown",
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "rtv"
+    },
+    {
+      "name": "cbv",
+      "format": "UNKNOWN",
+      "heap_type": "upload",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "width": 256,
+      "height": 1,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "row_major",
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "common"
+    },
+    {
       "name": "dsv",
       "format": "D24_UNORM_S8_UINT",
       "heap_type": "default",
@@ -133,6 +170,8 @@ auto GetTestJson() {
       "max_lod": 65535
     }
   ],
+  "gpu_handle_num_view": 16,
+  "gpu_handle_num_sampler": 8,
   "render_pass": [
     {
       "name": "copy resource",
@@ -175,6 +214,81 @@ auto GetTestJson() {
       }
     },
     {
+      "name": "pingpong-a",
+      "command_queue": "queue_graphics",
+      "buffer_list": [
+        {
+          "name": "cbv",
+          "state": "cbv"
+        },
+        {
+          "name": "pingpong",
+          "state": "rtv"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "pass_vars": {
+        "shader_vs": "test.vs.hlsl",
+        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "shader_ps": "test.ps.hlsl",
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "rtv_index": 1,
+        "use_sampler": false
+      }
+    },
+    {
+      "name": "pingpong-b",
+      "command_queue": "queue_graphics",
+      "buffer_list": [
+        {
+          "name": "cbv",
+          "state": "cbv"
+        },
+        {
+          "name": "pingpong",
+          "state": "srv_ps"
+        },
+        {
+          "name": "pingpong",
+          "state": "rtv"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "pass_vars": {
+        "shader_vs": "test.vs.hlsl",
+        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "shader_ps": "test.ps.hlsl",
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "rtv_index": 2
+      }
+    },
+    {
+      "name": "pingpong-c",
+      "command_queue": "queue_graphics",
+      "buffer_list": [
+        {
+          "name": "cbv",
+          "state": "cbv"
+        },
+        {
+          "name": "pingpong",
+          "state": "srv_ps"
+        },
+        {
+          "name": "pingpong",
+          "state": "rtv"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "pass_vars": {
+        "shader_vs": "test.vs.hlsl",
+        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "shader_ps": "test.ps.hlsl",
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "rtv_index": 2
+      }
+    },
+    {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
@@ -191,6 +305,10 @@ auto GetTestJson() {
         {
           "name": "swapchain",
           "state": "rtv"
+        },
+        {
+          "name": "pingpong",
+          "state": "srv_ps"
         }
       ],
       "sampler": ["bilinear"],
@@ -447,6 +565,99 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
     render_pass_vars[index] = RenderPassCopyResource::Init(&args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
+  {
+    auto shader_code_vs_ps = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+#define CopyFullscreenRootsig "\
+DescriptorTable(CBV(b0), visibility=SHADER_VISIBILITY_PIXEL),    \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  return cbv_color;
+}
+)";
+    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-a"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
+  }
+  {
+    auto shader_code_vs_ps = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+Texture2D src : register(t0);
+SamplerState tex_sampler : register(s0);
+#define CopyFullscreenRootsig " \
+DescriptorTable(CBV(b0),                                                \
+                SRV(t0, numDescriptors=2),                              \
+                visibility=SHADER_VISIBILITY_PIXEL),                    \
+DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  float4 color = src.Sample(tex_sampler, input.texcoord);
+  return color * cbv_color;
+}
+)";
+    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-b"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
+  }
+  {
+    auto shader_code_vs_ps = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+#define CopyFullscreenRootsig "\
+DescriptorTable(CBV(b0), visibility=SHADER_VISIBILITY_PIXEL),    \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  return cbv_color;
+}
+)";
+    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-c"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
+  }
   shader_compiler.Term();
   return render_pass_vars;
 }
@@ -492,6 +703,18 @@ void RenderPassUpdate(const RenderPass& render_pass, void** render_pass_vars, Sc
       RenderPassCopyResource::Update(&args);
       return;
     }
+    case SID("pingpong-a"): {
+      RenderPassPostprocess::Update(&args);
+      return;
+    }
+    case SID("pingpong-b"): {
+      RenderPassPostprocess::Update(&args);
+      return;
+    }
+    case SID("pingpong-c"): {
+      RenderPassPostprocess::Update(&args);
+      return;
+    }
   }
   logerror("Update not registered {}", render_pass.name);
   assert(false && "Update not registered");
@@ -514,6 +737,15 @@ auto IsRenderNeeded(const RenderPass& render_pass, void** render_pass_vars) {
     case SID("copy resource"): {
       return RenderPassCopyResource::IsRenderNeeded(args);
     }
+    case SID("pingpong-a"): {
+      return RenderPassPostprocess::IsRenderNeeded(&args);
+    }
+    case SID("pingpong-b"): {
+      return RenderPassPostprocess::IsRenderNeeded(&args);
+    }
+    case SID("pingpong-c"): {
+      return RenderPassPostprocess::IsRenderNeeded(&args);
+     }
   }
   logerror("IsRenderNeeded not registered {}", render_pass.name);
   assert(false && "IsRenderNeeded not registered");
@@ -562,6 +794,18 @@ auto RenderPassRender(const RenderPass& render_pass, DescriptorCpu* descriptor_c
     }
     case SID("copy resource"): {
       RenderPassCopyResource::Render(&args);
+      return;
+    }
+    case SID("pingpong-a"): {
+      RenderPassPostprocess::Render(&args);
+      return;
+    }
+    case SID("pingpong-b"): {
+      RenderPassPostprocess::Render(&args);
+      return;
+    }
+    case SID("pingpong-c"): {
+      RenderPassPostprocess::Render(&args);
       return;
     }
   }
@@ -741,10 +985,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
       auto& buffer_config = render_graph.buffer_list[i];
       CHECK_UNARY(CreateCpuHandleWithView(buffer_config, buffer_list.resource_list[buffer_list.buffer_index_writable[i]], &descriptor_cpu, device.Get()));
-      SetD3d12Name(buffer_list.resource_list[buffer_list.buffer_index_writable[i]], json_buffer_list[i].at("name").get<std::string>() + "_w");
-      if (buffer_list.buffer_index_writable[i] != buffer_list.buffer_index_readable[i]) {
+      if (buffer_list.buffer_index_writable[i] == buffer_list.buffer_index_readable[i]) {
+        SetD3d12Name(buffer_list.resource_list[buffer_list.buffer_index_writable[i]], json_buffer_list[i].at("name"));
+      } else {
+        SetD3d12Name(buffer_list.resource_list[buffer_list.buffer_index_writable[i]], json_buffer_list[i].at("name").get<std::string>() + "_A");
         CHECK_UNARY(CreateCpuHandleWithView(buffer_config, buffer_list.resource_list[buffer_list.buffer_index_readable[i]], &descriptor_cpu, device.Get()));
-        SetD3d12Name(buffer_list.resource_list[buffer_list.buffer_index_readable[i]], json_buffer_list[i].at("name").get<std::string>() + "_r");
+        SetD3d12Name(buffer_list.resource_list[buffer_list.buffer_index_readable[i]], json_buffer_list[i].at("name").get<std::string>() + "_B");
       }
       if (buffer_config.descriptor_only) {
         auto index = i;
@@ -756,9 +1002,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       CHECK_NE(cpu_handler.ptr, 0);
       device.Get()->CreateSampler(&render_graph.sampler_list[i], cpu_handler);
     }
-    const auto gpu_handle_num_view = (render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kCbv)] + render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] + render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kUav)]) * render_graph.frame_buffer_num;
-    const auto gpu_handle_num_sampler = render_graph.sampler_num * render_graph.frame_buffer_num;
-    CHECK_UNARY(descriptor_gpu.Init(device.Get(), gpu_handle_num_view, gpu_handle_num_sampler));
+    CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
     render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, &descriptor_only_buffer_index);
   }
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
