@@ -12,6 +12,7 @@ class RenderPassPostprocess {
     bool use_views{true};
     bool use_sampler{true};
     void* cbv_ptr{nullptr};
+    uint32_t cbv_size{0};
   };
   static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
@@ -47,7 +48,8 @@ class RenderPassPostprocess {
       const auto cbv_name_hash = CalcEntityStrHash(*args->json, "cbv");
       const auto buffer_config_index = *(args->named_buffer_config_index->Get(cbv_name_hash));
       auto resource = GetResource(*args->buffer_list, buffer_config_index);
-      param->cbv_ptr = MapResource(resource, static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width));
+      param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
+      param->cbv_ptr = MapResource(resource, param->cbv_size);
     }
     return param;
   }
@@ -56,7 +58,11 @@ class RenderPassPostprocess {
     param->pso->Release();
     param->rootsig->Release();
   }
-  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
+  static void Update(RenderPassFuncArgsUpdate* args) {
+    if (!args->ptr) { return; }
+    auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
+    if (!pass_vars->cbv_ptr) { return; }
+    memcpy(pass_vars->cbv_ptr, args->ptr, pass_vars->cbv_size);
   }
   static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
   static auto Render(RenderPassFuncArgsRender* args) {

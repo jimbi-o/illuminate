@@ -793,6 +793,8 @@ void RenderPassUpdate(const RenderPass& render_pass, void** render_pass_vars, Sc
       return;
     }
     case SID("pingpong-a"): {
+      float c[4]{0.0f,1.0f,1.0f,1.0f};
+      args.ptr = c;
       RenderPassPostprocess::Update(&args);
       return;
     }

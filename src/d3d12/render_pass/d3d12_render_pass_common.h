@@ -25,6 +25,7 @@ struct RenderPassFuncArgsUpdate {
   void* pass_vars_ptr{nullptr};
   SceneData* scene_data{nullptr};
   uint32_t frame_index{0};
+  void* ptr{nullptr};
 };
 struct RenderPassFuncArgsRender {
   D3d12CommandList* command_list{nullptr};
