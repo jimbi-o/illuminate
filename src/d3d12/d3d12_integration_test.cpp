@@ -98,6 +98,7 @@ auto GetTestJson() {
     },
     {
       "name": "cbv-a",
+      "need_name_cache": true,
       "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
@@ -116,6 +117,7 @@ auto GetTestJson() {
     },
     {
       "name": "cbv-b",
+      "need_name_cache": true,
       "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
@@ -134,6 +136,7 @@ auto GetTestJson() {
     },
     {
       "name": "cbv-c",
+      "need_name_cache": true,
       "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
@@ -172,10 +175,12 @@ auto GetTestJson() {
     },
     {
       "name": "swapchain",
+      "need_name_cache": true,
       "descriptor_only": true
     },
     {
       "name": "imgui_font",
+      "need_name_cache": true,
       "descriptor_only": true
     }
   ],
@@ -537,7 +542,7 @@ auto GetTestTinyGltf() {
 }
 )";
 }
-auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, const HashMap<uint32_t, MemoryAllocationJanitor>* descriptor_only_buffer_allocator_index) {
+auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_allocator_index) {
   ShaderCompiler shader_compiler;
   if (!shader_compiler.Init()) {
     logerror("shader_compiler.Init failed");
@@ -553,7 +558,7 @@ auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, Memo
     .hwnd = hwnd,
     .frame_buffer_num = frame_buffer_num,
     .allocator = allocator,
-    .descriptor_only_buffer_allocator_index = descriptor_only_buffer_allocator_index,
+    .named_buffer_allocator_index = named_buffer_allocator_index,
   };
   auto render_pass_vars = AllocateArray<void*>(allocator, static_cast<uint32_t>(src_render_pass_list.size()));
   {
@@ -1029,8 +1034,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   DescriptorGpu descriptor_gpu;
   RenderGraph render_graph;
   void** render_pass_vars{nullptr};
-  HashMap<uint32_t, MemoryAllocationJanitor> descriptor_only_buffer_config_index(&allocator);
-  HashMap<uint32_t, MemoryAllocationJanitor> descriptor_only_buffer_allocator_index(&allocator);
+  HashMap<uint32_t, MemoryAllocationJanitor> named_buffer_config_index(&allocator);
+  HashMap<uint32_t, MemoryAllocationJanitor> named_buffer_allocator_index(&allocator);
   {
     auto json = GetTestJson();
     ParseRenderGraphJson(json, &allocator, &render_graph);
@@ -1075,11 +1080,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       } else {
         SetD3d12Name(buffer_list.resource_list[i], str);
       }
-      if (buffer_config.descriptor_only) {
+      if (buffer_config.need_name_cache) {
         auto index = buffer_config_index;
-        CHECK_UNARY(descriptor_only_buffer_config_index.Insert(CalcEntityStrHash(json_buffer_list[buffer_config_index], "name"), std::move(index)));
+        CHECK_UNARY(named_buffer_config_index.Insert(CalcEntityStrHash(json_buffer_list[buffer_config_index], "name"), std::move(index)));
         index = i;
-        CHECK_UNARY(descriptor_only_buffer_allocator_index.Insert(CalcEntityStrHash(json_buffer_list[buffer_config_index], "name"), std::move(index)));
+        CHECK_UNARY(named_buffer_allocator_index.Insert(CalcEntityStrHash(json_buffer_list[buffer_config_index], "name"), std::move(index)));
       }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
@@ -1088,7 +1093,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       device.Get()->CreateSampler(&render_graph.sampler_list[i], cpu_handler);
     }
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
-    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, &descriptor_only_buffer_allocator_index);
+    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, &named_buffer_allocator_index);
   }
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
   auto gpu_descriptor_offset_start = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
@@ -1116,8 +1121,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
-    RegisterResource(*descriptor_only_buffer_config_index.Get(SID("swapchain")), swapchain.GetResource(), &buffer_list);
-    descriptor_cpu.RegisterExternalHandle(*descriptor_only_buffer_allocator_index.Get(SID("swapchain")), DescriptorType::kRtv, swapchain.GetRtvHandle());
+    RegisterResource(*named_buffer_config_index.Get(SID("swapchain")), swapchain.GetResource(), &buffer_list);
+    descriptor_cpu.RegisterExternalHandle(*named_buffer_allocator_index.Get(SID("swapchain")), DescriptorType::kRtv, swapchain.GetRtvHandle());
     gpu_descriptor_offset_start[frame_index] = descriptor_gpu.GetViewHandleCount();
     if (gpu_descriptor_offset_start[frame_index] == descriptor_gpu.GetViewHandleTotal()) {
       gpu_descriptor_offset_start[frame_index] = 0;
@@ -1186,7 +1191,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   swapchain.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();
-  RegisterResource(*descriptor_only_buffer_config_index.Get(SID("swapchain")), nullptr, &buffer_list);
+  RegisterResource(*named_buffer_config_index.Get(SID("swapchain")), nullptr, &buffer_list);
   ReleaseBuffers(&buffer_list);
   buffer_allocator->Release();
   command_queue_signals.Term();

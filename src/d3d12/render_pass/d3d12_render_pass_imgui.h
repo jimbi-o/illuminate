@@ -8,7 +8,7 @@ namespace illuminate {
 class RenderPassImgui {
  public:
   static void* Init(RenderPassFuncArgsInit* args) {
-    const auto imgui_font_buffer_index = *(args->descriptor_only_buffer_allocator_index->Get(SID("imgui_font")));
+    const auto imgui_font_buffer_index = *(args->named_buffer_allocator_index->Get(SID("imgui_font")));
     auto cpu_handle_font = args->descriptor_cpu->GetHandle(imgui_font_buffer_index, DescriptorType::kSrv);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
