@@ -44,12 +44,8 @@ class RenderPassPrez {
   }
   static void Term(void* ptr) {
     auto param = static_cast<Param*>(ptr);
-    if (param->pso->Release() != 0) {
-      logwarn("ReleaseResourceDispatchCs pso ref left.");
-    }
-    if (param->rootsig->Release() != 0) {
-      logwarn("ReleaseResourceDispatchCs rootsig ref left.");
-    }
+    param->pso->Release();
+    param->rootsig->Release();
   }
   static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
   }
