@@ -233,16 +233,19 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
         r.descriptor_handle_num_per_type[cbv_index]++;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagSrv) {
-        r.descriptor_handle_num_per_type[srv_index]++;
+        const uint32_t add_val = r.buffer_list[i].pingpong ? 2 : 1;
+        r.descriptor_handle_num_per_type[srv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagUav) {
         r.descriptor_handle_num_per_type[uav_index]++;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagRtv) {
-        r.descriptor_handle_num_per_type[rtv_index]++;
+        const uint32_t add_val = r.buffer_list[i].pingpong ? 2 : 1;
+        r.descriptor_handle_num_per_type[rtv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagDsv) {
-        r.descriptor_handle_num_per_type[dsv_index]++;
+        const uint32_t add_val = r.buffer_list[i].pingpong ? 2 : 1;
+        r.descriptor_handle_num_per_type[dsv_index] += add_val;
       }
     }
     r.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)] = r.sampler_num;

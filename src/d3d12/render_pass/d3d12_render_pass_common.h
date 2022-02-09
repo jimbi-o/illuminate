@@ -16,7 +16,7 @@ struct RenderPassFuncArgsInit {
   HWND hwnd{nullptr};
   uint32_t frame_buffer_num{0};
   MemoryAllocationJanitor* allocator{nullptr};
-  const HashMap<uint32_t, MemoryAllocationJanitor>* descriptor_only_buffer_index{nullptr};
+  const HashMap<uint32_t, MemoryAllocationJanitor>* descriptor_only_buffer_allocator_index{nullptr};
 };
 struct RenderPassFuncArgsUpdate {
   void* pass_vars_ptr{nullptr};

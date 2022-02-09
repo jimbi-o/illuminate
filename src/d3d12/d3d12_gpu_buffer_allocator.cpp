@@ -120,13 +120,22 @@ void ReleaseBuffers(BufferList* buffer_list) {
   }
 }
 ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const ResourceStateType state) {
+  return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_index, state)];
+}
+uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const ResourceStateType state) {
   if (state == ResourceStateType::kSrvPs || state == ResourceStateType::kSrvNonPs) {
-    return buffer_list.resource_list[buffer_list.buffer_index_readable[buffer_index]];
+    if (!buffer_list.write_to_sub[buffer_index]) {
+      return buffer_list.buffer_allocation_index_sub[buffer_index];
+    }
+    return buffer_list.buffer_allocation_index_main[buffer_index];
   }
-  return buffer_list.resource_list[buffer_list.buffer_index_writable[buffer_index]];
+  if (buffer_list.write_to_sub[buffer_index]) {
+    return buffer_list.buffer_allocation_index_sub[buffer_index];
+  }
+  return buffer_list.buffer_allocation_index_main[buffer_index];
 }
 void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list) {
-  buffer_list->resource_list[buffer_list->buffer_index_writable[buffer_index]] = resource;
-  buffer_list->resource_list[buffer_list->buffer_index_readable[buffer_index]] = resource;
+  buffer_list->resource_list[buffer_list->buffer_allocation_index_main[buffer_index]] = resource;
+  buffer_list->resource_list[buffer_list->buffer_allocation_index_sub[buffer_index]]  = resource;
 }
 } // namespace illuminate

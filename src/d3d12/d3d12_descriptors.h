@@ -9,11 +9,13 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D1
 class DescriptorCpu {
  public:
   template <typename A>
-  bool Init(D3d12Device* const device, const uint32_t buffer_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, A* allocator) {
+  bool Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, A* allocator) {
+    buffer_allocation_num_ = buffer_allocation_num;
+    sampler_num_ = sampler_num;
     for (uint32_t i = 0; i < kDescriptorTypeNum; i++) {
-      const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num : buffer_num;
+      const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num : buffer_allocation_num;
       handles_[i] = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, num);
-      for (uint32_t j = 0; j < buffer_num; j++) {
+      for (uint32_t j = 0; j < num; j++) {
         handles_[i][j].ptr = 0;
       }
       total_handle_num_[GetDescriptorTypeIndex(static_cast<DescriptorType>(i))] += descriptor_handle_num_per_type[i];
@@ -62,14 +64,15 @@ class DescriptorCpu {
   uint32_t handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
   uint32_t handle_increment_size_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
   uint64_t heap_start_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
+  uint32_t buffer_allocation_num_{0};
+  uint32_t sampler_num_{0};
 };
 class DescriptorGpu {
  public:
-  static uint32_t GetViewNum(const uint32_t buffer_num, const RenderPassBuffer* buffer_list);
   bool Init(D3d12Device* device, const uint32_t handle_num_view, const uint32_t handle_num_sampler);
   void Term();
-  D3D12_GPU_DESCRIPTOR_HANDLE CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffer_list, const DescriptorCpu& descriptor_cpu);
-  D3D12_GPU_DESCRIPTOR_HANDLE CopySamplerDescriptors(D3d12Device* device, const RenderPass& render_pass, const DescriptorCpu& descriptor_cpu);
+  D3D12_GPU_DESCRIPTOR_HANDLE CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const uint32_t* buffer_id_list, const DescriptorType* descriptor_type_list, const DescriptorCpu& descriptor_cpu);
+  D3D12_GPU_DESCRIPTOR_HANDLE CopySamplerDescriptors(D3d12Device* device, const uint32_t sampler_num, const uint32_t* sampler_index_list, const DescriptorCpu& descriptor_cpu);
   auto GetViewHandleCount() const { return descriptor_cbv_srv_uav_.current_handle_num; }
   auto GetViewHandleTotal() const { return descriptor_cbv_srv_uav_.total_handle_num; }
   auto GetSamplerHandleCount() const { return descriptor_sampler_.current_handle_num; }

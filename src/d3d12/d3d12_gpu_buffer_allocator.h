@@ -17,36 +17,61 @@ void ReleaseBufferAllocation(BufferAllocation* b);
 void* MapResource(ID3D12Resource* resource, const uint32_t size, const uint32_t read_begin = 0, const uint32_t read_end = 0);
 void UnmapResource(ID3D12Resource* resource);
 struct BufferList {
-  uint32_t* buffer_index_writable{nullptr};
-  uint32_t* buffer_index_readable{nullptr};
+  uint32_t* buffer_allocation_index_main{nullptr};
+  uint32_t* buffer_allocation_index_sub{nullptr};
+  bool* write_to_sub{nullptr};
   uint32_t buffer_allocation_num{0};
   D3D12MA::Allocation** buffer_allocation_list{nullptr};
   ID3D12Resource** resource_list{nullptr};
+  uint32_t* buffer_config_index{nullptr};
+  bool* is_sub{nullptr};
 };
 template <typename A>
 BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* buffer_allocator, A* allocator) {
-  // TODO pingpong
   BufferList buffer_list{};
+  buffer_list.buffer_allocation_index_main = AllocateArray<uint32_t>(allocator, buffer_num);
+  buffer_list.buffer_allocation_index_sub = AllocateArray<uint32_t>(allocator, buffer_num);
+  buffer_list.write_to_sub = AllocateArray<bool>(allocator, buffer_num);
   buffer_list.buffer_allocation_num = buffer_num;
-  buffer_list.buffer_index_writable = AllocateArray<uint32_t>(allocator, buffer_num);
-  buffer_list.buffer_index_readable = AllocateArray<uint32_t>(allocator, buffer_num);
-  buffer_list.buffer_allocation_list = AllocateArray<D3D12MA::Allocation*>(allocator, buffer_num);
-  buffer_list.resource_list = AllocateArray<ID3D12Resource*>(allocator, buffer_num);
   for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
-    buffer_list.buffer_index_writable[i] = i;
-    buffer_list.buffer_index_readable[i] = i;
+    if (buffer_config_list[i].pingpong) {
+      buffer_list.buffer_allocation_num++;
+    }
+  }
+  buffer_list.buffer_allocation_list = AllocateArray<D3D12MA::Allocation*>(allocator, buffer_list.buffer_allocation_num);
+  buffer_list.resource_list = AllocateArray<ID3D12Resource*>(allocator, buffer_list.buffer_allocation_num);
+  buffer_list.buffer_config_index = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
+  buffer_list.is_sub = AllocateArray<bool>(allocator, buffer_list.buffer_allocation_num);
+  uint32_t buffer_allocation_index = 0;
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    buffer_list.buffer_allocation_index_main[i] = buffer_allocation_index;
+    buffer_list.buffer_allocation_index_sub[i] = buffer_allocation_index;
+    buffer_list.write_to_sub[i] = false;
+    buffer_list.buffer_config_index[buffer_allocation_index] = i;
+    buffer_list.is_sub[buffer_allocation_index] = false;
     auto& buffer_config = buffer_config_list[i];
     if (buffer_config.descriptor_only) {
-      buffer_list.buffer_allocation_list[i] = nullptr;
-      buffer_list.resource_list[i] = nullptr;
+      buffer_list.buffer_allocation_list[buffer_allocation_index] = nullptr;
+      buffer_list.resource_list[buffer_allocation_index] = nullptr;
+      buffer_allocation_index++;
       continue;
     }
-    CreateBuffer(buffer_config, main_buffer_size, buffer_allocator, &buffer_list.buffer_allocation_list[i], &buffer_list.resource_list[i]);
+    CreateBuffer(buffer_config, main_buffer_size, buffer_allocator, &buffer_list.buffer_allocation_list[buffer_allocation_index], &buffer_list.resource_list[buffer_allocation_index]);
+    buffer_allocation_index++;
+    if (buffer_config.pingpong) {
+      buffer_list.buffer_allocation_index_sub[i] = buffer_allocation_index;
+      buffer_list.buffer_config_index[buffer_allocation_index] = i;
+      buffer_list.is_sub[buffer_allocation_index] = true;
+      CreateBuffer(buffer_config, main_buffer_size, buffer_allocator, &buffer_list.buffer_allocation_list[buffer_allocation_index], &buffer_list.resource_list[buffer_allocation_index]);
+      buffer_allocation_index++;
+    }
   }
+  assert(buffer_allocation_index == buffer_list.buffer_allocation_num && "buffer allocation count bug");
   return buffer_list;
 }
 void ReleaseBuffers(BufferList* buffer_list);
 ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const ResourceStateType state);
+uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const ResourceStateType state);
 void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list);
 }
 #endif

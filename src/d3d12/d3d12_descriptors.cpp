@@ -28,10 +28,12 @@ void DescriptorCpu::Term() {
   }
 }
 const D3D12_CPU_DESCRIPTOR_HANDLE& DescriptorCpu::CreateHandle(const uint32_t index, const DescriptorType type) {
+  assert((type == DescriptorType::kSampler && index < sampler_num_) || (type != DescriptorType::kSampler && index < buffer_allocation_num_));
   auto heap_index = GetDescriptorTypeIndex(type);
   D3D12_CPU_DESCRIPTOR_HANDLE handle{};
   handle.ptr = heap_start_[heap_index] + handle_num_[heap_index] * handle_increment_size_[heap_index];
   auto descriptor_type_index = static_cast<uint32_t>(type);
+  assert(handles_[descriptor_type_index][index].ptr == 0);
   handles_[descriptor_type_index][index].ptr = handle.ptr;
   handle_num_[heap_index]++;
   assert(handle_num_[heap_index] <= total_handle_num_[heap_index] && "handle num exceeded handle pool size");
@@ -41,14 +43,14 @@ void DescriptorCpu::RegisterExternalHandle(const uint32_t index, const Descripto
   auto descriptor_type_index = static_cast<uint32_t>(type);
   handles_[descriptor_type_index][index].ptr = handle.ptr;
 }
-uint32_t DescriptorGpu::GetViewNum(const uint32_t buffer_num, const RenderPassBuffer* buffer_list) {
+namespace {
+uint32_t GetViewNum(const uint32_t buffer_num, const DescriptorType* descriptor_type_list) {
   uint32_t view_num = 0;
   for (uint32_t i = 0; i < buffer_num; i++) {
-    switch (buffer_list[i].state) {
-      case ResourceStateType::kCbv:
-      case ResourceStateType::kSrvPs:
-      case ResourceStateType::kSrvNonPs:
-      case ResourceStateType::kUav: {
+    switch (descriptor_type_list[i]) {
+      case DescriptorType::kCbv:
+      case DescriptorType::kSrv:
+      case DescriptorType::kUav: {
         view_num++;
         break;
       }
@@ -59,6 +61,7 @@ uint32_t DescriptorGpu::GetViewNum(const uint32_t buffer_num, const RenderPassBu
   }
   return view_num;
 }
+} // namespace anonymous
 DescriptorGpu::DescriptorHeapSetGpu DescriptorGpu::InitDescriptorHeapSetGpu(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t handle_num) {
   DescriptorHeapSetGpu descriptor_heap;
   descriptor_heap.total_handle_num = handle_num;
@@ -122,8 +125,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyToGpuDescriptor(const uint32_t sr
   descriptor->current_handle_num += src_descriptor_num;
   return gpu_handle;
 }
-D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const RenderPassBuffer* buffer_list, const DescriptorCpu& descriptor_cpu) {
-  const auto view_num = GetViewNum(buffer_num, buffer_list);
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const uint32_t* buffer_id_list, const DescriptorType* descriptor_type_list, const DescriptorCpu& descriptor_cpu) {
+  const auto view_num = GetViewNum(buffer_num, descriptor_type_list);
   if (view_num == 0) {
     return D3D12_GPU_DESCRIPTOR_HANDLE{};
   }
@@ -138,14 +141,16 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* devi
   uint32_t view_index = 0;
   bool first_buffer = true;
   for (uint32_t i = 0; i < buffer_num; i++) {
-    auto& buffer = buffer_list[i];
-    auto descriptor_type = ConvertToDescriptorType(buffer.state);
-    switch (descriptor_type) {
+    switch (descriptor_type_list[i]) {
       case DescriptorType::kCbv:
       case DescriptorType::kSrv:
       case DescriptorType::kUav: {
-        auto handle = descriptor_cpu.GetHandle(buffer.buffer_index, descriptor_type);
-        if (handle.ptr == 0) { break; }
+        auto handle = descriptor_cpu.GetHandle(buffer_id_list[i], descriptor_type_list[i]);
+        if (handle.ptr == 0) {
+          logerror("descriptor_cpu.GetHandle failed {} {}", buffer_id_list[i], descriptor_type_list[i]);
+          assert(false && "descriptor_cpu.GetHandle failed.");
+          break;
+        }
         if (!first_buffer && handles[view_index].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle.ptr) {
           handle_num[view_index]++;
           break;
@@ -166,15 +171,15 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* devi
   assert(view_index < view_num && "buffer view count bug");
   return CopyToGpuDescriptor(view_num, view_index + 1, handle_num, handles, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, device, &descriptor_cbv_srv_uav_);
 }
-D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopySamplerDescriptors(D3d12Device* device, const RenderPass& render_pass, const DescriptorCpu& descriptor_cpu) {
-  if (render_pass.sampler_num == 0) { return D3D12_GPU_DESCRIPTOR_HANDLE{}; }
-  assert(render_pass.sampler_num <= descriptor_sampler_.total_handle_num);
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopySamplerDescriptors(D3d12Device* device, const uint32_t sampler_num, const uint32_t* sampler_index_list, const DescriptorCpu& descriptor_cpu) {
+  if (sampler_num == 0) { return D3D12_GPU_DESCRIPTOR_HANDLE{}; }
+  assert(sampler_num <= descriptor_sampler_.total_handle_num);
   auto tmp_allocator = GetTemporalMemoryAllocator();
   uint32_t sampler_index = 0;
-  auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, render_pass.sampler_num);
-  auto handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.sampler_num);
-  for (uint32_t i = 0; i < render_pass.sampler_num; i++) {
-    auto handle = descriptor_cpu.GetHandle(render_pass.sampler_index_list[i], DescriptorType::kSampler);
+  auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, sampler_num);
+  auto handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, sampler_num);
+  for (uint32_t i = 0; i < sampler_num; i++) {
+    auto handle = descriptor_cpu.GetHandle(sampler_index_list[i], DescriptorType::kSampler);
     if (handle.ptr == 0) { continue; }
     if (i > 0 && handle_list[sampler_index].ptr + descriptor_sampler_.handle_increment_size == handle.ptr) {
       handle_num[sampler_index]++;
@@ -186,6 +191,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopySamplerDescriptors(D3d12Device* d
     handle_num[sampler_index] = 1;
     handle_list[sampler_index].ptr = handle.ptr;
   }
-  return CopyToGpuDescriptor(render_pass.sampler_num, sampler_index + 1, handle_num, handle_list, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, device, &descriptor_sampler_);
+  return CopyToGpuDescriptor(sampler_num, sampler_index + 1, handle_num, handle_list, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, device, &descriptor_sampler_);
 }
 }
