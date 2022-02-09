@@ -70,8 +70,8 @@ BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_c
   return buffer_list;
 }
 void ReleaseBuffers(BufferList* buffer_list);
-ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write);
-uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write);
+ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write = PingPongBufferReadWriteType::kWritable);
+uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write = PingPongBufferReadWriteType::kWritable);
 void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list);
 void FlipPingPongBuffer(BufferList* buffer_list, const uint32_t buffer_num, const uint32_t* buffer_index_list);
 }

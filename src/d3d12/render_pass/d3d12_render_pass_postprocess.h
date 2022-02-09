@@ -11,6 +11,7 @@ class RenderPassPostprocess {
     uint32_t rtv_index{0};
     bool use_views{true};
     bool use_sampler{true};
+    void* cbv_ptr{nullptr};
   };
   static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
@@ -42,6 +43,12 @@ class RenderPassPostprocess {
     param->rtv_index = GetNum(*args->json, "rtv_index", 0);
     param->use_views = GetBool(*args->json, "use_views", true);
     param->use_sampler = GetBool(*args->json, "use_sampler", true);
+    if (args->json->contains("cbv")) {
+      const auto cbv_name_hash = CalcEntityStrHash(*args->json, "cbv");
+      const auto buffer_config_index = *(args->named_buffer_config_index->Get(cbv_name_hash));
+      auto resource = GetResource(*args->buffer_list, buffer_config_index);
+      param->cbv_ptr = MapResource(resource, static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width));
+    }
     return param;
   }
   static void Term(void* ptr) {

@@ -283,7 +283,8 @@ auto GetTestJson() {
         "shader_ps": "test.ps.hlsl",
         "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
         "rtv_index": 1,
-        "use_sampler": false
+        "use_sampler": false,
+        "cbv": "cbv-a"
       }
     },
     {
@@ -542,7 +543,7 @@ auto GetTestTinyGltf() {
 }
 )";
 }
-auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_allocator_index) {
+auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_allocator_index, const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_config_index, BufferList* buffer_list, BufferConfig* buffer_config_list) {
   ShaderCompiler shader_compiler;
   if (!shader_compiler.Init()) {
     logerror("shader_compiler.Init failed");
@@ -559,6 +560,9 @@ auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, Memo
     .frame_buffer_num = frame_buffer_num,
     .allocator = allocator,
     .named_buffer_allocator_index = named_buffer_allocator_index,
+    .named_buffer_config_index = named_buffer_config_index,
+    .buffer_list = buffer_list,
+    .buffer_config_list = buffer_config_list,
   };
   auto render_pass_vars = AllocateArray<void*>(allocator, static_cast<uint32_t>(src_render_pass_list.size()));
   {
@@ -1093,7 +1097,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       device.Get()->CreateSampler(&render_graph.sampler_list[i], cpu_handler);
     }
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
-    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, &named_buffer_allocator_index);
+    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, &named_buffer_allocator_index, &named_buffer_config_index, &buffer_list, render_graph.buffer_list);
   }
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
   auto gpu_descriptor_offset_start = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
