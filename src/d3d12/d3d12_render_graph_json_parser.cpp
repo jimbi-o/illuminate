@@ -419,4 +419,15 @@ void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D
     clear_value->Color[i] = 0.0f;
   }
 }
+void ConfigureBarrierTransition(const nlohmann::json& json_render_pass_list, const char* const barrier_entity_name, const uint32_t barrier_num, Barrier* barrier_list, D3D12_RESOURCE_STATES** buffer_state) {
+  if (!json_render_pass_list.contains(barrier_entity_name)) { return; }
+  for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {
+    const auto& json_barrier_config = json_render_pass_list.at(barrier_entity_name)[barrier_index];
+    auto& barrier_config = barrier_list[barrier_index];
+    if (!json_barrier_config.contains("state_before")) {
+      barrier_config.state_before = buffer_state[barrier_config.buffer_index][0];
+    }
+    buffer_state[barrier_config.buffer_index][0] = barrier_config.state_after;
+  }
+}
 }
