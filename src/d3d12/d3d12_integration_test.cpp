@@ -325,7 +325,8 @@ auto GetTestJson() {
         "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
         "shader_ps": "test.ps.hlsl",
         "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
-        "rtv_index": 2
+        "rtv_index": 2,
+        "cbv": "cbv-b"
       }
     },
     {
@@ -366,7 +367,8 @@ auto GetTestJson() {
         "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
         "shader_ps": "test.ps.hlsl",
         "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
-        "rtv_index": 2
+        "rtv_index": 2,
+        "cbv": "cbv-c"
       }
     },
     {
@@ -621,7 +623,7 @@ DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
 float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   float4 color = src.Sample(tex_sampler, input.texcoord);
   color.r = src1.Sample(tex_sampler, input.texcoord).r;
-  color.g = pingpong.Sample(tex_sampler, input.texcoord).r;
+  color.g = pingpong.Sample(tex_sampler, input.texcoord).b;
   return color;
 }
 )";
@@ -799,10 +801,14 @@ void RenderPassUpdate(const RenderPass& render_pass, void** render_pass_vars, Sc
       return;
     }
     case SID("pingpong-b"): {
+      float c[4]{1.0f,0.0f,1.0f,1.0f};
+      args.ptr = c;
       RenderPassPostprocess::Update(&args);
       return;
     }
     case SID("pingpong-c"): {
+      float c[4]{1.0f,1.0f,1.0f,1.0f};
+      args.ptr = c;
       RenderPassPostprocess::Update(&args);
       return;
     }
