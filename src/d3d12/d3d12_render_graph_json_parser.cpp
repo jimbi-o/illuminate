@@ -422,8 +422,9 @@ void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D
 void ConfigureBarrierTransition(const nlohmann::json& json_render_pass_list, const char* const barrier_entity_name, const uint32_t barrier_num, Barrier* barrier_list, const BufferConfig* buffer_config_list, D3D12_RESOURCE_STATES** buffer_state, bool* write_to_sub) {
   if (!json_render_pass_list.contains(barrier_entity_name)) { return; }
   for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {
-    const auto& json_barrier_config = json_render_pass_list.at(barrier_entity_name)[barrier_index];
     auto& barrier_config = barrier_list[barrier_index];
+    if (barrier_config.type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION) { continue; }
+    const auto& json_barrier_config = json_render_pass_list.at(barrier_entity_name)[barrier_index];
     uint32_t buffer_state_index = 0;
     if (buffer_config_list[barrier_config.buffer_index].pingpong) {
       const auto rw = GetPingPongBufferReadWriteTypeFromD3d12ResourceState(barrier_config.state_after);

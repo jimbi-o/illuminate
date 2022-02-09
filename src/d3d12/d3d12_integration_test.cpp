@@ -97,7 +97,43 @@ auto GetTestJson() {
       "initial_state": "rtv"
     },
     {
-      "name": "cbv",
+      "name": "cbv-a",
+      "format": "UNKNOWN",
+      "heap_type": "upload",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "width": 256,
+      "height": 1,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "row_major",
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "common"
+    },
+    {
+      "name": "cbv-b",
+      "format": "UNKNOWN",
+      "heap_type": "upload",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "width": 256,
+      "height": 1,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "row_major",
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "common"
+    },
+    {
+      "name": "cbv-c",
       "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
@@ -218,7 +254,7 @@ auto GetTestJson() {
       "command_queue": "queue_graphics",
       "buffer_list": [
         {
-          "name": "cbv",
+          "name": "cbv-a",
           "state": "cbv"
         },
         {
@@ -250,7 +286,7 @@ auto GetTestJson() {
       "command_queue": "queue_graphics",
       "buffer_list": [
         {
-          "name": "cbv",
+          "name": "cbv-b",
           "state": "cbv"
         },
         {
@@ -291,7 +327,7 @@ auto GetTestJson() {
       "command_queue": "queue_graphics",
       "buffer_list": [
         {
-          "name": "cbv",
+          "name": "cbv-c",
           "state": "cbv"
         },
         {
