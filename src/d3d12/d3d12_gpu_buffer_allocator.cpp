@@ -119,11 +119,11 @@ void ReleaseBuffers(BufferList* buffer_list) {
     }
   }
 }
-ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const ResourceStateType state) {
-  return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_index, state)];
+ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write) {
+  return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_index, read_write)];
 }
-uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const ResourceStateType state) {
-  if (state == ResourceStateType::kSrvPs || state == ResourceStateType::kSrvNonPs) {
+uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write) {
+  if (read_write == PingPongBufferReadWriteType::kReadable) {
     if (!buffer_list.write_to_sub[buffer_index]) {
       return buffer_list.buffer_allocation_index_sub[buffer_index];
     }

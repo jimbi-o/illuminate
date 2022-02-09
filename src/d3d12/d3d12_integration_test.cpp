@@ -564,10 +564,11 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
   auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, render_pass.buffer_num);
   for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
     auto& buffer = render_pass.buffer_list[b];
-    resource_list[b] = GetResource(buffer_list, buffer.buffer_index, buffer.state);
+    const auto pingpong_rw = GetPingPongBufferReadWriteType(buffer.state);
+    resource_list[b] = GetResource(buffer_list, buffer.buffer_index, pingpong_rw);
     const auto descriptor_type = ConvertToDescriptorType(buffer.state);
     if (descriptor_type != DescriptorType::kNum) {
-      cpu_handle_list[b].ptr = descriptor_cpu->GetHandle(GetBufferAllocationIndex(buffer_list, buffer.buffer_index, buffer.state), descriptor_type).ptr;
+      cpu_handle_list[b].ptr = descriptor_cpu->GetHandle(GetBufferAllocationIndex(buffer_list, buffer.buffer_index, pingpong_rw), descriptor_type).ptr;
     } else {
       cpu_handle_list[b].ptr = 0;
     }
@@ -655,7 +656,7 @@ auto ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   auto allocator = GetTemporalMemoryAllocator();
   auto resource_list = AllocateArray<ID3D12Resource*>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
-    resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, barrier_config[i].next_user_state);
+    resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, GetPingPongBufferReadWriteType(barrier_config[i].next_user_state));
   }
   ExecuteBarrier(command_list, barrier_num, barrier_config, resource_list);
 }
@@ -667,7 +668,7 @@ auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, co
     auto buffer_id_list = AllocateArray<uint32_t>(&tmp_allocator, render_pass.buffer_num);
     auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, render_pass.buffer_num);
     for (uint32_t j = 0; j < render_pass.buffer_num; j++) {
-      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, render_pass.buffer_list[j].buffer_index, render_pass.buffer_list[j].state);
+      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, render_pass.buffer_list[j].buffer_index, GetPingPongBufferReadWriteType(render_pass.buffer_list[j].state));
       descriptor_type_list[j] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
     }
     gpu_handle_list[0] = descriptor_gpu->CopyViewDescriptors(device, render_pass.buffer_num, buffer_id_list, descriptor_type_list, descriptor_cpu);

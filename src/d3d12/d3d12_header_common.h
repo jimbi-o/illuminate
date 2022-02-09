@@ -87,5 +87,12 @@ struct MainBufferFormat {
 uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT);
+enum class PingPongBufferReadWriteType : uint8_t { kWritable = 0, kReadable, };
+constexpr auto GetPingPongBufferReadWriteType(const ResourceStateType state) {
+  if (state == ResourceStateType::kSrvPs || state == ResourceStateType::kSrvNonPs) {
+    return PingPongBufferReadWriteType::kReadable;
+  }
+  return PingPongBufferReadWriteType::kWritable;
+}
 }
 #endif
