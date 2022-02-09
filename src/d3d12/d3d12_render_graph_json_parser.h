@@ -35,7 +35,7 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j);
 DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name);
 D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);
 void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D12_CLEAR_VALUE* clear_value);
-void ConfigureBarrierTransition(const nlohmann::json& json_render_pass_list, const char* const barrier_entity_name, const uint32_t barrier_num, Barrier* barrier_list, D3D12_RESOURCE_STATES** buffer_state);
+void ConfigureBarrierTransition(const nlohmann::json& json_render_pass_list, const char* const barrier_entity_name, const uint32_t barrier_num, Barrier* barrier_list, const BufferConfig* buffer_config_list, D3D12_RESOURCE_STATES** buffer_state, bool* write_to_sub);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -179,6 +179,21 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
         GetBarrierList(postpass_barrier, j.at("buffer"), dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
       } // barriers
       dst_pass.execute = GetBool(src_pass, "execute", false);
+      if (src_pass.contains("flip_pingpong")) {
+        const auto& pingpong = src_pass.at("flip_pingpong");
+        dst_pass.flip_pingpong_num = static_cast<uint32_t>(pingpong.size());
+        dst_pass.flip_pingpong_index_list = AllocateArray<uint32_t>(allocator, dst_pass.flip_pingpong_num);
+        auto& buffer_config_list = j.at("buffer");
+        for (uint32_t p = 0; p < dst_pass.flip_pingpong_num; p++) {
+          const auto str = pingpong[p].get<std::string_view>();
+          for (uint32_t b = 0; b < r.buffer_num; b++) {
+            if (str.compare(buffer_config_list[b].at("name")) == 0) {
+              dst_pass.flip_pingpong_index_list[p] = b;
+              break;
+            }
+          }
+        }
+      } // pingpong
     } // pass
     for (uint32_t i = 0; i < r.render_pass_num; i++) { // wait_pass
       auto& dst_pass = r.render_pass_list[i];
@@ -283,15 +298,21 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
   {
     auto tmp_allocator = GetTemporalMemoryAllocator();
     auto buffer_state = AllocateArray<D3D12_RESOURCE_STATES*>(&tmp_allocator, r.buffer_num);
+    auto write_to_sub = AllocateArray<bool>(&tmp_allocator, r.buffer_num);
     for (uint32_t i = 0; i < r.buffer_num; i++) {
       buffer_state[i] = AllocateArray<D3D12_RESOURCE_STATES>(&tmp_allocator, 2);
       buffer_state[i][0] = ConvertToD3d12ResourceState(r.buffer_list[i].initial_state);
       buffer_state[i][1] = buffer_state[i][0];
+      write_to_sub[i] = 0;
     }
     const auto& json_render_pass_list = j.at("render_pass");
     for (uint32_t i = 0; i < r.render_pass_num; i++) {
-      ConfigureBarrierTransition(json_render_pass_list[i], "prepass_barrier", r.render_pass_list[i].prepass_barrier_num, r.render_pass_list[i].prepass_barrier, buffer_state);
-      ConfigureBarrierTransition(json_render_pass_list[i], "postpass_barrier", r.render_pass_list[i].postpass_barrier_num, r.render_pass_list[i].postpass_barrier, buffer_state);
+      ConfigureBarrierTransition(json_render_pass_list[i], "prepass_barrier", r.render_pass_list[i].prepass_barrier_num, r.render_pass_list[i].prepass_barrier, r.buffer_list, buffer_state, write_to_sub);
+      ConfigureBarrierTransition(json_render_pass_list[i], "postpass_barrier", r.render_pass_list[i].postpass_barrier_num, r.render_pass_list[i].postpass_barrier, r.buffer_list, buffer_state, write_to_sub);
+      for (uint32_t f = 0; f < r.render_pass_list[i].flip_pingpong_num; f++) {
+        const auto& buffer_index = r.render_pass_list[i].flip_pingpong_index_list[f];
+        write_to_sub[buffer_index] = !write_to_sub[buffer_index];
+      }
     }
   } // barrier transition
   // do not allocate from allocator below this line.

@@ -78,6 +78,25 @@ auto GetTestJson() {
       "initial_state": "uav"
     },
     {
+      "name": "pingpong",
+      "pingpong": true,
+      "format": "R8G8B8A8_UNORM",
+      "heap_type": "default",
+      "dimension": "texture2d",
+      "size_type": "primary_relative",
+      "width": 1.0,
+      "height": 1.0,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "unknown",
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "rtv"
+    },
+    {
       "name": "cbv",
       "format": "UNKNOWN",
       "heap_type": "upload",
@@ -195,6 +214,120 @@ auto GetTestJson() {
       }
     },
     {
+      "name": "pingpong-a",
+      "command_queue": "queue_graphics",
+      "buffer_list": [
+        {
+          "name": "cbv",
+          "state": "cbv"
+        },
+        {
+          "name": "pingpong",
+          "state": "rtv"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "flip_pingpong": ["pingpong"],
+      "postpass_barrier": [
+        {
+          "buffer_name": "pingpong",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["srv_ps"]
+        }
+      ],
+      "pass_vars": {
+        "shader_vs": "test.vs.hlsl",
+        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "shader_ps": "test.ps.hlsl",
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "rtv_index": 1,
+        "use_sampler": false
+      }
+    },
+    {
+      "name": "pingpong-b",
+      "command_queue": "queue_graphics",
+      "buffer_list": [
+        {
+          "name": "cbv",
+          "state": "cbv"
+        },
+        {
+          "name": "pingpong",
+          "state": "srv_ps"
+        },
+        {
+          "name": "pingpong",
+          "state": "rtv"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "flip_pingpong": ["pingpong"],
+      "postpass_barrier": [
+        {
+          "buffer_name": "pingpong",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["srv_ps"]
+        },
+        {
+          "buffer_name": "pingpong",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["rtv"]
+        }
+      ],
+      "pass_vars": {
+        "shader_vs": "test.vs.hlsl",
+        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "shader_ps": "test.ps.hlsl",
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "rtv_index": 2
+      }
+    },
+    {
+      "name": "pingpong-c",
+      "command_queue": "queue_graphics",
+      "buffer_list": [
+        {
+          "name": "cbv",
+          "state": "cbv"
+        },
+        {
+          "name": "pingpong",
+          "state": "srv_ps"
+        },
+        {
+          "name": "pingpong",
+          "state": "rtv"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "flip_pingpong": ["pingpong"],
+      "postpass_barrier": [
+        {
+          "buffer_name": "pingpong",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["srv_ps"]
+        },
+        {
+          "buffer_name": "pingpong",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["rtv"]
+        }
+      ],
+      "pass_vars": {
+        "shader_vs": "test.vs.hlsl",
+        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "shader_ps": "test.ps.hlsl",
+        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "rtv_index": 2
+      }
+    },
+    {
       "name": "output to swapchain",
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
@@ -211,8 +344,14 @@ auto GetTestJson() {
         {
           "name": "swapchain",
           "state": "rtv"
-        }      ],
+        },
+        {
+          "name": "pingpong",
+          "state": "srv_ps"
+        }
+      ],
       "sampler": ["bilinear"],
+      "flip_pingpong": ["pingpong"],
       "prepass_barrier": [
         {
           "buffer_name": "swapchain",
@@ -246,6 +385,12 @@ auto GetTestJson() {
           "type": "transition",
           "split_type": "none",
           "state_after": ["dsv_write"]
+        },
+        {
+          "buffer_name": "pingpong",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["rtv"]
         }
       ],
       "pass_vars": {
@@ -434,15 +579,17 @@ FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
 }
 Texture2D src : register(t0);
 Texture2D src1;
+Texture2D pingpong;
 SamplerState tex_sampler : register(s0);
 #define CopyFullscreenRootsig " \
-DescriptorTable(SRV(t0, numDescriptors=2), visibility=SHADER_VISIBILITY_PIXEL), \
+DescriptorTable(SRV(t0, numDescriptors=3), visibility=SHADER_VISIBILITY_PIXEL), \
 DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
 "
 [RootSignature(CopyFullscreenRootsig)]
 float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   float4 color = src.Sample(tex_sampler, input.texcoord);
   color.r = src1.Sample(tex_sampler, input.texcoord).r;
+  color.g = pingpong.Sample(tex_sampler, input.texcoord).r;
   return color;
 }
 )";
@@ -466,6 +613,105 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
     render_pass_vars[index] = RenderPassCopyResource::Init(&args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
+  {
+    auto shader_code_vs_ps = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+#define CopyFullscreenRootsig "\
+DescriptorTable(CBV(b0), visibility=SHADER_VISIBILITY_PIXEL),    \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  return cbv_color;
+}
+)";
+    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-a"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
+  }
+  {
+    auto shader_code_vs_ps = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+Texture2D src : register(t0);
+SamplerState tex_sampler : register(s0);
+#define CopyFullscreenRootsig " \
+DescriptorTable(CBV(b0),                                                \
+                SRV(t0, numDescriptors=1),                              \
+                visibility=SHADER_VISIBILITY_PIXEL),                    \
+DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  float4 color = src.Sample(tex_sampler, input.texcoord);
+  return color * cbv_color;
+}
+)";
+    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-b"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
+  }
+  {
+    auto shader_code_vs_ps = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+Texture2D src : register(t0);
+SamplerState tex_sampler : register(s0);
+#define CopyFullscreenRootsig " \
+DescriptorTable(CBV(b0),                                                \
+                SRV(t0, numDescriptors=1),                              \
+                visibility=SHADER_VISIBILITY_PIXEL),                    \
+DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  float4 color = src.Sample(tex_sampler, input.texcoord);
+  return color * cbv_color;
+}
+)";
+    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-c"));
+    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args.shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    CHECK_NE(render_pass_vars[index], nullptr);
+  }
   shader_compiler.Term();
   return render_pass_vars;
 }
@@ -483,6 +729,9 @@ void ReleaseRenderPassResources(const uint32_t render_pass_num, const RenderPass
   RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("output to swapchain"))]);
   RenderPassImgui::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("imgui"))]);
   RenderPassCopyResource::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("copy resource"))]);
+  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("pingpong-a"))]);
+  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("pingpong-b"))]);
+  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("pingpong-c"))]);
 }
 void RenderPassUpdate(const RenderPass& render_pass, void** render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
   RenderPassFuncArgsUpdate args{
@@ -879,7 +1128,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list);
       auto [resource_list, cpu_handle_list] = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, &render_pass_allocator);
       auto gpu_handle_list = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, descriptor_cpu, &descriptor_gpu, &render_pass_allocator);
-      RenderPassRender(render_graph.render_pass_list[k], main_buffer_size, render_pass_vars, command_list, resource_list, cpu_handle_list, gpu_handle_list, &scene_data, frame_index);
+      RenderPassRender(render_pass, main_buffer_size, render_pass_vars, command_list, resource_list, cpu_handle_list, gpu_handle_list, &scene_data, frame_index);
+      FlipPingPongBuffer(&buffer_list, render_pass.flip_pingpong_num, render_pass.flip_pingpong_index_list);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list);
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);

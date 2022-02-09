@@ -55,6 +55,8 @@ struct RenderPass {
   uint32_t* signal_pass_index{nullptr};
   uint32_t sampler_num{0};
   uint32_t* sampler_index_list{nullptr};
+  uint32_t flip_pingpong_num{0};
+  uint32_t* flip_pingpong_index_list{nullptr};
 };
 struct RenderGraph {
   uint32_t frame_buffer_num{0};

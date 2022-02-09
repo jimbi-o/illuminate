@@ -138,4 +138,9 @@ void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, Buf
   buffer_list->resource_list[buffer_list->buffer_allocation_index_main[buffer_index]] = resource;
   buffer_list->resource_list[buffer_list->buffer_allocation_index_sub[buffer_index]]  = resource;
 }
+void FlipPingPongBuffer(BufferList* buffer_list, const uint32_t buffer_num, const uint32_t* buffer_index_list) {
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    buffer_list->write_to_sub[buffer_index_list[i]] = !buffer_list->write_to_sub[buffer_index_list[i]];
+  }
+}
 } // namespace illuminate
