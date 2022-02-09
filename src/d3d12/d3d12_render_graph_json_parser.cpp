@@ -419,14 +419,4 @@ void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D
     clear_value->Color[i] = 0.0f;
   }
 }
-ResourceStateType GetNextUserState(const RenderGraph& r, const uint32_t start_pass_index, const uint32_t buffer_index) {
-  for (uint32_t next_index = start_pass_index; next_index < r.render_pass_num; next_index++) {
-    for (uint32_t b_index = 0; b_index < r.render_pass_list[next_index].buffer_num; b_index++) {
-      if (r.render_pass_list[next_index].buffer_list[b_index].buffer_index == buffer_index) {
-        return r.render_pass_list[next_index].buffer_list[b_index].state;
-      }
-    }
-  }
-  return r.buffer_list[buffer_index].initial_state;
-}
 }

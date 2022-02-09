@@ -35,7 +35,6 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j);
 DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name);
 D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);
 void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D12_CLEAR_VALUE* clear_value);
-ResourceStateType GetNextUserState(const RenderGraph& r, const uint32_t start_pass_index, const uint32_t buffer_index);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -296,7 +295,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
             barrier_config.state_before = buffer_state[barrier_config.buffer_index];
           }
           buffer_state[barrier_config.buffer_index] = barrier_config.state_after;
-          barrier_config.next_user_state = GetNextUserState(r, i, barrier_config.buffer_index);
         }
       }
       if (json_render_pass_list[i].contains("postpass_barrier")) {
@@ -307,7 +305,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
             barrier_config.state_before = buffer_state[barrier_config.buffer_index];
           }
           buffer_state[barrier_config.buffer_index] = barrier_config.state_after;
-          barrier_config.next_user_state = GetNextUserState(r, i + 1, barrier_config.buffer_index);
         }
       }
     }

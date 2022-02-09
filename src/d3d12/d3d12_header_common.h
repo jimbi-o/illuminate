@@ -94,5 +94,17 @@ constexpr auto GetPingPongBufferReadWriteType(const ResourceStateType state) {
   }
   return PingPongBufferReadWriteType::kWritable;
 }
+constexpr auto GetPingPongBufferReadWriteTypeFromD3d12ResourceState(const D3D12_RESOURCE_STATES state) {
+  if (state & D3D12_RESOURCE_STATE_RENDER_TARGET) {
+    return PingPongBufferReadWriteType::kWritable;
+  }
+  if (state & D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+    return PingPongBufferReadWriteType::kWritable;
+  }
+  if (state & D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+    return PingPongBufferReadWriteType::kWritable;
+  }
+  return PingPongBufferReadWriteType::kReadable;
+}
 }
 #endif

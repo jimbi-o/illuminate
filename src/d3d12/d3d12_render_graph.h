@@ -37,7 +37,6 @@ struct Barrier {
   D3D12_RESOURCE_BARRIER_FLAGS flag{}; // split begin/end/none
   D3D12_RESOURCE_STATES state_before{};
   D3D12_RESOURCE_STATES state_after{};
-  ResourceStateType next_user_state{};
 };
 struct RenderPass {
   StrHash name{};

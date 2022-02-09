@@ -656,7 +656,7 @@ auto ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   auto allocator = GetTemporalMemoryAllocator();
   auto resource_list = AllocateArray<ID3D12Resource*>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
-    resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, GetPingPongBufferReadWriteType(barrier_config[i].next_user_state));
+    resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, GetPingPongBufferReadWriteTypeFromD3d12ResourceState(barrier_config[i].state_after));
   }
   ExecuteBarrier(command_list, barrier_num, barrier_config, resource_list);
 }
