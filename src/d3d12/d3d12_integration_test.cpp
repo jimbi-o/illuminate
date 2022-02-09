@@ -543,28 +543,15 @@ auto GetTestTinyGltf() {
 }
 )";
 }
-auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, D3d12Device* device, const MainBufferFormat& main_buffer_format, DescriptorCpu* descriptor_cpu, HWND hwnd, const uint32_t frame_buffer_num, const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_allocator_index, const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_config_index, BufferList* buffer_list, BufferConfig* buffer_config_list) {
+auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, RenderPassFuncArgsInit* args) {
   ShaderCompiler shader_compiler;
   if (!shader_compiler.Init()) {
     logerror("shader_compiler.Init failed");
     assert(false && "shader_compiler.Init failed");
   }
-  RenderPassFuncArgsInit args{
-    .json = nullptr,
-    .shader_code = nullptr,
-    .shader_compiler = &shader_compiler,
-    .descriptor_cpu = descriptor_cpu,
-    .device = device,
-    .main_buffer_format = main_buffer_format,
-    .hwnd = hwnd,
-    .frame_buffer_num = frame_buffer_num,
-    .allocator = allocator,
-    .named_buffer_allocator_index = named_buffer_allocator_index,
-    .named_buffer_config_index = named_buffer_config_index,
-    .buffer_list = buffer_list,
-    .buffer_config_list = buffer_config_list,
-  };
-  auto render_pass_vars = AllocateArray<void*>(allocator, static_cast<uint32_t>(src_render_pass_list.size()));
+  args->shader_compiler = &shader_compiler;
+  const auto render_pass_num = static_cast<uint32_t>(src_render_pass_list.size());
+  auto render_pass_vars = AllocateArray<void*>(allocator, render_pass_num);
   {
     auto shader_code_cs = R"(
 RWTexture2D<float4> uav : register(u0);
@@ -576,9 +563,9 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
 }
 )";
     const auto index = FindIndex(src_render_pass_list, "name", SID("dispatch cs"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = shader_code_cs;
-    render_pass_vars[index] = RenderPassCsDispatch::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = shader_code_cs;
+    render_pass_vars[index] = RenderPassCsDispatch::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
@@ -603,9 +590,9 @@ float4 main(const VsInput input) : SV_Position {
 }
 )";
     const auto index = FindIndex(src_render_pass_list, "name", SID("prez"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = shader_code_vs;
-    render_pass_vars[index] = RenderPassPrez::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = shader_code_vs;
+    render_pass_vars[index] = RenderPassPrez::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
@@ -639,23 +626,23 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
 }
 )";
     const auto index = FindIndex(src_render_pass_list, "name", SID("output to swapchain"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = shader_code_vs_ps;
-    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
     const auto index = FindIndex(src_render_pass_list, "name", SID("imgui"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = nullptr;
-    render_pass_vars[index] = RenderPassImgui::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = nullptr;
+    render_pass_vars[index] = RenderPassImgui::Init(args);
     CHECK_EQ(render_pass_vars[index], nullptr);
   }
   {
     const auto index = FindIndex(src_render_pass_list, "name", SID("copy resource"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = nullptr;
-    render_pass_vars[index] = RenderPassCopyResource::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = nullptr;
+    render_pass_vars[index] = RenderPassCopyResource::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
@@ -682,9 +669,9 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
 }
 )";
     const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-a"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = shader_code_vs_ps;
-    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
@@ -717,9 +704,9 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
 }
 )";
     const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-b"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = shader_code_vs_ps;
-    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
@@ -752,9 +739,9 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
 }
 )";
     const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-c"));
-    args.json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args.shader_code = shader_code_vs_ps;
-    render_pass_vars[index] = RenderPassPostprocess::Init(&args);
+    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
+    args->shader_code = shader_code_vs_ps;
+    render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   shader_compiler.Term();
@@ -1097,7 +1084,22 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       device.Get()->CreateSampler(&render_graph.sampler_list[i], cpu_handler);
     }
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
-    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, device.Get(), main_buffer_format, &descriptor_cpu, window.GetHwnd(), render_graph.frame_buffer_num, &named_buffer_allocator_index, &named_buffer_config_index, &buffer_list, render_graph.buffer_list);
+    RenderPassFuncArgsInit render_pass_func_args_init{
+      .json = nullptr,
+      .shader_code = nullptr,
+      .shader_compiler = nullptr,
+      .descriptor_cpu = &descriptor_cpu,
+      .device = device.Get(),
+      .main_buffer_format = main_buffer_format,
+      .hwnd = window.GetHwnd(),
+      .frame_buffer_num = render_graph.frame_buffer_num,
+      .allocator = &allocator,
+      .named_buffer_allocator_index = &named_buffer_allocator_index,
+      .named_buffer_config_index = &named_buffer_config_index,
+      .buffer_list = &buffer_list,
+      .buffer_config_list = render_graph.buffer_list,
+    };
+    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, &render_pass_func_args_init);
   }
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
   auto gpu_descriptor_offset_start = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
