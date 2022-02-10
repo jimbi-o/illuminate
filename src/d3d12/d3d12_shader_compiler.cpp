@@ -237,7 +237,7 @@ ShaderCompileSettings ParseDefaultCompileSettings(const nlohmann::json& json, Me
   }
   return settings;
 }
-void GetCompileShaderArgs(const nlohmann::json& json, const ShaderCompileSettings& settings, uint32_t* args_num, wchar_t*** args, MemoryAllocationJanitor* allocator) {
+void GetCompileShaderArgsRootsig(const nlohmann::json& json, const ShaderCompileSettings& settings, uint32_t* args_num, wchar_t*** args, MemoryAllocationJanitor* allocator) {
   *args_num = settings.option_args_num + 4;
   const auto additional_args_exists = json.contains("compile_args");
   if (additional_args_exists) {
@@ -459,7 +459,7 @@ TEST_CASE("material compile") {
     uint32_t args_num = 0;
     wchar_t** args{};
     const auto& json_rootsig = json.at("material").at("rootsig")[0];
-    GetCompileShaderArgs(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
+    GetCompileShaderArgsRootsig(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
     CHECK_EQ(args_num, 12);
     CHECK_EQ(wcscmp(args[0], L"-T"), 0);
     CHECK_EQ(wcscmp(args[1], L"cs_6_6"), 0);
@@ -488,7 +488,7 @@ void MainCs() {}
     uint32_t args_num = 0;
     wchar_t** args{};
     const auto& json_rootsig = json.at("material").at("rootsig")[1];
-    GetCompileShaderArgs(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
+    GetCompileShaderArgsRootsig(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
     CHECK_EQ(args_num, 9);
     CHECK_EQ(wcscmp(args[0], L"-T"), 0);
     CHECK_EQ(wcscmp(args[1], L"vs_6_6"), 0);
@@ -522,7 +522,7 @@ void main() {}
     uint32_t args_num = 0;
     wchar_t** args{};
     const auto& json_rootsig = json.at("material").at("rootsig")[2];
-    GetCompileShaderArgs(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
+    GetCompileShaderArgsRootsig(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
     CHECK_EQ(args_num, 9);
     CHECK_EQ(wcscmp(args[0], L"-T"), 0);
     CHECK_EQ(wcscmp(args[1], L"ps_6_6"), 0);
@@ -550,7 +550,7 @@ void MainPs() {}
     uint32_t args_num = 0;
     wchar_t** args{};
     const auto& json_rootsig = json.at("material").at("rootsig")[2];
-    GetCompileShaderArgs(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
+    GetCompileShaderArgsRootsig(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
     CHECK_EQ(args_num, 9);
     CHECK_EQ(wcscmp(args[0], L"-T"), 0);
     CHECK_EQ(wcscmp(args[1], L"ps_6_6"), 0);
@@ -577,7 +577,7 @@ void MainPs() {}
     uint32_t args_num = 0;
     wchar_t** args{};
     const auto& json_rootsig = json.at("material").at("rootsig")[3];
-    GetCompileShaderArgs(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
+    GetCompileShaderArgsRootsig(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
     CHECK_EQ(args_num, 9);
     CHECK_EQ(wcscmp(args[0], L"-T"), 0);
     CHECK_EQ(wcscmp(args[1], L"ps_6_6"), 0);
