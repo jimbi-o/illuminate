@@ -361,7 +361,6 @@ TEST_CASE("material compile") {
   ShaderCompiler shader_compiler;
   CHECK_UNARY(shader_compiler.Init());
   auto allocator = GetTemporalMemoryAllocator();
-  HashMap<ID3D12RootSignature*, MemoryAllocationJanitor> rootsig_list(&allocator);
   auto json = R"(
 {
 "material": {
@@ -474,15 +473,15 @@ TEST_CASE("material compile") {
     CHECK_EQ(wcscmp(args[9], L"-Zpr"), 0);
     CHECK_EQ(wcscmp(args[10], L"-Qstrip_reflect"), 0);
     CHECK_EQ(wcscmp(args[11], L"-Qstrip_debug"), 0);
-    auto shader_code = R"(
+    auto shader_code_rootsig = R"(
 #define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
 [RootSignature(FillScreenCsRootsig)]
 [numthreads(32,32,1)]
 void MainCs() {}
 )";
-    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, (const wchar_t**)args, device.Get());
+    auto rootsig = shader_compiler.CreateRootSignature(shader_code_rootsig, static_cast<uint32_t>(strlen(shader_code_rootsig)), args_num, (const wchar_t**)args, device.Get());
     CHECK_NE(rootsig, nullptr);
-    CHECK_UNARY(rootsig_list.Insert(SID("dispatch cs"), std::move(rootsig)));
+    rootsig->Release();
   }
   {
     // dispatch cs
@@ -500,7 +499,7 @@ void MainCs() {}
     CHECK_EQ(wcscmp(args[6], L"-Qstrip_debug"), 0);
     CHECK_EQ(wcscmp(args[7], L"-Qstrip_reflect"), 0);
     CHECK_EQ(wcscmp(args[8], L"-Qstrip_rootsignature"), 0);
-    auto shader_code = R"(
+    auto shader_code_rootsig = R"(
 #define PrezRootsig "RootFlags("                                    \
                          "ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | "    \
                          "DENY_VERTEX_SHADER_ROOT_ACCESS | "        \
@@ -514,9 +513,9 @@ void MainCs() {}
 [RootSignature(PrezRootsig)]
 void main() {}
 )";
-    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, (const wchar_t**)args, device.Get());
+    auto rootsig = shader_compiler.CreateRootSignature(shader_code_rootsig, static_cast<uint32_t>(strlen(shader_code_rootsig)), args_num, (const wchar_t**)args, device.Get());
     CHECK_NE(rootsig, nullptr);
-    CHECK_UNARY(rootsig_list.Insert(SID("prez"), std::move(rootsig)));
+    rootsig->Release();
   }
   {
     // output to swapchain
@@ -534,7 +533,7 @@ void main() {}
     CHECK_EQ(wcscmp(args[6], L"-Qstrip_debug"), 0);
     CHECK_EQ(wcscmp(args[7], L"-Qstrip_reflect"), 0);
     CHECK_EQ(wcscmp(args[8], L"-Qstrip_rootsignature"), 0);
-    auto shader_code = R"(
+    auto shader_code_rootsig = R"(
 #define CopyFullscreenRootsig " \
 DescriptorTable(SRV(t0, numDescriptors=3), visibility=SHADER_VISIBILITY_PIXEL), \
 DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
@@ -542,9 +541,9 @@ DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
 [RootSignature(CopyFullscreenRootsig)]
 void MainPs() {}
 )";
-    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, (const wchar_t**)args, device.Get());
+    auto rootsig = shader_compiler.CreateRootSignature(shader_code_rootsig, static_cast<uint32_t>(strlen(shader_code_rootsig)), args_num, (const wchar_t**)args, device.Get());
     CHECK_NE(rootsig, nullptr);
-    CHECK_UNARY(rootsig_list.Insert(SID("output to swapchain"), std::move(rootsig)));
+    rootsig->Release();
   }
   {
     // pingpong-a
@@ -562,16 +561,16 @@ void MainPs() {}
     CHECK_EQ(wcscmp(args[6], L"-Qstrip_debug"), 0);
     CHECK_EQ(wcscmp(args[7], L"-Qstrip_reflect"), 0);
     CHECK_EQ(wcscmp(args[8], L"-Qstrip_rootsignature"), 0);
-    auto shader_code = R"(
+    auto shader_code_rootsig = R"(
 #define CopyFullscreenRootsig "\
 DescriptorTable(CBV(b0), visibility=SHADER_VISIBILITY_PIXEL),    \
 "
 [RootSignature(CopyFullscreenRootsig)]
 void MainPs() {}
 )";
-    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, (const wchar_t**)args, device.Get());
+    auto rootsig = shader_compiler.CreateRootSignature(shader_code_rootsig, static_cast<uint32_t>(strlen(shader_code_rootsig)), args_num, (const wchar_t**)args, device.Get());
     CHECK_NE(rootsig, nullptr);
-    CHECK_UNARY(rootsig_list.Insert(SID("pingpong-a"), std::move(rootsig)));
+    rootsig->Release();
   }
   {
     // pingpong-bc
@@ -589,7 +588,7 @@ void MainPs() {}
     CHECK_EQ(wcscmp(args[6], L"-Qstrip_debug"), 0);
     CHECK_EQ(wcscmp(args[7], L"-Qstrip_reflect"), 0);
     CHECK_EQ(wcscmp(args[8], L"-Qstrip_rootsignature"), 0);
-    auto shader_code = R"(
+    auto shader_code_rootsig = R"(
 #define CopyFullscreenRootsig " \
 DescriptorTable(CBV(b0),                                                \
                 SRV(t0, numDescriptors=1),                              \
@@ -599,15 +598,10 @@ DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
 [RootSignature(CopyFullscreenRootsig)]
 void MainPs() {}
 )";
-    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, (const wchar_t**)args, device.Get());
+    auto rootsig = shader_compiler.CreateRootSignature(shader_code_rootsig, static_cast<uint32_t>(strlen(shader_code_rootsig)), args_num, (const wchar_t**)args, device.Get());
     CHECK_NE(rootsig, nullptr);
-    CHECK_UNARY(rootsig_list.Insert(SID("pingpong-bc"), std::move(rootsig)));
+    rootsig->Release();
   }
-  (*rootsig_list.Get(SID("dispatch cs")))->Release();
-  (*rootsig_list.Get(SID("prez")))->Release();
-  (*rootsig_list.Get(SID("output to swapchain")))->Release();
-  (*rootsig_list.Get(SID("pingpong-a")))->Release();
-  (*rootsig_list.Get(SID("pingpong-bc")))->Release();
   shader_compiler.Term();
   device.Term();
   dxgi_core.Term();
