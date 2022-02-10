@@ -199,7 +199,8 @@ enum ShaderTarget :uint8_t {
   kShaderTargetLib,
   kShaderTargetMs,
   kShaderTargetAs,
-  kShaderTargetNum,
+  kShaderTargetInvalid,
+  kShaderTargetNum = kShaderTargetInvalid,
 };
 struct ShaderCompileSettings {
   wchar_t* entry_point{nullptr};
@@ -226,6 +227,65 @@ ShaderCompileSettings ParseDefaultCompileSettings(const nlohmann::json& json, Me
     CopyStrToWstrContainer(&settings.option_args[i], GetStringView(args[i]), allocator);
   }
   return settings;
+}
+void GetCompileShaderArgs(const nlohmann::json& json, const ShaderCompileSettings& settings, uint32_t* args_num, wchar_t*** args, MemoryAllocationJanitor* allocator) {
+  *args_num = settings.option_args_num + 4;
+  const auto additional_args_exists = json.contains("compile_args");
+  if (additional_args_exists) {
+    *args_num += GetUint32(json.at("compile_args").size());
+  }
+  *args = AllocateArray<wchar_t*>(allocator, *args_num);
+  uint32_t index = 0;
+  {
+    // target
+    CopyStrToWstrContainer(&(*args)[index], "-T", allocator);
+    index++;
+    const auto target = GetStringView(json, "target");
+    auto target_index = kShaderTargetNum;
+    if (target.compare("ps") == 0) {
+      target_index = kShaderTargetPs;
+    } else if (target.compare("vs") == 0) {
+      target_index = kShaderTargetVs;
+    } else if (target.compare("gs") == 0) {
+      target_index = kShaderTargetGs;
+    } else if (target.compare("hs") == 0) {
+      target_index = kShaderTargetHs;
+    } else if (target.compare("ds") == 0) {
+      target_index = kShaderTargetDs;
+    } else if (target.compare("cs") == 0) {
+      target_index = kShaderTargetCs;
+    } else if (target.compare("lib") == 0) {
+      target_index = kShaderTargetLib;
+    } else if (target.compare("ms") == 0) {
+      target_index = kShaderTargetMs;
+    } else if (target.compare("as") == 0) {
+      target_index = kShaderTargetAs;
+    }
+    assert(target_index != kShaderTargetInvalid);
+    (*args)[index] = settings.target_name[target_index];
+    index++;
+  }
+  {
+    // entry point
+    CopyStrToWstrContainer(&(*args)[index], "-E", allocator);
+    index++;
+    if (json.contains("entry")) {
+      CopyStrToWstrContainer(&(*args)[index], GetStringView(json, "entry"), allocator);
+    } else {
+      (*args)[index] = settings.entry_point;
+    }
+    index++;
+  }
+  for (uint32_t i = 0; i < settings.option_args_num; i++) {
+    (*args)[index + i] = settings.option_args[i];
+  }
+  index += settings.option_args_num;
+  if (additional_args_exists) {
+    auto additional_args = json.at("compile_args");
+    for (uint32_t i = 0; i < additional_args.size(); i++) {
+      CopyStrToWstrContainer(&(*args)[index + i], GetStringView(additional_args[i]), allocator);
+    }
+  }
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -311,19 +371,26 @@ TEST_CASE("material compile") {
   },
   "rootsig": [
     {
-      "name": "dispatch cs"
+      "name": "dispatch cs",
+      "target" : "cs",
+      "entry" : "MainCs",
+      "compile_args" : ["-Zpr", "-Qstrip_reflect", "-Qstrip_debug"]
     },
     {
-      "name": "prez"
+      "name": "prez",
+      "target" : "vs"
     },
     {
-      "name": "pingpong-a"
+      "name": "pingpong-a",
+      "target" : "ps"
     },
     {
-      "name": "pingpong-bc"
+      "name": "pingpong-bc",
+      "target" : "ps"
     },
     {
-      "name": "output to swapchain"
+      "name": "output to swapchain",
+      "target" : "ps"
     }
   ],
   "shader": [
@@ -377,7 +444,24 @@ TEST_CASE("material compile") {
   CHECK_EQ(wcscmp(default_compile_settings.option_args[3], L"-Qstrip_reflect"), 0);
   CHECK_EQ(wcscmp(default_compile_settings.option_args[4], L"-Qstrip_rootsignature"), 0);
   {
-    // prez
+    // dispatch cs
+    uint32_t args_num = 0;
+    wchar_t** args{};
+    const auto& json_rootsig = json.at("material").at("rootsig")[0];
+    GetCompileShaderArgs(json_rootsig, default_compile_settings, &args_num, &args, &allocator);
+    CHECK_EQ(args_num, 12);
+    CHECK_EQ(wcscmp(args[0], L"-T"), 0);
+    CHECK_EQ(wcscmp(args[1], L"cs_6_6"), 0);
+    CHECK_EQ(wcscmp(args[2], L"-E"), 0);
+    CHECK_EQ(wcscmp(args[3], L"MainCs"), 0);
+    CHECK_EQ(wcscmp(args[4], L"-Zi"), 0);
+    CHECK_EQ(wcscmp(args[5], L"-Zpr"), 0);
+    CHECK_EQ(wcscmp(args[6], L"-Qstrip_debug"), 0);
+    CHECK_EQ(wcscmp(args[7], L"-Qstrip_reflect"), 0);
+    CHECK_EQ(wcscmp(args[8], L"-Qstrip_rootsignature"), 0);
+    CHECK_EQ(wcscmp(args[9], L"-Zpr"), 0);
+    CHECK_EQ(wcscmp(args[10], L"-Qstrip_reflect"), 0);
+    CHECK_EQ(wcscmp(args[11], L"-Qstrip_debug"), 0);
     auto shader_code = R"(
 #define PrezRootsig "RootFlags("                                    \
                          "ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | "    \
@@ -390,13 +474,10 @@ TEST_CASE("material compile") {
                          "DENY_MESH_SHADER_ROOT_ACCESS"             \
                          "), "
 [RootSignature(PrezRootsig)]
-void main() {}
+void MainCs() {}
 )";
-    uint32_t args_num = 0;
-    const wchar_t** args{};
-    // TODO parse compiler args
     /*
-    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device.Get());
+    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, (const wchar_t**)args, device.Get());
     CHECK_NE(rootsig, nullptr);
     CHECK_UNARY(rootsig_list.Insert(SID("prez"), std::move(rootsig)));
     */
