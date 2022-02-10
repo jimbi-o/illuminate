@@ -39,7 +39,7 @@ class RenderPassPostprocess {
     SetD3d12Name(param->rootsig, "rootsig_swapchain");
     SetD3d12Name(param->pso, "pso_swapchain");
     if (args->json->contains("size_type")) {
-      param->size_type = (args->json->at("size_type").get<std::string_view>().compare("swapchain_relative") == 0) ? BufferSizeRelativeness::kSwapchainRelative : BufferSizeRelativeness::kPrimaryBufferRelative;
+      param->size_type = (GetStringView(args->json->at("size_type")).compare("swapchain_relative") == 0) ? BufferSizeRelativeness::kSwapchainRelative : BufferSizeRelativeness::kPrimaryBufferRelative;
     }
     param->rtv_index = GetNum(*args->json, "rtv_index", 0);
     param->use_views = GetBool(*args->json, "use_views", true);

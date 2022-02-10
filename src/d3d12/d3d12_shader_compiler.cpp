@@ -1,5 +1,7 @@
 #include "d3d12_shader_compiler.h"
+#include "d3d12_render_graph_json_parser.h"
 #include "d3d12_src_common.h"
+#include "illuminate/util/hash_map.h"
 #include "../win32_dll_util_macro.h"
 namespace illuminate {
 namespace {
@@ -64,7 +66,7 @@ bool IsCompileSuccessful(IDxcResult* result) {
   if (FAILED(hr) || FAILED(compile_result)) { return false; }
   return result->HasOutput(DXC_OUT_OBJECT);
 }
-ID3D12RootSignature* CreateRootSignature(D3d12Device* device, IDxcResult* result) {
+ID3D12RootSignature* CreateRootSignatureLocal(D3d12Device* device, IDxcResult* result) {
   if (!result->HasOutput(DXC_OUT_ROOT_SIGNATURE)) { return nullptr; }
   IDxcBlob* root_signature_blob = nullptr;
   auto hr = result->GetOutput(DXC_OUT_ROOT_SIGNATURE, IID_PPV_ARGS(&root_signature_blob), nullptr);
@@ -155,7 +157,7 @@ void ShaderCompiler::Term() {
 bool ShaderCompiler::CreateRootSignatureAndPsoCs(const char* const shadercode, const uint32_t shadercode_len, const uint32_t args_num, const wchar_t** args, D3d12Device* device, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
   auto result = CompileShader(compiler_, shadercode_len, shadercode, args_num, args, include_handler_);
   assert(result && "CompileShader failed.");
-  *rootsig = CreateRootSignature(device, result);
+  *rootsig = CreateRootSignatureLocal(device, result);
   assert(*rootsig && "CreateRootSignature failed.");
   *pso = CreatePipelineStateCs(device, result, *rootsig);
   assert(*pso && "CreatePipelineState failed.");
@@ -174,11 +176,11 @@ bool ShaderCompiler::CreateRootSignatureAndPsoVsPs(const char* const shadercode_
   auto result_ps = CompileShader(compiler_, shadercode_ps_len, shadercode_ps, args_num_ps, args_ps, include_handler_);
   assert(result_ps && "CompileShader ps failed.");
   if (shadercode_ps_len > 0) {
-    *rootsig = CreateRootSignature(device, result_ps);
-    assert(*rootsig && "CreateRootSignature(ps) failed.");
+    *rootsig = CreateRootSignatureLocal(device, result_ps);
+    assert(*rootsig && "CreateRootSignatureLocal(ps) failed.");
   }
   if (*rootsig == nullptr) {
-    *rootsig = CreateRootSignature(device, result_vs);
+    *rootsig = CreateRootSignatureLocal(device, result_vs);
   }
   pso_desc->root_signature = *rootsig;
   *pso = CreatePipelineStateVsPs(device, result_vs, result_ps, pso_desc);
@@ -186,6 +188,44 @@ bool ShaderCompiler::CreateRootSignatureAndPsoVsPs(const char* const shadercode_
   result_vs->Release();
   result_ps->Release();
   return true;
+}
+enum ShaderTarget :uint8_t {
+  kShaderTargetPs = 0,
+  kShaderTargetVs,
+  kShaderTargetGs,
+  kShaderTargetHs,
+  kShaderTargetDs,
+  kShaderTargetCs,
+  kShaderTargetLib,
+  kShaderTargetMs,
+  kShaderTargetAs,
+  kShaderTargetNum,
+};
+struct ShaderCompileSettings {
+  wchar_t* entry_point{nullptr};
+  wchar_t* target_name[kShaderTargetNum]{nullptr};
+  uint32_t option_args_num{0};
+  wchar_t** option_args{};
+};
+ShaderCompileSettings ParseDefaultCompileSettings(const nlohmann::json& json, MemoryAllocationJanitor* allocator) {
+  ShaderCompileSettings settings{};
+  CopyStrToWstrContainer(&settings.entry_point, GetStringView(json, "entry"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetPs], GetStringView(json, "ps_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetVs], GetStringView(json, "vs_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetGs], GetStringView(json, "gs_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetHs], GetStringView(json, "hs_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetDs], GetStringView(json, "ds_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetCs], GetStringView(json, "cs_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetLib], GetStringView(json, "lib_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetMs], GetStringView(json, "ms_target"), allocator);
+  CopyStrToWstrContainer(&settings.target_name[kShaderTargetAs], GetStringView(json, "as_target"), allocator);
+  const auto& args = json.at("compile_args");
+  settings.option_args_num = GetUint32(args.size());
+  settings.option_args = AllocateArray<wchar_t*>(allocator, settings.option_args_num);
+  for (uint32_t i = 0; i < settings.option_args_num; i++) {
+    CopyStrToWstrContainer(&settings.option_args[i], GetStringView(args[i]), allocator);
+  }
+  return settings;
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -228,7 +268,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     Device device;
     CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
     CHECK_UNARY(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
-    auto root_signature = CreateRootSignature(device.Get(), result);
+    auto root_signature = CreateRootSignatureLocal(device.Get(), result);
     CHECK_NE(root_signature, nullptr);
     auto pso_cs = CreatePipelineStateCs(device.Get(), result, root_signature);
     CHECK_NE(pso_cs, nullptr);
@@ -242,4 +282,126 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   CHECK_EQ(utils->Release(), 0);
   CHECK_EQ(compiler->Release(), 0);
   CHECK_UNARY(FreeLibrary(library));
+}
+TEST_CASE("material compile") {
+  using namespace illuminate; // NOLINT
+  DxgiCore dxgi_core;
+  CHECK_UNARY(dxgi_core.Init()); // NOLINT
+  Device device;
+  CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
+  ShaderCompiler shader_compiler;
+  CHECK_UNARY(shader_compiler.Init());
+  auto allocator = GetTemporalMemoryAllocator();
+  HashMap<ID3D12RootSignature*, MemoryAllocationJanitor> rootsig_list(&allocator);
+  auto json = R"(
+{
+"material": {
+  "default_settings": {
+    "entry" : "main",
+    "ps_target" : "ps_6_6",
+    "vs_target" : "vs_6_6",
+    "gs_target" : "gs_6_6",
+    "hs_target" : "hs_6_6",
+    "ds_target" : "ds_6_6",
+    "cs_target" : "cs_6_6",
+    "lib_target" : "lib_6_6",
+    "ms_target" : "ms_6_6",
+    "as_target" : "as_6_6",
+    "compile_args" : ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+  },
+  "rootsig": [
+    {
+      "name": "dispatch cs"
+    },
+    {
+      "name": "prez"
+    },
+    {
+      "name": "pingpong-a"
+    },
+    {
+      "name": "pingpong-bc"
+    },
+    {
+      "name": "output to swapchain"
+    }
+  ],
+  "shader": [
+    {
+      "name": "dispatch cs",
+      "rootsig": "dispatch cs",
+      "cs" : {}
+    },
+    {
+      "name": "prez",
+      "rootsig": "prez",
+      "vs" : {}
+    },
+    {
+      "name": "pingpong-a",
+      "rootsig": "pingpong-a",
+      "vs" : {"entry" : "MainVs"},
+      "ps" : {"entry" : "MainPs"}
+    },
+    {
+      "name": "pingpong-bc",
+      "rootsig": "pingpong-bc",
+      "vs" : {"entry" : "MainVs"},
+      "ps" : {"entry" : "MainPs"}
+    },
+    {
+      "name": "output to swapchain",
+      "rootsig": "output to swapchain",
+      "vs" : {"entry" : "MainVs"},
+      "ps" : {"entry" : "MainPs"}
+    }
+  ]
+}
+}
+)"_json;
+  auto default_compile_settings = ParseDefaultCompileSettings(json.at("material").at("default_settings"), &allocator);
+  CHECK_EQ(wcscmp(default_compile_settings.entry_point, L"main"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetPs], L"ps_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetVs], L"vs_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetGs], L"gs_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetHs], L"hs_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetDs], L"ds_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetCs], L"cs_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetLib], L"lib_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetMs], L"ms_6_6"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.target_name[kShaderTargetAs], L"as_6_6"), 0);
+  CHECK_EQ(default_compile_settings.option_args_num, 5);
+  CHECK_EQ(wcscmp(default_compile_settings.option_args[0], L"-Zi"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.option_args[1], L"-Zpr"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.option_args[2], L"-Qstrip_debug"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.option_args[3], L"-Qstrip_reflect"), 0);
+  CHECK_EQ(wcscmp(default_compile_settings.option_args[4], L"-Qstrip_rootsignature"), 0);
+  {
+    // prez
+    auto shader_code = R"(
+#define PrezRootsig "RootFlags("                                    \
+                         "ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | "    \
+                         "DENY_VERTEX_SHADER_ROOT_ACCESS | "        \
+                         "DENY_HULL_SHADER_ROOT_ACCESS | "          \
+                         "DENY_DOMAIN_SHADER_ROOT_ACCESS | "        \
+                         "DENY_GEOMETRY_SHADER_ROOT_ACCESS | "      \
+                         "DENY_PIXEL_SHADER_ROOT_ACCESS | "         \
+                         "DENY_AMPLIFICATION_SHADER_ROOT_ACCESS | " \
+                         "DENY_MESH_SHADER_ROOT_ACCESS"             \
+                         "), "
+[RootSignature(PrezRootsig)]
+void main() {}
+)";
+    uint32_t args_num = 0;
+    const wchar_t** args{};
+    // TODO parse compiler args
+    /*
+    auto rootsig = shader_compiler.CreateRootSignature(shader_code, static_cast<uint32_t>(strlen(shader_code)), args_num, args, device.Get());
+    CHECK_NE(rootsig, nullptr);
+    CHECK_UNARY(rootsig_list.Insert(SID("prez"), std::move(rootsig)));
+    */
+  }
+  shader_compiler.Term();
+  device.Term();
+  dxgi_core.Term();
 }

@@ -55,7 +55,7 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   return DXGI_FORMAT_UNKNOWN;
 }
 ResourceStateType GetResourceStateType(const nlohmann::json& j) {
-  auto str = j.get<std::string_view>();
+  auto str = GetStringView(j);
   if (str.compare("cbv") == 0) {
     return ResourceStateType::kCbv;
   }
@@ -96,7 +96,7 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* cons
 }
 DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name) {
   assert(j.contains(name));
-  auto str = j.at(name).get<std::string_view>();
+  auto str = GetStringView(j, name);
   if (str.compare("cbv") == 0) {
     return DescriptorType::kCbv;
   }
@@ -245,7 +245,7 @@ D3D12_FILTER_TYPE GetFilterType(const nlohmann::json& j, const char* const name)
   return (strcmp(str.data(), "linear") == 0) ? D3D12_FILTER_TYPE_LINEAR : D3D12_FILTER_TYPE_POINT;
 }
 D3D12_TEXTURE_ADDRESS_MODE GetAddressMode(const nlohmann::json& j) {
-  auto str = j.get<std::string_view>().data();
+  auto str = GetStringView(j).data();
   if (strcmp(str, "wrap") == 0) {
     return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
   }
@@ -267,7 +267,7 @@ D3D12_TEXTURE_ADDRESS_MODE GetAddressMode(const nlohmann::json& j) {
 }
 D3D12_COMPARISON_FUNC GetComparisonFunc(const nlohmann::json& j, const char* const name) {
   if (!j.contains(name)) { return D3D12_COMPARISON_FUNC_NEVER; }
-  auto str = j.at(name).get<std::string_view>().data();
+  auto str = GetStringView(j, name).data();
   if (strcmp(str, "never") == 0) {
     return D3D12_COMPARISON_FUNC_NEVER;
   }

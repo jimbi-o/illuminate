@@ -5,6 +5,9 @@
 #include "illuminate/util/hash_map.h"
 #include <nlohmann/json.hpp>
 namespace illuminate {
+inline auto GetStringView(const nlohmann::json& j) {
+  return j.get<std::string_view>();
+}
 inline auto GetStringView(const nlohmann::json& j, const char* const name) {
   return j.at(name).get<std::string_view>();
 }
@@ -87,7 +90,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
     r.swapchain_format = GetDxgiFormat(swapchain, "format");
     auto usage_list = swapchain.at("usage");
     for (auto& usage : usage_list) {
-      auto usage_str = usage.get<std::string_view>();
+      auto usage_str = GetStringView(usage);
       if (usage_str.compare("READ_ONLY") == 0) {
         r.swapchain_usage = DXGI_USAGE_READ_ONLY;
       }
@@ -157,7 +160,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
         dst_pass.sampler_index_list = AllocateArray<uint32_t>(allocator, dst_pass.sampler_num);
         const auto& graph_sampler_list = j.at("sampler");
         for (uint32_t s = 0; s < dst_pass.sampler_num; s++) {
-          auto sampler_name = sampler[s].get<std::string_view>().data();
+          auto sampler_name = GetStringView(sampler[s]).data();
           for (uint32_t graph_s = 0; graph_s < r.sampler_num; graph_s++) {
             if (GetStringView(graph_sampler_list[graph_s], "name").compare(sampler_name) == 0) {
               dst_pass.sampler_index_list[s] = graph_s;
@@ -185,7 +188,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
         dst_pass.flip_pingpong_index_list = AllocateArray<uint32_t>(allocator, dst_pass.flip_pingpong_num);
         auto& buffer_config_list = j.at("buffer");
         for (uint32_t p = 0; p < dst_pass.flip_pingpong_num; p++) {
-          const auto str = pingpong[p].get<std::string_view>();
+          const auto str = GetStringView(pingpong[p]);
           for (uint32_t b = 0; b < r.buffer_num; b++) {
             if (str.compare(buffer_config_list[b].at("name")) == 0) {
               dst_pass.flip_pingpong_index_list[p] = b;
@@ -204,7 +207,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
         dst_pass.signal_queue_index = AllocateArray<uint32_t>(allocator, dst_pass.wait_pass_num);
         dst_pass.signal_pass_index = AllocateArray<uint32_t>(allocator, dst_pass.wait_pass_num);
         for (uint32_t p = 0; p < dst_pass.wait_pass_num; p++) {
-          const auto str = wait_pass[p].get<std::string_view>().data();
+          const auto str = GetStringView(wait_pass[p]).data();
           const auto hash = CalcStrHash(str);
           for (uint32_t graph_index = 0; graph_index < r.render_pass_num; graph_index++) {
             if (dst_pass.index == graph_index) { continue; }
