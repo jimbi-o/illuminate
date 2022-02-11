@@ -32,7 +32,7 @@ IDxcIncludeHandler* CreateDxcIncludeHandler(IDxcUtils* utils) {
   logerror("CreateDefaultIncludeHandler failed. {}", hr);
   return nullptr;
 }
-IDxcResult* CompileShader(IDxcCompiler3* compiler, const uint32_t len, const void* data, const uint32_t compiler_arg_num, LPCWSTR* compiler_args, IDxcIncludeHandler* include_handler){
+IDxcResult* CompileShader(IDxcCompiler3* compiler, const uint32_t len, const void* data, const uint32_t compiler_arg_num, LPCWSTR* compiler_args, IDxcIncludeHandler* include_handler) {
   DxcBuffer buffer{
     .Ptr = data,
     .Size = len,
@@ -484,7 +484,7 @@ void MainCs() {}
     rootsig->Release();
   }
   {
-    // dispatch cs
+    // prez
     uint32_t args_num = 0;
     wchar_t** args{};
     const auto& json_rootsig = json.at("material").at("rootsig")[1];
@@ -605,4 +605,267 @@ void MainPs() {}
   shader_compiler.Term();
   device.Term();
   dxgi_core.Term();
+}
+namespace illuminate {
+namespace {
+static const uint32_t kPsoDescShaderObjectMaxNum = 2;
+struct PsoDescGraphicsShaderObject {
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{};
+  D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
+};
+struct PsoDescGraphics {
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
+  ID3D12RootSignature* root_signature{nullptr};
+  PsoDescGraphicsShaderObject shader_object[kPsoDescShaderObjectMaxNum]{};
+  D3D12_RASTERIZER_DESC rasterizer{
+    .FillMode = D3D12_FILL_MODE_SOLID,
+    .CullMode = D3D12_CULL_MODE_BACK,
+    .FrontCounterClockwise = true,
+    .DepthBias = 0,
+    .DepthBiasClamp = 0.0f,
+    .SlopeScaledDepthBias = 1.0f,
+    .DepthClipEnable = true,
+    .MultisampleEnable = false,
+    .AntialiasedLineEnable = false,
+    .ForcedSampleCount = 0,
+    .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+  };
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_input_layout{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT};
+  D3D12_INPUT_LAYOUT_DESC input_layout{};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_primitive_topology{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY};
+  D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology{D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_render_target_formats{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS};
+  D3D12_RT_FORMAT_ARRAY render_target_formats{};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil_format{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT};
+  DXGI_FORMAT depth_stencil_format{};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil1{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1};
+  D3D12_DEPTH_STENCIL_DESC1 depth_stencil1{
+    .DepthEnable = true,
+    .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+    .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+    .StencilEnable = false,
+    .StencilReadMask = 255U,
+    .StencilWriteMask = 255U,
+    .FrontFace = {
+      .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilPassOp = D3D12_STENCIL_OP_REPLACE,
+      .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+    },
+    .BackFace = {
+      .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+      .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+    },
+    .DepthBoundsTestEnable = false,
+  };
+};
+struct PsoDescCompute {
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
+  ID3D12RootSignature* root_signature{nullptr};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
+  D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
+};
+union PsoDesc {
+  PsoDescGraphics graphics;
+  PsoDescCompute compute;
+};
+struct PsoConfig {
+  uint32_t shader_object_num{0};
+  uint32_t* compile_result_list_index{nullptr};
+  uint32_t rootsig_index{0};
+  PsoDesc pso_desc{};
+};
+struct ShaderConfig {
+  uint32_t compile_result_num{0};
+  uint32_t* compile_args_num{nullptr};
+  wchar_t*** compile_args{nullptr};
+  uint32_t rootsig_num{0};
+  uint32_t* rootsig_compile_result_index{nullptr};
+  uint32_t pso_num{0};
+  PsoConfig* pso_config_list{nullptr};
+};
+auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* allocator, const char** shader_code_list_names) {
+  ShaderConfig config{};
+  const auto& compile_default = json.at("compile_default");
+  {
+    const auto& compile_entity = json.at("compile_entity");
+    config.compile_result_num = GetUint32(compile_entity.size());
+    config.compile_args_num = AllocateArray<uint32_t>(allocator, config.compile_result_num);
+    config.compile_args = AllocateArray<wchar_t**>(allocator, config.compile_result_num);
+    for (uint32_t i = 0; i < config.compile_result_num; i++) {
+      config.compile_args_num[i] = 4;
+      const auto& entity = compile_entity[i];
+      if (entity.contains("args")) {
+        config.compile_args_num[i] += GetUint32(entity.at("args").size());
+      }
+      config.compile_args[i] = AllocateArray<wchar_t*>(allocator, config.compile_args_num[i]);
+      uint32_t args_index = 0;
+      CopyStrToWstrContainer(&config.compile_args[i][args_index], "-T", allocator);
+      args_index++;
+      const auto target_str = GetStringView(entity, "target");
+      if (target_str.compare("ps") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_ps"), allocator);
+      } else if (target_str.compare("vs") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_vs"), allocator);
+      } else if (target_str.compare("gs") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_gs"), allocator);
+      } else if (target_str.compare("hs") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_hs"), allocator);
+      } else if (target_str.compare("ds") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_ds"), allocator);
+      } else if (target_str.compare("cs") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_cs"), allocator);
+      } else if (target_str.compare("lib") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_lib"), allocator);
+      } else if (target_str.compare("ms") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_ms"), allocator);
+      } else if (target_str.compare("s") == 0) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_s"), allocator);
+      } else {
+        logerror("invalid shader compile target {}", target_str);
+        assert(false && "invalid shader compile target");
+      }
+      args_index++;
+      CopyStrToWstrContainer(&config.compile_args[i][args_index], "-E", allocator);
+      args_index++;
+      if (entity.contains("entry")) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], entity.at("entry"), allocator);
+      } else {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], "main", allocator);
+      }
+      args_index++;
+      if (entity.contains("args")) {
+        const auto& args = entity.at("args");
+        for (uint32_t j = 0; j < args.size(); j++) {
+          CopyStrToWstrContainer(&config.compile_args[i][args_index + j], args[j], allocator);
+        }
+      }
+    }
+  }
+  return config;
+}
+auto CompileShader(IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, const char* shader_code, const uint32_t compile_args_num, LPCWSTR* compile_args) {
+  return CompileShader(compiler, GetUint32(strlen(shader_code)), shader_code, compile_args_num, compile_args, include_handler);
+}
+auto FillPsoConfig(const uint32_t shader_object_num, IDxcBlob** shader_object_list, PsoDesc* desc) {
+  assert(false);
+  return 0;
+}
+} // anonymous namespace
+} // namespace illuminate
+TEST_CASE("rootsig/pso") {
+  using namespace illuminate;
+  DxgiCore dxgi_core;
+  CHECK_UNARY(dxgi_core.Init()); // NOLINT
+  Device device;
+  CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
+  auto library = LoadDxcLibrary();
+  CHECK_NE(library, nullptr);
+  auto compiler = CreateDxcShaderCompiler(library);
+  CHECK_NE(compiler, nullptr); // NOLINT
+  auto utils = CreateDxcUtils(library);
+  CHECK_NE(utils, nullptr); // NOLINT
+  auto include_handler = CreateDxcIncludeHandler(utils);
+  CHECK_NE(include_handler, nullptr); // NOLINT
+  auto json = R"(
+{
+  "compile_default": {
+    "target_ps": "ps_6_6",
+    "target_vs": "vs_6_6",
+    "target_gs": "gs_6_6",
+    "target_hs": "hs_6_6",
+    "target_ds": "ds_6_6",
+    "target_cs": "cs_6_6",
+    "target_lib": "lib_6_6",
+    "target_ms": "ms_6_6",
+    "target_as": "as_6_6"
+  },
+  "compile_entity": [
+    {
+      "name": "rootsig dispatch cs",
+      "target": "cs",
+      "entry": "main",
+      "args": ["-Zi","-Qstrip_reflect"]
+    }
+  ]
+}
+)"_json;
+  const char* shader_code_list_names[] = {
+    "dispatch cs",
+  };
+  auto shader_code_dispatch_cs = R"(
+RWTexture2D<float4> uav : register(u0);
+#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
+[RootSignature(FillScreenCsRootsig)]
+[numthreads(32,32,1)]
+void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
+  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
+}
+)";
+  const char* shader_code_list[] = {
+    shader_code_dispatch_cs,
+  };
+  auto allocator = GetTemporalMemoryAllocator();
+  auto shader_config = ParseShaderConfigJson(json, &allocator, shader_code_list_names);
+  CHECK_EQ(shader_config.compile_result_num, 1);
+  CHECK_EQ(shader_config.compile_args_num[0], 6);
+  CHECK_EQ(wcscmp(shader_config.compile_args[0][0], L"-T"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[0][1], L"cs_6_6"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[0][2], L"-E"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[0][3], L"main"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[0][4], L"-Zi"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[0][5], L"-Qstrip_reflect"), 0);
+  CHECK_EQ(shader_config.rootsig_num, 1);
+  CHECK_EQ(shader_config.rootsig_compile_result_index[0], 0);
+  CHECK_EQ(shader_config.pso_num, 1);
+  CHECK_EQ(shader_config.pso_config_list[0].shader_object_num, 1);
+  CHECK_EQ(shader_config.pso_config_list[0].compile_result_list_index[0], 0);
+  CHECK_EQ(shader_config.pso_config_list[0].rootsig_index, 0);
+  CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_root_signature, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE);
+  CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_shader_bytecode, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS);
+  auto compile_result_list = AllocateArray<IDxcResult*>(&allocator, shader_config.compile_result_num);
+  auto rootsig_list = AllocateArray<ID3D12RootSignature*>(&allocator, shader_config.rootsig_num);
+  auto pso_list = AllocateArray<ID3D12PipelineState*>(&allocator, shader_config.pso_num);
+  for (uint32_t i = 0; i < shader_config.compile_result_num; i++) {
+    auto tmp_allocator = GetTemporalMemoryAllocator();
+    compile_result_list[i] = CompileShader(compiler, include_handler, shader_code_list[i], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
+    CHECK_UNARY(compile_result_list[i]);
+  }
+  for (uint32_t i = 0; i < shader_config.rootsig_num; i++) {
+    rootsig_list[i] = CreateRootSignatureLocal(device.Get(), compile_result_list[shader_config.rootsig_compile_result_index[i]]);
+    CHECK_UNARY(rootsig_list[i]);
+  }
+  for (uint32_t i = 0; i < shader_config.pso_num; i++) {
+    auto tmp_allocator = GetTemporalMemoryAllocator();
+    auto& config = shader_config.pso_config_list[i];
+    auto shader_object_list = AllocateArray<IDxcBlob*>(&tmp_allocator, config.shader_object_num);
+    for (uint32_t j = 0; j < config.shader_object_num; j++) {
+      shader_object_list[j] = GetShaderObject(compile_result_list[config.compile_result_list_index[j]]);
+      CHECK_UNARY(shader_object_list[j]);
+    }
+    const auto desc_size = FillPsoConfig(config.shader_object_num, shader_object_list, &config.pso_desc);
+    CHECK_EQ(shader_config.pso_config_list[i].pso_desc.compute.root_signature, rootsig_list[config.rootsig_index]);
+    CHECK_EQ(shader_config.pso_config_list[i].pso_desc.compute.shader_bytecode.pShaderBytecode, shader_object_list[0]->GetBufferPointer());
+    CHECK_EQ(shader_config.pso_config_list[i].pso_desc.compute.shader_bytecode.BytecodeLength, shader_object_list[0]->GetBufferSize());
+    CHECK_EQ(desc_size, sizeof(PsoDescCompute));
+    pso_list[i] = CreatePipelineState(device.Get(), desc_size, &config.pso_desc);
+    for (uint32_t j = 0; j < config.shader_object_num; j++) {
+      shader_object_list[j]->Release();
+    }
+  }
+  for (uint32_t i = 0; i < shader_config.pso_num; i++) {
+    pso_list[i]->Release();
+  }
+  for (uint32_t i = 0; i < shader_config.rootsig_num; i++) {
+    rootsig_list[i]->Release();
+  }
+  for (uint32_t i = 0; i < shader_config.compile_result_num; i++) {
+    compile_result_list[i]->Release();
+  }
+  CHECK_EQ(include_handler->Release(), 0);
+  CHECK_EQ(utils->Release(), 0);
+  CHECK_EQ(compiler->Release(), 0);
+  CHECK_UNARY(FreeLibrary(library));
 }
