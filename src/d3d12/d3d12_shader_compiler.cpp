@@ -686,7 +686,7 @@ struct ShaderConfig {
   uint32_t pso_num{0};
   PsoConfig* pso_config_list{nullptr};
 };
-auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* allocator, const char** shader_code_list_names) {
+auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* allocator) {
   ShaderConfig config{};
   const auto& compile_entity = json.at("compile_entity");
   {
@@ -744,8 +744,8 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
       }
     }
   }
+  const auto& rootsig = json.at("rootsig");
   {
-    const auto& rootsig = json.at("rootsig");
     config.rootsig_num = GetUint32(rootsig.size());
     config.rootsig_compile_result_index = AllocateArray<uint32_t>(allocator, config.rootsig_num);
     for (uint32_t i = 0; i < config.rootsig_num; i++) {
@@ -754,6 +754,39 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
         if (entity_name.compare(GetStringView(compile_entity[j], "name")) == 0) {
           config.rootsig_compile_result_index[i] = j;
           break;
+        }
+      }
+    }
+  }
+  {
+    const auto& pso = json.at("pso");
+    config.pso_num = GetUint32(pso.size());
+    config.pso_config_list = AllocateArray<PsoConfig>(allocator, config.pso_num);
+    for (uint32_t i = 0; i < config.pso_num; i++) {
+      const auto& pso_entity = pso[i];
+      const auto rootsig_name = GetStringView(pso_entity, "rootsig");
+      for (uint32_t j = 0; j < config.rootsig_num; j++) {
+        if (rootsig_name.compare(GetStringView(rootsig[j], "name")) == 0) {
+          config.pso_config_list[i].rootsig_index = j;
+          break;
+        }
+      }
+      const auto& entity_name_list = pso_entity.at("entity_list");
+      config.pso_config_list[i].shader_object_num = GetUint32(entity_name_list.size());
+      config.pso_config_list[i].compile_result_list_index = AllocateArray<uint32_t>(allocator, config.pso_config_list[i].shader_object_num);
+      for (uint32_t j = 0; j < config.pso_config_list[i].shader_object_num; j++) {
+        for (uint32_t k = 0; k < config.compile_result_num; k++) {
+          const auto entity_name = GetStringView(entity_name_list[j]);
+          if (entity_name.compare(GetStringView(compile_entity[k], "name")) == 0) {
+            config.pso_config_list[i].compile_result_list_index[j] = k;
+            if (compile_entity[k].at("target") == "cs") {
+              config.pso_config_list[i].pso_desc.compute.type_root_signature = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
+              config.pso_config_list[i].pso_desc.compute.type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
+            } else {
+              assert(false && "graphics pso not implemented yet");
+            }
+            break;
+          }
         }
       }
     }
@@ -809,12 +842,16 @@ TEST_CASE("rootsig/pso") {
       "name": "rootsig dispatch cs",
       "entity_name": "compile entity dispatch cs"
     }
+  ],
+  "pso": [
+    {
+      "name": "pso dispatch cs",
+      "rootsig": "rootsig dispatch cs",
+      "entity_list": ["compile entity dispatch cs"]
+    }
   ]
 }
 )"_json;
-  const char* shader_code_list_names[] = {
-    "dispatch cs",
-  };
   auto shader_code_dispatch_cs = R"(
 RWTexture2D<float4> uav : register(u0);
 #define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
@@ -828,7 +865,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     shader_code_dispatch_cs,
   };
   auto allocator = GetTemporalMemoryAllocator();
-  auto shader_config = ParseShaderConfigJson(json, &allocator, shader_code_list_names);
+  auto shader_config = ParseShaderConfigJson(json, &allocator);
   CHECK_EQ(shader_config.compile_result_num, 1);
   CHECK_EQ(shader_config.compile_args_num[0], 6);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][0], L"-T"), 0);
