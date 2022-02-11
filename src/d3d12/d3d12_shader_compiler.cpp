@@ -688,9 +688,9 @@ struct ShaderConfig {
 };
 auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* allocator, const char** shader_code_list_names) {
   ShaderConfig config{};
-  const auto& compile_default = json.at("compile_default");
+  const auto& compile_entity = json.at("compile_entity");
   {
-    const auto& compile_entity = json.at("compile_entity");
+    const auto& compile_default = json.at("compile_default");
     config.compile_result_num = GetUint32(compile_entity.size());
     config.compile_args_num = AllocateArray<uint32_t>(allocator, config.compile_result_num);
     config.compile_args = AllocateArray<wchar_t**>(allocator, config.compile_result_num);
@@ -744,6 +744,20 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
       }
     }
   }
+  {
+    const auto& rootsig = json.at("rootsig");
+    config.rootsig_num = GetUint32(rootsig.size());
+    config.rootsig_compile_result_index = AllocateArray<uint32_t>(allocator, config.rootsig_num);
+    for (uint32_t i = 0; i < config.rootsig_num; i++) {
+      const auto entity_name = GetStringView(rootsig[i], "entity_name");
+      for (uint32_t j = 0; j < config.compile_result_num; j++) {
+        if (entity_name.compare(GetStringView(compile_entity[j], "name")) == 0) {
+          config.rootsig_compile_result_index[i] = j;
+          break;
+        }
+      }
+    }
+  }
   return config;
 }
 auto CompileShader(IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, const char* shader_code, const uint32_t compile_args_num, LPCWSTR* compile_args) {
@@ -784,10 +798,16 @@ TEST_CASE("rootsig/pso") {
   },
   "compile_entity": [
     {
-      "name": "rootsig dispatch cs",
+      "name": "compile entity dispatch cs",
       "target": "cs",
       "entry": "main",
       "args": ["-Zi","-Qstrip_reflect"]
+    }
+  ],
+  "rootsig": [
+    {
+      "name": "rootsig dispatch cs",
+      "entity_name": "compile entity dispatch cs"
     }
   ]
 }
