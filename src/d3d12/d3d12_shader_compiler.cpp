@@ -312,30 +312,30 @@ union PsoDesc {
 };
 struct PsoConfig {
   uint32_t shader_object_num{0};
-  uint32_t* compile_result_list_index{nullptr};
+  uint32_t* compile_unit_list_index{nullptr};
   uint32_t rootsig_index{0};
   PsoDesc pso_desc{};
 };
 struct ShaderConfig {
-  uint32_t compile_result_num{0};
+  uint32_t compile_unit_num{0};
   uint32_t* compile_args_num{nullptr};
   wchar_t*** compile_args{nullptr};
   uint32_t rootsig_num{0};
-  uint32_t* rootsig_compile_result_index{nullptr};
+  uint32_t* rootsig_compile_unit_index{nullptr};
   uint32_t pso_num{0};
   PsoConfig* pso_config_list{nullptr};
 };
 auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* allocator) {
   ShaderConfig config{};
-  const auto& compile_entity = json.at("compile_entity");
+  const auto& compile_unit = json.at("compile_unit");
   {
     const auto& compile_default = json.at("compile_default");
-    config.compile_result_num = GetUint32(compile_entity.size());
-    config.compile_args_num = AllocateArray<uint32_t>(allocator, config.compile_result_num);
-    config.compile_args = AllocateArray<wchar_t**>(allocator, config.compile_result_num);
-    for (uint32_t i = 0; i < config.compile_result_num; i++) {
+    config.compile_unit_num = GetUint32(compile_unit.size());
+    config.compile_args_num = AllocateArray<uint32_t>(allocator, config.compile_unit_num);
+    config.compile_args = AllocateArray<wchar_t**>(allocator, config.compile_unit_num);
+    for (uint32_t i = 0; i < config.compile_unit_num; i++) {
       config.compile_args_num[i] = 4;
-      const auto& entity = compile_entity[i];
+      const auto& entity = compile_unit[i];
       if (entity.contains("args")) {
         config.compile_args_num[i] += GetUint32(entity.at("args").size());
       }
@@ -386,12 +386,12 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
   const auto& rootsig = json.at("rootsig");
   {
     config.rootsig_num = GetUint32(rootsig.size());
-    config.rootsig_compile_result_index = AllocateArray<uint32_t>(allocator, config.rootsig_num);
+    config.rootsig_compile_unit_index = AllocateArray<uint32_t>(allocator, config.rootsig_num);
     for (uint32_t i = 0; i < config.rootsig_num; i++) {
       const auto entity_name = GetStringView(rootsig[i], "entity_name");
-      for (uint32_t j = 0; j < config.compile_result_num; j++) {
-        if (entity_name.compare(GetStringView(compile_entity[j], "name")) == 0) {
-          config.rootsig_compile_result_index[i] = j;
+      for (uint32_t j = 0; j < config.compile_unit_num; j++) {
+        if (entity_name.compare(GetStringView(compile_unit[j], "name")) == 0) {
+          config.rootsig_compile_unit_index[i] = j;
           break;
         }
       }
@@ -412,13 +412,13 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
       }
       const auto& entity_name_list = pso_entity.at("entity_list");
       config.pso_config_list[i].shader_object_num = GetUint32(entity_name_list.size());
-      config.pso_config_list[i].compile_result_list_index = AllocateArray<uint32_t>(allocator, config.pso_config_list[i].shader_object_num);
+      config.pso_config_list[i].compile_unit_list_index = AllocateArray<uint32_t>(allocator, config.pso_config_list[i].shader_object_num);
       for (uint32_t j = 0; j < config.pso_config_list[i].shader_object_num; j++) {
-        for (uint32_t k = 0; k < config.compile_result_num; k++) {
+        for (uint32_t k = 0; k < config.compile_unit_num; k++) {
           const auto entity_name = GetStringView(entity_name_list[j]);
-          if (entity_name.compare(GetStringView(compile_entity[k], "name")) == 0) {
-            config.pso_config_list[i].compile_result_list_index[j] = k;
-            if (compile_entity[k].at("target") == "cs") {
+          if (entity_name.compare(GetStringView(compile_unit[k], "name")) == 0) {
+            config.pso_config_list[i].compile_unit_list_index[j] = k;
+            if (compile_unit[k].at("target") == "cs") {
               config.pso_config_list[i].pso_desc.compute.type_root_signature = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
               config.pso_config_list[i].pso_desc.compute.type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
             } else {
@@ -480,7 +480,7 @@ TEST_CASE("rootsig/pso") {
     "target_ms": "ms_6_6",
     "target_as": "as_6_6"
   },
-  "compile_entity": [
+  "compile_unit": [
     {
       "name": "compile entity dispatch cs",
       "target": "cs",
@@ -517,7 +517,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   };
   auto allocator = GetTemporalMemoryAllocator();
   auto shader_config = ParseShaderConfigJson(json, &allocator);
-  CHECK_EQ(shader_config.compile_result_num, 1);
+  CHECK_EQ(shader_config.compile_unit_num, 1);
   CHECK_EQ(shader_config.compile_args_num[0], 6);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][0], L"-T"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][1], L"cs_6_6"), 0);
@@ -526,26 +526,26 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   CHECK_EQ(wcscmp(shader_config.compile_args[0][4], L"-Zi"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][5], L"-Qstrip_reflect"), 0);
   CHECK_EQ(shader_config.rootsig_num, 1);
-  CHECK_EQ(shader_config.rootsig_compile_result_index[0], 0);
+  CHECK_EQ(shader_config.rootsig_compile_unit_index[0], 0);
   CHECK_EQ(shader_config.pso_num, 1);
   CHECK_EQ(shader_config.pso_config_list[0].shader_object_num, 1);
-  CHECK_EQ(shader_config.pso_config_list[0].compile_result_list_index[0], 0);
+  CHECK_EQ(shader_config.pso_config_list[0].compile_unit_list_index[0], 0);
   CHECK_EQ(shader_config.pso_config_list[0].rootsig_index, 0);
   CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_root_signature, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE);
   CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_shader_bytecode, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS);
-  auto compile_result_list = AllocateArray<IDxcResult*>(&allocator, shader_config.compile_result_num);
-  auto shader_object_list = AllocateArray<IDxcBlob*>(&allocator, shader_config.compile_result_num);
+  auto compile_unit_list = AllocateArray<IDxcResult*>(&allocator, shader_config.compile_unit_num);
+  auto shader_object_list = AllocateArray<IDxcBlob*>(&allocator, shader_config.compile_unit_num);
   auto rootsig_list = AllocateArray<ID3D12RootSignature*>(&allocator, shader_config.rootsig_num);
   auto pso_list = AllocateArray<ID3D12PipelineState*>(&allocator, shader_config.pso_num);
-  for (uint32_t i = 0; i < shader_config.compile_result_num; i++) {
+  for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
-    compile_result_list[i] = CompileShader(compiler, include_handler, shader_code_list[i], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
-    CHECK_UNARY(compile_result_list[i]);
-    shader_object_list[i] = GetShaderObject(compile_result_list[i]);
+    compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[i], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
+    CHECK_UNARY(compile_unit_list[i]);
+    shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
     CHECK_UNARY(shader_object_list[i]);
   }
   for (uint32_t i = 0; i < shader_config.rootsig_num; i++) {
-    rootsig_list[i] = CreateRootSignatureLocal(device.Get(), compile_result_list[shader_config.rootsig_compile_result_index[i]]);
+    rootsig_list[i] = CreateRootSignatureLocal(device.Get(), compile_unit_list[shader_config.rootsig_compile_unit_index[i]]);
     CHECK_UNARY(rootsig_list[i]);
   }
   for (uint32_t i = 0; i < shader_config.pso_num; i++) {
@@ -553,7 +553,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     auto& config = shader_config.pso_config_list[i];
     auto pso_shader_object_list = AllocateArray<IDxcBlob*>(&tmp_allocator, config.shader_object_num);
     for (uint32_t j = 0; j < config.shader_object_num; j++) {
-      pso_shader_object_list[j] = shader_object_list[config.compile_result_list_index[j]];
+      pso_shader_object_list[j] = shader_object_list[config.compile_unit_list_index[j]];
       CHECK_UNARY(pso_shader_object_list[j]);
     }
     const auto desc_size = FillPsoConfig(rootsig_list[config.rootsig_index], config.shader_object_num, shader_object_list, &config.pso_desc);
@@ -569,9 +569,9 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   for (uint32_t i = 0; i < shader_config.rootsig_num; i++) {
     rootsig_list[i]->Release();
   }
-  for (uint32_t i = 0; i < shader_config.compile_result_num; i++) {
+  for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
     shader_object_list[i]->Release();
-    compile_result_list[i]->Release();
+    compile_unit_list[i]->Release();
   }
   CHECK_EQ(include_handler->Release(), 0);
   CHECK_EQ(utils->Release(), 0);
