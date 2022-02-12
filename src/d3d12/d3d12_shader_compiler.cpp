@@ -317,7 +317,10 @@ struct PsoConfig {
   PsoDesc pso_desc{};
 };
 struct ShaderConfig {
+  uint32_t file_num{0};
+  char** filename_list{nullptr};
   uint32_t compile_unit_num{0};
+  uint32_t* compile_unit_filename_index_list{nullptr};
   uint32_t* compile_args_num{nullptr};
   wchar_t*** compile_args{nullptr};
   uint32_t rootsig_num{0};
@@ -329,21 +332,65 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
   ShaderConfig config{};
   const auto& compile_unit = json.at("compile_unit");
   {
-    const auto& compile_default = json.at("compile_default");
     config.compile_unit_num = GetUint32(compile_unit.size());
+    for (uint32_t i = 0; i < config.compile_unit_num; i++) {
+      const auto str = GetStringView(compile_unit[i], "filename");
+      bool duplicate = false;
+      for (uint32_t j = 0; j < i; j++) {
+        if (str.compare(GetStringView(compile_unit[j], "filename")) == 0) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (!duplicate) {
+        config.file_num++;
+      }
+    }
+    config.filename_list = AllocateArray<char*>(allocator, config.file_num);
+    uint32_t file_index = 0;
+    for (uint32_t i = 0; i < config.compile_unit_num; i++) {
+      const auto str = GetStringView(compile_unit[i], "filename");
+      bool duplicate = false;
+      for (uint32_t j = 0; j < i; j++) {
+        if (str.compare(GetStringView(compile_unit[j], "filename")) == 0) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (!duplicate) {
+        const auto char_num = GetUint32(str.size() + 1);
+        config.filename_list[file_index] = AllocateArray<char>(allocator, char_num);
+        strcpy_s(config.filename_list[file_index], char_num, str.data());
+        file_index++;
+      }
+    }
+    assert(file_index == config.file_num && "pso creation file count bug");
+  }
+  {
+    const auto& compile_default = json.at("compile_default");
+    config.compile_unit_filename_index_list = AllocateArray<uint32_t>(allocator, config.compile_unit_num);
     config.compile_args_num = AllocateArray<uint32_t>(allocator, config.compile_unit_num);
     config.compile_args = AllocateArray<wchar_t**>(allocator, config.compile_unit_num);
     for (uint32_t i = 0; i < config.compile_unit_num; i++) {
       config.compile_args_num[i] = 4;
-      const auto& entity = compile_unit[i];
-      if (entity.contains("args")) {
-        config.compile_args_num[i] += GetUint32(entity.at("args").size());
+      const auto& unit = compile_unit[i];
+      {
+        const auto filename = GetStringView(unit, "filename");
+        for (uint32_t j = 0; j < config.file_num; j++) {
+          if (strcmp(filename.data(), config.filename_list[j]) == 0) {
+            config.compile_unit_filename_index_list[i] = j;
+            break;
+          }
+        }
+      }
+      if (unit.contains("args")) {
+        config.compile_args_num[i] += GetUint32(unit.at("args").size());
       }
       config.compile_args[i] = AllocateArray<wchar_t*>(allocator, config.compile_args_num[i]);
       uint32_t args_index = 0;
       CopyStrToWstrContainer(&config.compile_args[i][args_index], "-T", allocator);
       args_index++;
-      const auto target_str = GetStringView(entity, "target");
+      const auto target_str = GetStringView(unit, "target");
       if (target_str.compare("ps") == 0) {
         CopyStrToWstrContainer(&config.compile_args[i][args_index], GetStringView(compile_default, "target_ps"), allocator);
       } else if (target_str.compare("vs") == 0) {
@@ -369,14 +416,14 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
       args_index++;
       CopyStrToWstrContainer(&config.compile_args[i][args_index], "-E", allocator);
       args_index++;
-      if (entity.contains("entry")) {
-        CopyStrToWstrContainer(&config.compile_args[i][args_index], entity.at("entry"), allocator);
+      if (unit.contains("entry")) {
+        CopyStrToWstrContainer(&config.compile_args[i][args_index], unit.at("entry"), allocator);
       } else {
         CopyStrToWstrContainer(&config.compile_args[i][args_index], "main", allocator);
       }
       args_index++;
-      if (entity.contains("args")) {
-        const auto& args = entity.at("args");
+      if (unit.contains("args")) {
+        const auto& args = unit.at("args");
         for (uint32_t j = 0; j < args.size(); j++) {
           CopyStrToWstrContainer(&config.compile_args[i][args_index + j], args[j], allocator);
         }
@@ -388,9 +435,9 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
     config.rootsig_num = GetUint32(rootsig.size());
     config.rootsig_compile_unit_index = AllocateArray<uint32_t>(allocator, config.rootsig_num);
     for (uint32_t i = 0; i < config.rootsig_num; i++) {
-      const auto entity_name = GetStringView(rootsig[i], "entity_name");
+      const auto unit_name = GetStringView(rootsig[i], "unit_name");
       for (uint32_t j = 0; j < config.compile_unit_num; j++) {
-        if (entity_name.compare(GetStringView(compile_unit[j], "name")) == 0) {
+        if (unit_name.compare(GetStringView(compile_unit[j], "name")) == 0) {
           config.rootsig_compile_unit_index[i] = j;
           break;
         }
@@ -402,21 +449,21 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
     config.pso_num = GetUint32(pso.size());
     config.pso_config_list = AllocateArray<PsoConfig>(allocator, config.pso_num);
     for (uint32_t i = 0; i < config.pso_num; i++) {
-      const auto& pso_entity = pso[i];
-      const auto rootsig_name = GetStringView(pso_entity, "rootsig");
+      const auto& pso_unit = pso[i];
+      const auto rootsig_name = GetStringView(pso_unit, "rootsig");
       for (uint32_t j = 0; j < config.rootsig_num; j++) {
         if (rootsig_name.compare(GetStringView(rootsig[j], "name")) == 0) {
           config.pso_config_list[i].rootsig_index = j;
           break;
         }
       }
-      const auto& entity_name_list = pso_entity.at("entity_list");
-      config.pso_config_list[i].shader_object_num = GetUint32(entity_name_list.size());
+      const auto& unit_name_list = pso_unit.at("unit_list");
+      config.pso_config_list[i].shader_object_num = GetUint32(unit_name_list.size());
       config.pso_config_list[i].compile_unit_list_index = AllocateArray<uint32_t>(allocator, config.pso_config_list[i].shader_object_num);
       for (uint32_t j = 0; j < config.pso_config_list[i].shader_object_num; j++) {
         for (uint32_t k = 0; k < config.compile_unit_num; k++) {
-          const auto entity_name = GetStringView(entity_name_list[j]);
-          if (entity_name.compare(GetStringView(compile_unit[k], "name")) == 0) {
+          const auto unit_name = GetStringView(unit_name_list[j]);
+          if (unit_name.compare(GetStringView(compile_unit[k], "name")) == 0) {
             config.pso_config_list[i].compile_unit_list_index[j] = k;
             if (compile_unit[k].at("target") == "cs") {
               config.pso_config_list[i].pso_desc.compute.type_root_signature = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
@@ -482,7 +529,8 @@ TEST_CASE("rootsig/pso") {
   },
   "compile_unit": [
     {
-      "name": "compile entity dispatch cs",
+      "name": "compile unit dispatch cs",
+      "filename": "dispatch cs",
       "target": "cs",
       "entry": "main",
       "args": ["-Zi","-Qstrip_reflect"]
@@ -491,33 +539,24 @@ TEST_CASE("rootsig/pso") {
   "rootsig": [
     {
       "name": "rootsig dispatch cs",
-      "entity_name": "compile entity dispatch cs"
+      "unit_name": "compile unit dispatch cs"
     }
   ],
   "pso": [
     {
       "name": "pso dispatch cs",
       "rootsig": "rootsig dispatch cs",
-      "entity_list": ["compile entity dispatch cs"]
+      "unit_list": ["compile unit dispatch cs"]
     }
   ]
 }
 )"_json;
-  auto shader_code_dispatch_cs = R"(
-RWTexture2D<float4> uav : register(u0);
-#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
-[RootSignature(FillScreenCsRootsig)]
-[numthreads(32,32,1)]
-void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
-  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
-}
-)";
-  const char* shader_code_list[] = {
-    shader_code_dispatch_cs,
-  };
   auto allocator = GetTemporalMemoryAllocator();
   auto shader_config = ParseShaderConfigJson(json, &allocator);
+  CHECK_EQ(shader_config.file_num, 1);
+  CHECK_EQ(strcmp(shader_config.filename_list[0], "dispatch cs"), 0);
   CHECK_EQ(shader_config.compile_unit_num, 1);
+  CHECK_EQ(shader_config.compile_unit_filename_index_list[0], 0);
   CHECK_EQ(shader_config.compile_args_num[0], 6);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][0], L"-T"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][1], L"cs_6_6"), 0);
@@ -533,13 +572,25 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   CHECK_EQ(shader_config.pso_config_list[0].rootsig_index, 0);
   CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_root_signature, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE);
   CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_shader_bytecode, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS);
+  auto shader_code_dispatch_cs = R"(
+RWTexture2D<float4> uav : register(u0);
+#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
+[RootSignature(FillScreenCsRootsig)]
+[numthreads(32,32,1)]
+void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
+  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
+}
+)";
+  const char* shader_code_list[] = {
+    shader_code_dispatch_cs,
+  };
   auto compile_unit_list = AllocateArray<IDxcResult*>(&allocator, shader_config.compile_unit_num);
   auto shader_object_list = AllocateArray<IDxcBlob*>(&allocator, shader_config.compile_unit_num);
   auto rootsig_list = AllocateArray<ID3D12RootSignature*>(&allocator, shader_config.rootsig_num);
   auto pso_list = AllocateArray<ID3D12PipelineState*>(&allocator, shader_config.pso_num);
   for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
-    compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[i], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
+    compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[shader_config.compile_unit_filename_index_list[i]], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
     CHECK_UNARY(compile_unit_list[i]);
     shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
     CHECK_UNARY(shader_object_list[i]);
