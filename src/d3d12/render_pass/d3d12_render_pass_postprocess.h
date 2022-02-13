@@ -17,27 +17,7 @@ class RenderPassPostprocess {
   static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
-    auto allocator = GetTemporalMemoryAllocator();
-    std::wstring* wstr_args_vs{nullptr};
-    const wchar_t** args_vs{nullptr};
-    auto args_num_vs = GetShaderCompilerArgs(*args->json, "shader_compile_args_vs", &allocator, &wstr_args_vs, &args_vs);
-    assert(args_num_vs > 0);
-    std::wstring* wstr_args_ps{nullptr};
-    const wchar_t** args_ps{nullptr};
-    auto args_num_ps = GetShaderCompilerArgs(*args->json, "shader_compile_args_ps", &allocator, &wstr_args_ps, &args_ps);
-    assert(args_num_ps > 0);
-    ShaderCompiler::PsoDescVsPs pso_desc{};
-    pso_desc.render_target_formats.RTFormats[0] = args->main_buffer_format.swapchain;
-    pso_desc.render_target_formats.NumRenderTargets = 1;
-    pso_desc.depth_stencil1.DepthEnable = false;
-    if (!args->shader_compiler->CreateRootSignatureAndPsoVsPs(args->shader_code, static_cast<uint32_t>(strlen(args->shader_code)), args_num_vs, args_vs,
-                                                              args->shader_code, static_cast<uint32_t>(strlen(args->shader_code)), args_num_ps, args_ps,
-                                                              args->device, &pso_desc, &param->rootsig, &param->pso)) {
-      logerror("vs ps parse error");
-      assert(false && "vs ps parse error");
-    }
-    SetD3d12Name(param->rootsig, "rootsig_swapchain");
-    SetD3d12Name(param->pso, "pso_swapchain");
+    args->pso_rootsig_manager->FindMaterial(args->json->at("material"), &param->rootsig, &param->pso);
     if (args->json->contains("size_type")) {
       param->size_type = (GetStringView(args->json->at("size_type")).compare("swapchain_relative") == 0) ? BufferSizeRelativeness::kSwapchainRelative : BufferSizeRelativeness::kPrimaryBufferRelative;
     }
@@ -53,10 +33,7 @@ class RenderPassPostprocess {
     }
     return param;
   }
-  static void Term(void* ptr) {
-    auto param = static_cast<Param*>(ptr);
-    param->pso->Release();
-    param->rootsig->Release();
+  static void Term([[maybe_unused]]void* ptr) {
   }
   static void Update(RenderPassFuncArgsUpdate* args) {
     if (!args->ptr) { return; }

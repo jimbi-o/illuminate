@@ -189,7 +189,7 @@ bool ShaderCompiler::CreateRootSignatureAndPsoVsPs(const char* const shadercode_
   result_ps->Release();
   return true;
 }
-} // namespace illuminate
+} // namspace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_device.h"
 #include "d3d12_dxgi_core.h"
@@ -327,7 +327,7 @@ template <typename T>
 auto IncrementPtr(void* ptr, const std::size_t& increment_size) {
   return static_cast<T*>(reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(ptr) + increment_size));
 }
-void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* compile_unit_index_list, const nlohmann::json& compile_unit_list, void* dst) {
+void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* compile_unit_index_list, const nlohmann::json& compile_unit_list, const nlohmann::json& pso, void* dst) {
   auto rootsig =  static_cast<PsoDescRootSignature*>(dst);
   *rootsig = {};
   dst = IncrementPtr(dst, sizeof(PsoDescRootSignature));
@@ -375,6 +375,13 @@ void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* com
   dst = IncrementPtr(dst, sizeof(shader_bytecode_list[0]) * shader_bytecode_num);
   auto graphics_misc = static_cast<PsoDescGraphicsMisc*>(dst);
   *graphics_misc = {};
+  if (pso.contains("render_target_formats")) {
+    auto& render_target_formats = pso.at("render_target_formats");
+    graphics_misc->render_target_formats.NumRenderTargets = GetUint32(render_target_formats.size());
+    for (uint32_t i = 0; i < graphics_misc->render_target_formats.NumRenderTargets; i++) {
+      graphics_misc->render_target_formats.RTFormats[i] = GetDxgiFormat(GetStringView(render_target_formats[i]).data());
+    }
+  }
 }
 auto ParseShaderConfigJson(const nlohmann::json& json, MemoryAllocationJanitor* allocator) {
   ShaderConfig config{};
@@ -518,7 +525,7 @@ auto ParseShaderConfigJson(const nlohmann::json& json, MemoryAllocationJanitor* 
       }
       config.pso_config_list[i].pso_size = (compile_unit[config.pso_config_list[i].compile_unit_list_index[0]].at("target") == "cs") ? (sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode)) : (sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode) * config.pso_config_list[i].shader_object_num + sizeof(PsoDescGraphicsMisc));
       config.pso_config_list[i].pso_desc = allocator->Allocate(config.pso_config_list[i].pso_size);
-      FillPsoDescWithJsonConfig(config.pso_config_list[i].shader_object_num, config.pso_config_list[i].compile_unit_list_index, compile_unit, config.pso_config_list[i].pso_desc);
+      FillPsoDescWithJsonConfig(config.pso_config_list[i].shader_object_num, config.pso_config_list[i].compile_unit_list_index, compile_unit, pso_unit, config.pso_config_list[i].pso_desc);
     }
   }
   return config;
@@ -538,7 +545,77 @@ auto FillPsoPtr(ID3D12RootSignature* rootsig, const uint32_t shader_object_num, 
     shader_bytecode_list[i].shader_bytecode.BytecodeLength = shader_object_list[i]->GetBufferSize();
   }
 }
+void ParseJson(const nlohmann::json& json, const char** shader_code_list, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, D3d12Device* device,
+               HashMap<uint32_t, MemoryAllocationJanitor>* rootsig_index_map, uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
+               HashMap<uint32_t, MemoryAllocationJanitor>* pso_index_map, uint32_t* pso_num, ID3D12PipelineState*** pso_list,
+               MemoryAllocationJanitor* allocator) {
+  auto func_allocator = GetTemporalMemoryAllocator();
+  auto shader_config = ParseShaderConfigJson(json, &func_allocator);
+  auto compile_unit_list = AllocateArray<IDxcResult*>(&func_allocator, shader_config.compile_unit_num);
+  auto shader_object_list = AllocateArray<IDxcBlob*>(&func_allocator, shader_config.compile_unit_num);
+  *rootsig_num = shader_config.rootsig_num;
+  *pso_num = shader_config.pso_num;
+  *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, shader_config.rootsig_num);
+  *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, shader_config.pso_num);
+  for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
+    auto tmp_allocator = GetTemporalMemoryAllocator();
+    compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[shader_config.compile_unit_filename_index_list[i]], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
+    shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
+  }
+  for (uint32_t i = 0; i < shader_config.rootsig_num; i++) {
+    (*rootsig_list)[i] = CreateRootSignatureLocal(device, compile_unit_list[shader_config.rootsig_compile_unit_index[i]]);
+  }
+  for (uint32_t i = 0; i < shader_config.pso_num; i++) {
+    auto tmp_allocator = GetTemporalMemoryAllocator();
+    auto& config = shader_config.pso_config_list[i];
+    auto pso_shader_object_list = AllocateArray<IDxcBlob*>(&tmp_allocator, config.shader_object_num);
+    for (uint32_t j = 0; j < config.shader_object_num; j++) {
+      pso_shader_object_list[j] = shader_object_list[config.compile_unit_list_index[j]];
+    }
+    FillPsoPtr((*rootsig_list)[config.rootsig_index], config.shader_object_num, pso_shader_object_list, config.pso_desc);
+    (*pso_list)[i] = CreatePipelineState(device, config.pso_size, config.pso_desc);
+  }
+  for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
+    shader_object_list[i]->Release();
+    compile_unit_list[i]->Release();
+  }
+  const auto& json_pso_list = json.at("pso");
+  for (uint32_t i = 0; i < json_pso_list.size(); i++) {
+    const auto name = GetStringView(json_pso_list[i], "name");
+    const auto hash = CalcStrHash(name.data());
+    rootsig_index_map->Insert(hash, std::move(shader_config.pso_config_list[i].rootsig_index));
+    pso_index_map->InsertCopy(hash, i);
+    SetD3d12Name((*rootsig_list)[i], json_pso_list[i].at("rootsig"));
+    SetD3d12Name((*pso_list)[i], json_pso_list[i].at("name"));
+  }
+}
 } // anonymous namespace
+bool PsoRootsigManager::Init(const nlohmann::json& material_json, const char** shader_code_list, D3d12Device* device, MemoryAllocationJanitor* allocator) {
+  library_ = LoadDxcLibrary();
+  if (library_ == nullptr) { return false; }
+  compiler_ = CreateDxcShaderCompiler(library_);
+  if (compiler_ == nullptr) { return false; }
+   utils_ = CreateDxcUtils(library_);
+  if (compiler_ == nullptr) { return false; }
+  include_handler_ = CreateDxcIncludeHandler(utils_);
+  if (include_handler_ == nullptr) { return false; }
+  rootsig_index_.SetAllocator(allocator);
+  pso_index_.SetAllocator(allocator);
+  ParseJson(material_json, shader_code_list, compiler_, include_handler_, device, &rootsig_index_, &rootsig_num_, &rootsig_list_, &pso_index_, &pso_num_, &pso_list_, allocator);
+  return true;
+}
+void PsoRootsigManager::Term() {
+  for (uint32_t i = 0; i < pso_num_; i++) {
+    pso_list_[i]->Release();
+  }
+  for (uint32_t i = 0; i < rootsig_num_; i++) {
+    rootsig_list_[i]->Release();
+  }
+  include_handler_->Release();
+  utils_->Release();
+  compiler_->Release();
+  FreeLibrary(library_);
+}
 } // namespace illuminate
 TEST_CASE("rootsig/pso") {
   using namespace illuminate;
@@ -742,6 +819,29 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
     shader_object_list[i]->Release();
     compile_unit_list[i]->Release();
   }
+  {
+    HashMap<uint32_t, MemoryAllocationJanitor> rootsig_index(&allocator);
+    HashMap<uint32_t, MemoryAllocationJanitor> pso_index(&allocator);
+    uint32_t rootsig_num{0};
+    uint32_t pso_num{0};
+    ID3D12RootSignature** rootsig_list_check_parse_json{nullptr};
+    ID3D12PipelineState** pso_list_check_parse_json{nullptr};
+    ParseJson(json, shader_code_list, compiler, include_handler, device.Get(), &rootsig_index, &rootsig_num, &rootsig_list_check_parse_json, &pso_index, &pso_num, &pso_list_check_parse_json, &allocator);
+    CHECK_EQ(rootsig_num, 2);
+    CHECK_EQ(pso_num, 2);
+    CHECK_NE(rootsig_list_check_parse_json[0], nullptr);
+    CHECK_NE(rootsig_list_check_parse_json[1], nullptr);
+    CHECK_NE(pso_list_check_parse_json[0], nullptr);
+    CHECK_NE(pso_list_check_parse_json[1], nullptr);
+    CHECK_EQ(*(rootsig_index.Get(SID("pso dispatch cs"))), 0);
+    CHECK_EQ(*(rootsig_index.Get(SID("pso output to swapchain"))), 1);
+    CHECK_EQ(*(pso_index.Get(SID("pso dispatch cs"))), 0);
+    CHECK_EQ(*(pso_index.Get(SID("pso output to swapchain"))), 1);
+    rootsig_list_check_parse_json[0]->Release();
+    rootsig_list_check_parse_json[1]->Release();
+    pso_list_check_parse_json[0]->Release();
+    pso_list_check_parse_json[1]->Release();
+  }
   CHECK_EQ(include_handler->Release(), 0);
   CHECK_EQ(utils->Release(), 0);
   CHECK_EQ(compiler->Release(), 0);
@@ -750,3 +850,6 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   dxgi_core.Term();
   gSystemMemoryAllocator->Reset();
 }
+// TODO configure depth enable = false
+// TODO configure rtv format
+// TODO check d3d12 debug layer messages

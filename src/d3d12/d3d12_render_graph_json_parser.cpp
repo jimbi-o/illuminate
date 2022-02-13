@@ -23,12 +23,8 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const entity_name, const
   assert(false&& "FindIndex not found (2)");
   return ~0U;
 }
-DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name) {
-  if (!j.contains(entity_name)) {
-    logwarn("entity not found. {}", entity_name);
-    return DXGI_FORMAT_UNKNOWN;
-  }
-  auto format_str = GetStringView(j, entity_name);
+DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j) {
+  auto format_str = GetStringView(j);
   if (format_str.compare("UNKNOWN") == 0) {
     return DXGI_FORMAT_UNKNOWN;
   }
@@ -53,6 +49,13 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
   logerror("invalid format specified. {}", format_str.data());
   assert(false && "invalid format specified");
   return DXGI_FORMAT_UNKNOWN;
+}
+DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name) {
+  if (!j.contains(entity_name)) {
+    logwarn("entity not found. {}", entity_name);
+    return DXGI_FORMAT_UNKNOWN;
+  }
+  return GetDxgiFormat(j.at(entity_name));
 }
 ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   auto str = GetStringView(j);

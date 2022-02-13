@@ -20,6 +20,7 @@ struct RenderPassFuncArgsInit {
   const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_config_index{nullptr};
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
+  PsoRootsigManager* pso_rootsig_manager{nullptr};
 };
 struct RenderPassFuncArgsUpdate {
   void* pass_vars_ptr{nullptr};

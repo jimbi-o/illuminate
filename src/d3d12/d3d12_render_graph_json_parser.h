@@ -31,6 +31,7 @@ uint32_t FindIndex(const nlohmann::json& j, const char* const name, const uint32
 uint32_t FindIndex(const nlohmann::json& j, const char* const entity_name, const StrHash& name);
 D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
+DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j);
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetSamplerConfig(const nlohmann::json& j, D3D12_SAMPLER_DESC* sampler_desc);
 void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, const uint32_t barrier_num, Barrier* barrier_list);

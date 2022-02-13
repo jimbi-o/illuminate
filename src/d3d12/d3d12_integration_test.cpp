@@ -213,6 +213,113 @@ auto GetTestJson() {
   ],
   "gpu_handle_num_view": 16,
   "gpu_handle_num_sampler": 8,
+  "material": {
+    "compile_default": {
+      "target_ps": "ps_6_6",
+      "target_vs": "vs_6_6",
+      "target_gs": "gs_6_6",
+      "target_hs": "hs_6_6",
+      "target_ds": "ds_6_6",
+      "target_cs": "cs_6_6",
+      "target_lib": "lib_6_6",
+      "target_ms": "ms_6_6",
+      "target_as": "as_6_6"
+    },
+    "compile_unit": [
+      {
+        "name": "compile unit dispatch cs",
+        "filename": "dispatch cs",
+        "target": "cs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit output to swapchain vs",
+        "filename": "output to swapchain",
+        "target": "vs",
+        "entry": "MainVs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit output to swapchain ps",
+        "filename": "output to swapchain",
+        "target": "ps",
+        "entry": "MainPs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit pingpong-a vs",
+        "filename": "pingpong-a",
+        "target": "vs",
+        "entry": "MainVs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit pingpong-a ps",
+        "filename": "pingpong-a",
+        "target": "ps",
+        "entry": "MainPs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit pingpong-bc vs",
+        "filename": "pingpong-bc",
+        "target": "vs",
+        "entry": "MainVs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit pingpong-bc ps",
+        "filename": "pingpong-bc",
+        "target": "ps",
+        "entry": "MainPs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      }
+    ],
+    "rootsig": [
+      {
+        "name": "rootsig dispatch cs",
+        "unit_name": "compile unit dispatch cs"
+      },
+      {
+        "name": "rootsig output to swapchain",
+        "unit_name": "compile unit output to swapchain ps"
+      },
+      {
+        "name": "rootsig pingpong-a",
+        "unit_name": "compile unit pingpong-a ps"
+      },
+      {
+        "name": "rootsig pingpong-bc",
+        "unit_name": "compile unit pingpong-bc ps"
+      }
+    ],
+    "pso": [
+      {
+        "name": "pso dispatch cs",
+        "rootsig": "rootsig dispatch cs",
+        "unit_list": ["compile unit dispatch cs"],
+        "render_target_formats": ["R8G8B8A8_UNORM"]
+      },
+      {
+        "name": "pso output to swapchain",
+        "rootsig": "rootsig output to swapchain",
+        "unit_list": ["compile unit output to swapchain vs", "compile unit output to swapchain ps"],
+        "render_target_formats": ["R8G8B8A8_UNORM"]
+      },
+      {
+        "name": "pso pingpong-a",
+        "rootsig": "rootsig pingpong-a",
+        "unit_list": ["compile unit pingpong-a vs", "compile unit pingpong-a ps"],
+        "render_target_formats": ["R8G8B8A8_UNORM"]
+      },
+      {
+        "name": "pso pingpong-bc",
+        "rootsig": "rootsig pingpong-bc",
+        "unit_list": ["compile unit pingpong-bc vs", "compile unit pingpong-bc ps"],
+        "render_target_formats": ["R8G8B8A8_UNORM"]
+      }
+    ]
+  },
   "render_pass": [
     {
       "name": "copy resource",
@@ -278,10 +385,7 @@ auto GetTestJson() {
         }
       ],
       "pass_vars": {
-        "shader_vs": "test.vs.hlsl",
-        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
-        "shader_ps": "test.ps.hlsl",
-        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "material": "pso pingpong-a",
         "rtv_index": 1,
         "use_sampler": false,
         "cbv": "cbv-a"
@@ -321,10 +425,7 @@ auto GetTestJson() {
         }
       ],
       "pass_vars": {
-        "shader_vs": "test.vs.hlsl",
-        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
-        "shader_ps": "test.ps.hlsl",
-        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "material": "pso pingpong-bc",
         "rtv_index": 2,
         "cbv": "cbv-b"
       }
@@ -363,10 +464,7 @@ auto GetTestJson() {
         }
       ],
       "pass_vars": {
-        "shader_vs": "test.vs.hlsl",
-        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
-        "shader_ps": "test.ps.hlsl",
-        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "material": "pso pingpong-bc",
         "rtv_index": 2,
         "cbv": "cbv-c"
       }
@@ -438,10 +536,7 @@ auto GetTestJson() {
         }
       ],
       "pass_vars": {
-        "shader_vs": "test.vs.hlsl",
-        "shader_compile_args_vs":["-T", "vs_6_6", "-E", "MainVs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
-        "shader_ps": "test.ps.hlsl",
-        "shader_compile_args_ps":["-T", "ps_6_6", "-E", "MainPs", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "material": "pso output to swapchain",
         "size_type": "swapchain_relative",
         "rtv_index": 2,
         "use_views": true,
@@ -1031,6 +1126,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   DescriptorCpu descriptor_cpu;
   BufferList buffer_list;
   DescriptorGpu descriptor_gpu;
+  PsoRootsigManager pso_rootsig_manager;
   RenderGraph render_graph;
   void** render_pass_vars{nullptr};
   HashMap<uint32_t, MemoryAllocationJanitor> named_buffer_config_index(&allocator);
@@ -1092,6 +1188,103 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       device.Get()->CreateSampler(&render_graph.sampler_list[i], cpu_handler);
     }
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
+    {
+      auto shader_code_dispatch_cs = R"(
+RWTexture2D<float4> uav : register(u0);
+#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
+[RootSignature(FillScreenCsRootsig)]
+[numthreads(32,32,1)]
+void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
+  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
+}
+)";
+      auto shader_code_output_to_swapchain = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+Texture2D src : register(t0);
+Texture2D src1;
+Texture2D pingpong;
+SamplerState tex_sampler : register(s0);
+#define CopyFullscreenRootsig " \
+DescriptorTable(SRV(t0, numDescriptors=3), visibility=SHADER_VISIBILITY_PIXEL), \
+DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  float4 color = src.Sample(tex_sampler, input.texcoord);
+  color.r = src1.Sample(tex_sampler, input.texcoord).r;
+  color.g = pingpong.Sample(tex_sampler, input.texcoord).b;
+  return color;
+}
+)";
+      auto shader_code_pingpong_a = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+#define CopyFullscreenRootsig "\
+DescriptorTable(CBV(b0), visibility=SHADER_VISIBILITY_PIXEL),    \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  return cbv_color;
+}
+)";
+      auto shader_code_pingpong_bc = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+float4 cbv_color : register(b0);
+Texture2D src : register(t0);
+SamplerState tex_sampler : register(s0);
+#define CopyFullscreenRootsig " \
+DescriptorTable(CBV(b0),                                                \
+                SRV(t0, numDescriptors=1),                              \
+                visibility=SHADER_VISIBILITY_PIXEL),                    \
+DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  float4 color = src.Sample(tex_sampler, input.texcoord);
+  return color * cbv_color;
+}
+)";
+      const char* shader_code_list[] = {
+        shader_code_dispatch_cs,
+        shader_code_output_to_swapchain,
+        shader_code_pingpong_a,
+        shader_code_pingpong_bc,
+      };
+      CHECK_UNARY(pso_rootsig_manager.Init(json.at("material"), shader_code_list, device.Get(), &allocator));
+    }
     RenderPassFuncArgsInit render_pass_func_args_init{
       .json = nullptr,
       .shader_code = nullptr,
@@ -1106,6 +1299,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .named_buffer_config_index = &named_buffer_config_index,
       .buffer_list = &buffer_list,
       .buffer_config_list = render_graph.buffer_list,
+      .pso_rootsig_manager = &pso_rootsig_manager,
     };
     render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, &render_pass_func_args_init);
   }
@@ -1203,6 +1397,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   ReleaseSceneData(&scene_data);
   ReleaseRenderPassResources(render_graph.render_pass_num, render_graph.render_pass_list, render_pass_vars);
   swapchain.Term();
+  pso_rootsig_manager.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();
   RegisterResource(*named_buffer_config_index.Get(SID("swapchain")), nullptr, &buffer_list);

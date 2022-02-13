@@ -35,6 +35,10 @@ class HashMap {
     (*table_[index]) = std::move(val);
     return true;
   }
+  bool InsertCopy(const StrHash key, const T& val) {
+    auto v = val;
+    return Insert(key, std::move(v));
+  }
   void Reserve(const StrHash key) {
     table_[GetIndex(key)] = Allocate<T>(allocator_);
   }
