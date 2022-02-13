@@ -247,15 +247,16 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
 }
 namespace illuminate {
 namespace {
-static const uint32_t kPsoDescShaderObjectMaxNum = 2;
-struct PsoDescGraphicsShaderObject {
+struct PsoDescRootSignature {
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
+  ID3D12RootSignature* root_signature{nullptr};
+};
+struct PsoDescShaderBytecode {
   D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{};
   D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
 };
-struct PsoDescGraphics {
-  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
-  ID3D12RootSignature* root_signature{nullptr};
-  PsoDescGraphicsShaderObject shader_object[kPsoDescShaderObjectMaxNum]{};
+struct PsoDescGraphicsMisc {
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_rasterizer{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER};
   D3D12_RASTERIZER_DESC rasterizer{
     .FillMode = D3D12_FILL_MODE_SOLID,
     .CullMode = D3D12_CULL_MODE_BACK,
@@ -300,21 +301,12 @@ struct PsoDescGraphics {
     .DepthBoundsTestEnable = false,
   };
 };
-struct PsoDescCompute {
-  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
-  ID3D12RootSignature* root_signature{nullptr};
-  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
-  D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
-};
-union PsoDesc {
-  PsoDescGraphics graphics;
-  PsoDescCompute compute;
-};
 struct PsoConfig {
   uint32_t shader_object_num{0};
   uint32_t* compile_unit_list_index{nullptr};
   uint32_t rootsig_index{0};
-  PsoDesc pso_desc{};
+  void* pso_desc{nullptr};
+  uint32_t pso_size{0};
 };
 struct ShaderConfig {
   uint32_t file_num{0};
@@ -328,7 +320,63 @@ struct ShaderConfig {
   uint32_t pso_num{0};
   PsoConfig* pso_config_list{nullptr};
 };
-auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* allocator) {
+auto IncrementPtr(void* ptr, const std::size_t& increment_size) {
+  return reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(ptr) + increment_size);
+}
+template <typename T>
+auto IncrementPtr(void* ptr, const std::size_t& increment_size) {
+  return static_cast<T*>(reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(ptr) + increment_size));
+}
+void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* compile_unit_index_list, const nlohmann::json& compile_unit_list, void* dst) {
+  auto rootsig =  static_cast<PsoDescRootSignature*>(dst);
+  *rootsig = {};
+  dst = IncrementPtr(dst, sizeof(PsoDescRootSignature));
+  auto shader_bytecode_list = static_cast<PsoDescShaderBytecode*>(dst);
+  for (uint32_t i = 0; i < shader_bytecode_num; i++) {
+    shader_bytecode_list[i] = {};
+    auto target = compile_unit_list[compile_unit_index_list[i]].at("target");
+    if (target == "cs") {
+      assert(i == 0 && shader_bytecode_num == 1 && "invalid shader bytecode index for cs");
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
+      return;
+    }
+    if (target == "ps") {
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
+      continue;
+    }
+    if (target == "vs") {
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS;
+      continue;
+    }
+    if (target == "gs") {
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS;
+      continue;
+    }
+    if (target == "hs") {
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS;
+      continue;
+    }
+    if (target == "ds") {
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS;
+      continue;
+    }
+    if (target == "ms") {
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
+      continue;
+    }
+    if (target == "as") {
+      shader_bytecode_list[i].type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
+      continue;
+    }
+    logerror("target not implemented {}", target);
+    assert(false && "target not implemented");
+    return;
+  }
+  dst = IncrementPtr(dst, sizeof(shader_bytecode_list[0]) * shader_bytecode_num);
+  auto graphics_misc = static_cast<PsoDescGraphicsMisc*>(dst);
+  *graphics_misc = {};
+}
+auto ParseShaderConfigJson(const nlohmann::json& json, MemoryAllocationJanitor* allocator) {
   ShaderConfig config{};
   const auto& compile_unit = json.at("compile_unit");
   {
@@ -462,19 +510,15 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
       config.pso_config_list[i].compile_unit_list_index = AllocateArray<uint32_t>(allocator, config.pso_config_list[i].shader_object_num);
       for (uint32_t j = 0; j < config.pso_config_list[i].shader_object_num; j++) {
         for (uint32_t k = 0; k < config.compile_unit_num; k++) {
-          const auto unit_name = GetStringView(unit_name_list[j]);
-          if (unit_name.compare(GetStringView(compile_unit[k], "name")) == 0) {
+          if (unit_name_list[j] == compile_unit[k].at("name")) {
             config.pso_config_list[i].compile_unit_list_index[j] = k;
-            if (compile_unit[k].at("target") == "cs") {
-              config.pso_config_list[i].pso_desc.compute.type_root_signature = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
-              config.pso_config_list[i].pso_desc.compute.type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
-            } else {
-              assert(false && "graphics pso not implemented yet");
-            }
             break;
           }
         }
       }
+      config.pso_config_list[i].pso_size = (compile_unit[config.pso_config_list[i].compile_unit_list_index[0]].at("target") == "cs") ? (sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode)) : (sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode) * config.pso_config_list[i].shader_object_num + sizeof(PsoDescGraphicsMisc));
+      config.pso_config_list[i].pso_desc = allocator->Allocate(config.pso_config_list[i].pso_size);
+      FillPsoDescWithJsonConfig(config.pso_config_list[i].shader_object_num, config.pso_config_list[i].compile_unit_list_index, compile_unit, config.pso_config_list[i].pso_desc);
     }
   }
   return config;
@@ -482,21 +526,17 @@ auto ParseShaderConfigJson(const nlohmann::json json, MemoryAllocationJanitor* a
 auto CompileShader(IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, const char* shader_code, const uint32_t compile_args_num, LPCWSTR* compile_args) {
   return CompileShader(compiler, GetUint32(strlen(shader_code)), shader_code, compile_args_num, compile_args, include_handler);
 }
-auto FillPsoConfig(ID3D12RootSignature* rootsig, const uint32_t shader_object_num, IDxcBlob** shader_object_list, PsoDesc* desc) {
-  if (desc->compute.type_shader_bytecode == D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS) {
-    assert(shader_object_num == 1);
-    desc->compute.root_signature = rootsig;
-    desc->compute.shader_bytecode.pShaderBytecode = shader_object_list[0]->GetBufferPointer();
-    desc->compute.shader_bytecode.BytecodeLength = shader_object_list[0]->GetBufferSize();
-    return sizeof(desc->compute);
+auto FillPsoPtr(ID3D12RootSignature* rootsig, const uint32_t shader_object_num, IDxcBlob** shader_object_list, void* dst) {
+  {
+    auto dst_rootsig =  static_cast<PsoDescRootSignature*>(dst);
+    dst_rootsig->root_signature = rootsig;
+    dst = IncrementPtr(dst, sizeof(PsoDescRootSignature));
   }
-  assert(shader_object_num <= kPsoDescShaderObjectMaxNum && "Currently, only vs-ps pso is implemented");
-  desc->graphics.root_signature = rootsig;
+  auto shader_bytecode_list = static_cast<PsoDescShaderBytecode*>(dst);
   for (uint32_t i = 0; i < shader_object_num; i++) {
-    desc->graphics.shader_object[i].shader_bytecode.pShaderBytecode = shader_object_list[i]->GetBufferPointer();
-    desc->graphics.shader_object[i].shader_bytecode.BytecodeLength = shader_object_list[i]->GetBufferSize();
+    shader_bytecode_list[i].shader_bytecode.pShaderBytecode = shader_object_list[i]->GetBufferPointer();
+    shader_bytecode_list[i].shader_bytecode.BytecodeLength = shader_object_list[i]->GetBufferSize();
   }
-  return sizeof(desc->graphics);
 }
 } // anonymous namespace
 } // namespace illuminate
@@ -532,14 +572,31 @@ TEST_CASE("rootsig/pso") {
       "name": "compile unit dispatch cs",
       "filename": "dispatch cs",
       "target": "cs",
-      "entry": "main",
       "args": ["-Zi","-Qstrip_reflect"]
+    },
+    {
+      "name": "compile unit output to swapchain vs",
+      "filename": "output to swapchain",
+      "target": "vs",
+      "entry": "MainVs",
+      "args": []
+    },
+    {
+      "name": "compile unit output to swapchain ps",
+      "filename": "output to swapchain",
+      "target": "ps",
+      "entry": "MainPs",
+      "args": ["-Qstrip_reflect"]
     }
   ],
   "rootsig": [
     {
       "name": "rootsig dispatch cs",
       "unit_name": "compile unit dispatch cs"
+    },
+    {
+      "name": "rootsig output to swapchain",
+      "unit_name": "compile unit output to swapchain ps"
     }
   ],
   "pso": [
@@ -547,16 +604,24 @@ TEST_CASE("rootsig/pso") {
       "name": "pso dispatch cs",
       "rootsig": "rootsig dispatch cs",
       "unit_list": ["compile unit dispatch cs"]
+    },
+    {
+      "name": "pso output to swapchain",
+      "rootsig": "rootsig output to swapchain",
+      "unit_list": ["compile unit output to swapchain vs", "compile unit output to swapchain ps"]
     }
   ]
 }
 )"_json;
   auto allocator = GetTemporalMemoryAllocator();
   auto shader_config = ParseShaderConfigJson(json, &allocator);
-  CHECK_EQ(shader_config.file_num, 1);
+  CHECK_EQ(shader_config.file_num, 2);
   CHECK_EQ(strcmp(shader_config.filename_list[0], "dispatch cs"), 0);
-  CHECK_EQ(shader_config.compile_unit_num, 1);
+  CHECK_EQ(strcmp(shader_config.filename_list[1], "output to swapchain"), 0);
+  CHECK_EQ(shader_config.compile_unit_num, 3);
   CHECK_EQ(shader_config.compile_unit_filename_index_list[0], 0);
+  CHECK_EQ(shader_config.compile_unit_filename_index_list[1], 1);
+  CHECK_EQ(shader_config.compile_unit_filename_index_list[2], 1);
   CHECK_EQ(shader_config.compile_args_num[0], 6);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][0], L"-T"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][1], L"cs_6_6"), 0);
@@ -564,14 +629,33 @@ TEST_CASE("rootsig/pso") {
   CHECK_EQ(wcscmp(shader_config.compile_args[0][3], L"main"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][4], L"-Zi"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][5], L"-Qstrip_reflect"), 0);
-  CHECK_EQ(shader_config.rootsig_num, 1);
+  CHECK_EQ(shader_config.compile_args_num[1], 4);
+  CHECK_EQ(wcscmp(shader_config.compile_args[1][0], L"-T"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[1][1], L"vs_6_6"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[1][2], L"-E"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[1][3], L"MainVs"), 0);
+  CHECK_EQ(shader_config.compile_args_num[2], 5);
+  CHECK_EQ(wcscmp(shader_config.compile_args[2][0], L"-T"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[2][1], L"ps_6_6"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[2][2], L"-E"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[2][3], L"MainPs"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[2][4], L"-Qstrip_reflect"), 0);
+  CHECK_EQ(shader_config.rootsig_num, 2);
   CHECK_EQ(shader_config.rootsig_compile_unit_index[0], 0);
-  CHECK_EQ(shader_config.pso_num, 1);
+  CHECK_EQ(shader_config.rootsig_compile_unit_index[1], 2);
+  CHECK_EQ(shader_config.pso_num, 2);
   CHECK_EQ(shader_config.pso_config_list[0].shader_object_num, 1);
   CHECK_EQ(shader_config.pso_config_list[0].compile_unit_list_index[0], 0);
   CHECK_EQ(shader_config.pso_config_list[0].rootsig_index, 0);
-  CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_root_signature, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE);
-  CHECK_EQ(shader_config.pso_config_list[0].pso_desc.compute.type_shader_bytecode, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS);
+  CHECK_EQ(static_cast<PsoDescRootSignature*>(shader_config.pso_config_list[0].pso_desc)->type_root_signature, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE);
+  CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[0].pso_desc, sizeof(PsoDescRootSignature))->type_shader_bytecode, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS);
+  CHECK_EQ(shader_config.pso_config_list[1].shader_object_num, 2);
+  CHECK_EQ(shader_config.pso_config_list[1].compile_unit_list_index[0], 1);
+  CHECK_EQ(shader_config.pso_config_list[1].compile_unit_list_index[1], 2);
+  CHECK_EQ(shader_config.pso_config_list[1].rootsig_index, 1);
+  CHECK_EQ(static_cast<PsoDescRootSignature*>(shader_config.pso_config_list[1].pso_desc)->type_root_signature, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE);
+  CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature))->type_shader_bytecode, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS);
+  CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode))->type_shader_bytecode, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS);
   auto shader_code_dispatch_cs = R"(
 RWTexture2D<float4> uav : register(u0);
 #define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
@@ -581,8 +665,38 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
 }
 )";
+  auto shader_code_output_to_swapchain = R"(
+struct FullscreenTriangleVSOutput {
+  float4 position : SV_POSITION;
+  float2 texcoord : TEXCOORD0;
+};
+FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
+  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
+  FullscreenTriangleVSOutput output;
+  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
+  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
+  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
+  return output;
+}
+Texture2D src : register(t0);
+Texture2D src1;
+Texture2D pingpong;
+SamplerState tex_sampler : register(s0);
+#define CopyFullscreenRootsig " \
+DescriptorTable(SRV(t0, numDescriptors=3), visibility=SHADER_VISIBILITY_PIXEL), \
+DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
+"
+[RootSignature(CopyFullscreenRootsig)]
+float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
+  float4 color = src.Sample(tex_sampler, input.texcoord);
+  color.r = src1.Sample(tex_sampler, input.texcoord).r;
+  color.g = pingpong.Sample(tex_sampler, input.texcoord).b;
+  return color;
+}
+)";
   const char* shader_code_list[] = {
     shader_code_dispatch_cs,
+    shader_code_output_to_swapchain,
   };
   auto compile_unit_list = AllocateArray<IDxcResult*>(&allocator, shader_config.compile_unit_num);
   auto shader_object_list = AllocateArray<IDxcBlob*>(&allocator, shader_config.compile_unit_num);
@@ -605,14 +719,18 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
     auto pso_shader_object_list = AllocateArray<IDxcBlob*>(&tmp_allocator, config.shader_object_num);
     for (uint32_t j = 0; j < config.shader_object_num; j++) {
       pso_shader_object_list[j] = shader_object_list[config.compile_unit_list_index[j]];
-      CHECK_UNARY(pso_shader_object_list[j]);
     }
-    const auto desc_size = FillPsoConfig(rootsig_list[config.rootsig_index], config.shader_object_num, shader_object_list, &config.pso_desc);
-    CHECK_EQ(shader_config.pso_config_list[i].pso_desc.compute.root_signature, rootsig_list[config.rootsig_index]);
-    CHECK_EQ(shader_config.pso_config_list[i].pso_desc.compute.shader_bytecode.pShaderBytecode, shader_object_list[0]->GetBufferPointer());
-    CHECK_EQ(shader_config.pso_config_list[i].pso_desc.compute.shader_bytecode.BytecodeLength, shader_object_list[0]->GetBufferSize());
-    CHECK_EQ(desc_size, sizeof(PsoDescCompute));
-    pso_list[i] = CreatePipelineState(device.Get(), desc_size, &config.pso_desc);
+    FillPsoPtr(rootsig_list[config.rootsig_index], config.shader_object_num, pso_shader_object_list, config.pso_desc);
+    if (i == 0) {
+      CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[0].pso_desc, sizeof(PsoDescRootSignature))->shader_bytecode.pShaderBytecode, shader_object_list[0]->GetBufferPointer());
+      CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[0].pso_desc, sizeof(PsoDescRootSignature))->shader_bytecode.BytecodeLength, shader_object_list[0]->GetBufferSize());
+    } else {
+      CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature))->shader_bytecode.pShaderBytecode, shader_object_list[1]->GetBufferPointer());
+      CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature))->shader_bytecode.BytecodeLength, shader_object_list[1]->GetBufferSize());
+      CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode))->shader_bytecode.pShaderBytecode, shader_object_list[2]->GetBufferPointer());
+      CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode))->shader_bytecode.BytecodeLength, shader_object_list[2]->GetBufferSize());
+    }
+    pso_list[i] = CreatePipelineState(device.Get(), config.pso_size, config.pso_desc);
   }
   for (uint32_t i = 0; i < shader_config.pso_num; i++) {
     pso_list[i]->Release();
