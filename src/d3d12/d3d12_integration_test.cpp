@@ -665,76 +665,79 @@ auto GetTestTinyGltf() {
 }
 )";
 }
-auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, RenderPassFuncArgsInit* args) {
-  const auto render_pass_num = static_cast<uint32_t>(src_render_pass_list.size());
+auto PrepareRenderPassResources(const nlohmann::json& render_pass_list_json, const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator, RenderPassFuncArgsInit* args) {
   auto render_pass_vars = AllocateArray<void*>(allocator, render_pass_num);
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("dispatch cs"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassCsDispatch::Init(args);
-    CHECK_NE(render_pass_vars[index], nullptr);
-  }
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("prez"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassPrez::Init(args);
-    CHECK_NE(render_pass_vars[index], nullptr);
-  }
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("output to swapchain"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassPostprocess::Init(args);
-    CHECK_NE(render_pass_vars[index], nullptr);
-  }
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("imgui"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassImgui::Init(args);
-    CHECK_EQ(render_pass_vars[index], nullptr);
-  }
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("copy resource"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassCopyResource::Init(args);
-    CHECK_NE(render_pass_vars[index], nullptr);
-  }
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-a"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassPostprocess::Init(args);
-    CHECK_NE(render_pass_vars[index], nullptr);
-  }
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-b"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassPostprocess::Init(args);
-    CHECK_NE(render_pass_vars[index], nullptr);
-  }
-  {
-    const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-c"));
-    args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    render_pass_vars[index] = RenderPassPostprocess::Init(args);
-    CHECK_NE(render_pass_vars[index], nullptr);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    args->json = render_pass_list_json[i].contains("pass_vars") ? &render_pass_list_json[i].at("pass_vars") : nullptr;
+    switch (render_pass_list[i].name) {
+      case SID("dispatch cs"): {
+        render_pass_vars[i] = RenderPassCsDispatch::Init(args);
+        CHECK_NE(render_pass_vars[i], nullptr);
+        break;
+      }
+      case SID("prez"): {
+        render_pass_vars[i] = RenderPassPrez::Init(args);
+        CHECK_NE(render_pass_vars[i], nullptr);
+        break;
+      }
+      case SID("pingpong-a"):
+      case SID("pingpong-b"):
+      case SID("pingpong-c"):
+      case SID("output to swapchain"): {
+        render_pass_vars[i] = RenderPassPostprocess::Init(args);
+        CHECK_NE(render_pass_vars[i], nullptr);
+        break;
+      }
+      case SID("imgui"): {
+        render_pass_vars[i] = RenderPassImgui::Init(args);
+        break;
+      }
+      case SID("copy resource"): {
+        render_pass_vars[i] = RenderPassCopyResource::Init(args);
+        break;
+      }
+      default: {
+        logerror("render pass Init not registered. {}", GetStringView(render_pass_list_json[i], "name"));
+        assert(false && "render pass Init not registered.");
+        break;
+      }
+    }
   }
   return render_pass_vars;
 }
-auto FindIndex(const uint32_t render_pass_num, const RenderPass* render_pass_list, const StrHash& name) {
-  for (uint32_t i = 0; i < render_pass_num; i++) {
-    if (render_pass_list[i].name == name) { return i; }
-  }
-  logerror("render pass not found {} {}", render_pass_num, name);
-  assert(false && "render pass not found");
-  return ~0U;
-}
 void ReleaseRenderPassResources(const uint32_t render_pass_num, const RenderPass* render_pass_list, void** render_pass_vars) {
-  RenderPassCsDispatch::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("dispatch cs"))]);
-  RenderPassPrez::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("prez"))]);
-  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("output to swapchain"))]);
-  RenderPassImgui::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("imgui"))]);
-  RenderPassCopyResource::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("copy resource"))]);
-  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("pingpong-a"))]);
-  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("pingpong-b"))]);
-  RenderPassPostprocess::Term(render_pass_vars[FindIndex(render_pass_num, render_pass_list, SID("pingpong-c"))]);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    switch (render_pass_list[i].name) {
+      case SID("dispatch cs"): {
+        RenderPassCsDispatch::Term(render_pass_vars[i]);
+        break;
+      }
+      case SID("prez"): {
+        RenderPassPrez::Term(render_pass_vars[i]);
+        break;
+      }
+      case SID("pingpong-a"):
+      case SID("pingpong-b"):
+      case SID("pingpong-c"):
+      case SID("output to swapchain"): {
+        RenderPassPostprocess::Term(render_pass_vars[i]);
+        break;
+      }
+      case SID("imgui"): {
+        RenderPassImgui::Term(render_pass_vars[i]);
+        break;
+      }
+      case SID("copy resource"): {
+        RenderPassCopyResource::Term(render_pass_vars[i]);
+        break;
+      }
+      default: {
+        logerror("render pass Term not registered. {}", render_pass_list[i].name);
+        assert(false && "render pass Term not registered.");
+        break;
+      }
+    }
+  }
 }
 void RenderPassUpdate(const RenderPass& render_pass, void** render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
   RenderPassFuncArgsUpdate args{
@@ -794,6 +797,9 @@ auto IsRenderNeeded(const RenderPass& render_pass, void** render_pass_vars) {
     case SID("prez"): {
       return RenderPassPrez::IsRenderNeeded(args);
     }
+    case SID("pingpong-a"):
+    case SID("pingpong-b"):
+    case SID("pingpong-c"):
     case SID("output to swapchain"): {
       return RenderPassPostprocess::IsRenderNeeded(args);
     }
@@ -803,15 +809,6 @@ auto IsRenderNeeded(const RenderPass& render_pass, void** render_pass_vars) {
     case SID("copy resource"): {
       return RenderPassCopyResource::IsRenderNeeded(args);
     }
-    case SID("pingpong-a"): {
-      return RenderPassPostprocess::IsRenderNeeded(&args);
-    }
-    case SID("pingpong-b"): {
-      return RenderPassPostprocess::IsRenderNeeded(&args);
-    }
-    case SID("pingpong-c"): {
-      return RenderPassPostprocess::IsRenderNeeded(&args);
-     }
   }
   logerror("IsRenderNeeded not registered {}", render_pass.name);
   assert(false && "IsRenderNeeded not registered");
@@ -853,6 +850,9 @@ auto RenderPassRender(const RenderPass& render_pass, const MainBufferSize& main_
       RenderPassPrez::Render(&args);
       return;
     }
+    case SID("pingpong-a"):
+    case SID("pingpong-b"):
+    case SID("pingpong-c"):
     case SID("output to swapchain"): {
       RenderPassPostprocess::Render(&args);
       return;
@@ -863,18 +863,6 @@ auto RenderPassRender(const RenderPass& render_pass, const MainBufferSize& main_
     }
     case SID("copy resource"): {
       RenderPassCopyResource::Render(&args);
-      return;
-    }
-    case SID("pingpong-a"): {
-      RenderPassPostprocess::Render(&args);
-      return;
-    }
-    case SID("pingpong-b"): {
-      RenderPassPostprocess::Render(&args);
-      return;
-    }
-    case SID("pingpong-c"): {
-      RenderPassPostprocess::Render(&args);
       return;
     }
   }
@@ -1194,7 +1182,7 @@ float4 main(const VsInput input) : SV_Position {
       .buffer_config_list = render_graph.buffer_list,
       .pso_rootsig_manager = &pso_rootsig_manager,
     };
-    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), &allocator, &render_pass_func_args_init);
+    render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), render_graph.render_pass_num, render_graph.render_pass_list, &allocator, &render_pass_func_args_init);
   }
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
   auto gpu_descriptor_offset_start = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
