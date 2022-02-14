@@ -1,7 +1,6 @@
 target_sources(${CMAKE_PROJECT_NAME}
   PRIVATE
   d3d12_render_pass_common.h
-  d3d12_render_pass_common.cpp
   d3d12_render_pass_cs_dispatch.h
   d3d12_render_pass_imgui.h
   d3d12_render_pass_imgui.cpp

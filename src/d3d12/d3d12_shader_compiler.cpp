@@ -108,145 +108,6 @@ ID3D12PipelineState* CreatePipelineState(D3d12Device* device, const std::size_t&
   }
   return nullptr;
 }
-ID3D12PipelineState* CreatePipelineStateCs(D3d12Device* device, IDxcResult* result, ID3D12RootSignature* root_signature) {
-  auto shader_object = GetShaderObject(result);
-  assert(shader_object);
-  struct {
-    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
-    ID3D12RootSignature* root_signature{nullptr};
-    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS};
-    D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
-  } desc_local {
-    .root_signature = root_signature,
-    .shader_bytecode = D3D12_SHADER_BYTECODE{shader_object->GetBufferPointer(), shader_object->GetBufferSize()},
-  };
-  auto pso = CreatePipelineState(device, sizeof(desc_local), &desc_local);
-  shader_object->Release();
-  return pso;
-}
-ID3D12PipelineState* CreatePipelineStateVsPs(D3d12Device* device, IDxcResult* result_vs, IDxcResult* result_ps, ShaderCompiler::PsoDescVsPs* pso_desc) {
-  auto shader_object_vs = GetShaderObject(result_vs);
-  assert(shader_object_vs);
-  auto shader_object_ps = GetShaderObject(result_ps);
-  assert(shader_object_ps);
-  pso_desc->shader_bytecode_vs = D3D12_SHADER_BYTECODE{shader_object_vs->GetBufferPointer(), shader_object_vs->GetBufferSize()};
-  pso_desc->shader_bytecode_ps = D3D12_SHADER_BYTECODE{shader_object_ps->GetBufferPointer(), shader_object_ps->GetBufferSize()};
-  auto pso = CreatePipelineState(device, sizeof(*pso_desc), pso_desc);
-  shader_object_ps->Release();
-  shader_object_vs->Release();
-  return pso;
-}
-} // namespace anonymous
-bool ShaderCompiler::Init() {
-  library_ = LoadDxcLibrary();
-  if (library_ == nullptr) { return false; }
-  compiler_ = CreateDxcShaderCompiler(library_);
-  if (compiler_ == nullptr) { return false; }
-   utils_ = CreateDxcUtils(library_);
-  if (compiler_ == nullptr) { return false; }
-  include_handler_ = CreateDxcIncludeHandler(utils_);
-  if (include_handler_ == nullptr) { return false; }
-  return true;
-}
-void ShaderCompiler::Term() {
-  include_handler_->Release();
-  utils_->Release();
-  compiler_->Release();
-  FreeLibrary(library_);
-}
-bool ShaderCompiler::CreateRootSignatureAndPsoCs(const char* const shadercode, const uint32_t shadercode_len, const uint32_t args_num, const wchar_t** args, D3d12Device* device, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
-  auto result = CompileShader(compiler_, shadercode_len, shadercode, args_num, args, include_handler_);
-  assert(result && "CompileShader failed.");
-  *rootsig = CreateRootSignatureLocal(device, result);
-  assert(*rootsig && "CreateRootSignature failed.");
-  *pso = CreatePipelineStateCs(device, result, *rootsig);
-  assert(*pso && "CreatePipelineState failed.");
-  result->Release();
-  return true;
-}
-bool ShaderCompiler::CreateRootSignatureAndPsoVs(const char* const shadercode, const uint32_t shadercode_len, const uint32_t args_num, const wchar_t** args,
-                                                 D3d12Device* device, PsoDescVsPs* pso_desc, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
-  return CreateRootSignatureAndPsoVsPs(shadercode, shadercode_len, args_num, args, nullptr, 0, 0, nullptr, device, pso_desc, rootsig, pso);
-}
-bool ShaderCompiler::CreateRootSignatureAndPsoVsPs(const char* const shadercode_vs, const uint32_t shadercode_vs_len, const uint32_t args_num_vs, const wchar_t** args_vs,
-                                                   const char* const shadercode_ps, const uint32_t shadercode_ps_len, const uint32_t args_num_ps, const wchar_t** args_ps,
-                                                   D3d12Device* device, PsoDescVsPs* pso_desc, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
-  auto result_vs = CompileShader(compiler_, shadercode_vs_len, shadercode_vs, args_num_vs, args_vs, include_handler_);
-  assert(result_vs && "CompileShader vs failed.");
-  auto result_ps = CompileShader(compiler_, shadercode_ps_len, shadercode_ps, args_num_ps, args_ps, include_handler_);
-  assert(result_ps && "CompileShader ps failed.");
-  if (shadercode_ps_len > 0) {
-    *rootsig = CreateRootSignatureLocal(device, result_ps);
-    assert(*rootsig && "CreateRootSignatureLocal(ps) failed.");
-  }
-  if (*rootsig == nullptr) {
-    *rootsig = CreateRootSignatureLocal(device, result_vs);
-  }
-  pso_desc->root_signature = *rootsig;
-  *pso = CreatePipelineStateVsPs(device, result_vs, result_ps, pso_desc);
-  assert(*pso && "CreatePipelineStateVsPs failed.");
-  result_vs->Release();
-  result_ps->Release();
-  return true;
-}
-} // namspace illuminate
-#include "doctest/doctest.h"
-#include "d3d12_device.h"
-#include "d3d12_dxgi_core.h"
-TEST_CASE("compile shader") { // NOLINT
-  auto data = R"(
-RWTexture2D<float4> uav : register(u0);
-#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
-[RootSignature(FillScreenCsRootsig)]
-[numthreads(32,32,1)]
-void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
-  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
-}
-)";
-  const wchar_t* compiler_args[] = {
-    L"-T", L"cs_6_6",
-    L"-E", L"main",
-    L"-Zi",
-    L"-Zpr",
-    L"-Qstrip_debug",
-    L"-Qstrip_reflect",
-    L"-Qstrip_rootsignature",
-  };
-  using namespace illuminate; // NOLINT
-  auto library = LoadDxcLibrary();
-  CHECK_NE(library, nullptr);
-  auto compiler = CreateDxcShaderCompiler(library);
-  CHECK_NE(compiler, nullptr); // NOLINT
-  auto utils = CreateDxcUtils(library);
-  CHECK_NE(utils, nullptr); // NOLINT
-  auto include_handler = CreateDxcIncludeHandler(utils);
-  CHECK_NE(include_handler, nullptr); // NOLINT
-  auto result = CompileShader(compiler, static_cast<uint32_t>(strlen(data)), data, sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args, include_handler);
-  CHECK_NE(result, nullptr);
-  CHECK_UNARY(IsCompileSuccessful(result));
-  {
-    DxgiCore dxgi_core;
-    CHECK_UNARY(dxgi_core.Init()); // NOLINT
-    Device device;
-    CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
-    CHECK_UNARY(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
-    auto root_signature = CreateRootSignatureLocal(device.Get(), result);
-    CHECK_NE(root_signature, nullptr);
-    auto pso_cs = CreatePipelineStateCs(device.Get(), result, root_signature);
-    CHECK_NE(pso_cs, nullptr);
-    CHECK_EQ(pso_cs->Release(), 0);
-    CHECK_EQ(root_signature->Release(), 0);
-    device.Term();
-    dxgi_core.Term();
-  }
-  CHECK_EQ(result->Release(), 0);
-  CHECK_EQ(include_handler->Release(), 0);
-  CHECK_EQ(utils->Release(), 0);
-  CHECK_EQ(compiler->Release(), 0);
-  CHECK_UNARY(FreeLibrary(library));
-}
-namespace illuminate {
-namespace {
 struct PsoDescRootSignature {
   D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE};
   ID3D12RootSignature* root_signature{nullptr};
@@ -327,7 +188,7 @@ template <typename T>
 auto IncrementPtr(void* ptr, const std::size_t& increment_size) {
   return static_cast<T*>(reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(ptr) + increment_size));
 }
-void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* compile_unit_index_list, const nlohmann::json& compile_unit_list, const nlohmann::json& pso, void* dst) {
+void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* compile_unit_index_list, const nlohmann::json& compile_unit_list, const nlohmann::json& pso, MemoryAllocationJanitor* allocator, void* dst) {
   auto rootsig =  static_cast<PsoDescRootSignature*>(dst);
   *rootsig = {};
   dst = IncrementPtr(dst, sizeof(PsoDescRootSignature));
@@ -385,6 +246,40 @@ void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* com
   if (pso.contains("depth_stencil")) {
     auto& depth_stencil = pso.at("depth_stencil");
     graphics_misc->depth_stencil.DepthEnable = GetBool(depth_stencil,  "depth_enable", true);
+    graphics_misc->depth_stencil_format = GetDxgiFormat(depth_stencil, "format");
+  }
+  if (pso.contains("input_element")) {
+    const auto& input_element_json = pso.at("input_element");
+    graphics_misc->input_layout.NumElements = GetUint32(input_element_json.size());
+    auto input_element = AllocateArray<D3D12_INPUT_ELEMENT_DESC>(allocator, graphics_misc->input_layout.NumElements);
+    for (uint32_t i = 0; i < graphics_misc->input_layout.NumElements; i++) {
+      input_element[i].SemanticName = GetStringView(input_element_json[i], "name").data();
+      input_element[i].SemanticIndex = GetNum(input_element_json[i], "index", 0);
+      input_element[i].Format = GetDxgiFormat(input_element_json[i], "format");
+      input_element[i].InputSlot = GetNum(input_element_json[i], "slot", 0);
+      if (input_element_json[i].contains("aligned_byte_offset")) {
+        auto& aligned_byte_offset = input_element_json[i].at("aligned_byte_offset");
+        if (aligned_byte_offset.is_string()) {
+          assert(aligned_byte_offset == "APPEND_ALIGNED_ELEMENT" && "only D3D12_APPEND_ALIGNED_ELEMENT is implemented");
+          input_element[i].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+        } else {
+          input_element[i].AlignedByteOffset = aligned_byte_offset;
+        }
+      } else {
+        input_element[i].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+      }
+      if (input_element_json[i].contains("slot_class")) {
+        input_element[i].InputSlotClass = (input_element_json[i].at("slot_class") == "PER_INSTANCE_DATA") ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+      } else {
+        input_element[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+      }
+      if (input_element[i].InputSlotClass == D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA) {
+        input_element[i].InstanceDataStepRate = 0;
+      } else {
+        input_element[i].InstanceDataStepRate = GetNum(input_element_json[i], "instance_data_step_rate", 0);
+      }
+    }
+    graphics_misc->input_layout.pInputElementDescs = input_element;
   }
 }
 auto ParseShaderConfigJson(const nlohmann::json& json, MemoryAllocationJanitor* allocator) {
@@ -529,13 +424,16 @@ auto ParseShaderConfigJson(const nlohmann::json& json, MemoryAllocationJanitor* 
       }
       config.pso_config_list[i].pso_size = (compile_unit[config.pso_config_list[i].compile_unit_list_index[0]].at("target") == "cs") ? (sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode)) : (sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode) * config.pso_config_list[i].shader_object_num + sizeof(PsoDescGraphicsMisc));
       config.pso_config_list[i].pso_desc = allocator->Allocate(config.pso_config_list[i].pso_size);
-      FillPsoDescWithJsonConfig(config.pso_config_list[i].shader_object_num, config.pso_config_list[i].compile_unit_list_index, compile_unit, pso_unit, config.pso_config_list[i].pso_desc);
+      FillPsoDescWithJsonConfig(config.pso_config_list[i].shader_object_num, config.pso_config_list[i].compile_unit_list_index, compile_unit, pso_unit, allocator, config.pso_config_list[i].pso_desc);
     }
   }
   return config;
 }
-auto CompileShader(IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, const char* shader_code, const uint32_t compile_args_num, LPCWSTR* compile_args) {
-  return CompileShader(compiler, GetUint32(strlen(shader_code)), shader_code, compile_args_num, compile_args, include_handler);
+IDxcResult* CompileShader(IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, const char* shader_code, const uint32_t compile_args_num, LPCWSTR* compile_args) {
+  auto result = CompileShader(compiler, GetUint32(strlen(shader_code)), shader_code, compile_args_num, compile_args, include_handler);
+  if (IsCompileSuccessful(result)) { return result; }
+  result->Release();
+  return nullptr;
 }
 auto FillPsoPtr(ID3D12RootSignature* rootsig, const uint32_t shader_object_num, IDxcBlob** shader_object_list, void* dst) {
   {
@@ -621,6 +519,71 @@ void PsoRootsigManager::Term() {
   FreeLibrary(library_);
 }
 } // namespace illuminate
+#include "doctest/doctest.h"
+#include "d3d12_device.h"
+#include "d3d12_dxgi_core.h"
+TEST_CASE("compile shader") { // NOLINT
+  auto data = R"(
+RWTexture2D<float4> uav : register(u0);
+#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
+[RootSignature(FillScreenCsRootsig)]
+[numthreads(32,32,1)]
+void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
+  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
+}
+)";
+  const wchar_t* compiler_args[] = {
+    L"-T", L"cs_6_6",
+    L"-E", L"main",
+    L"-Zi",
+    L"-Zpr",
+    L"-Qstrip_debug",
+    L"-Qstrip_reflect",
+    L"-Qstrip_rootsignature",
+  };
+  using namespace illuminate; // NOLINT
+  auto library = LoadDxcLibrary();
+  CHECK_NE(library, nullptr);
+  auto compiler = CreateDxcShaderCompiler(library);
+  CHECK_NE(compiler, nullptr); // NOLINT
+  auto utils = CreateDxcUtils(library);
+  CHECK_NE(utils, nullptr); // NOLINT
+  auto include_handler = CreateDxcIncludeHandler(utils);
+  CHECK_NE(include_handler, nullptr); // NOLINT
+  auto result = CompileShader(compiler, static_cast<uint32_t>(strlen(data)), data, sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args, include_handler);
+  CHECK_NE(result, nullptr);
+  CHECK_UNARY(IsCompileSuccessful(result));
+  {
+    DxgiCore dxgi_core;
+    CHECK_UNARY(dxgi_core.Init()); // NOLINT
+    Device device;
+    CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
+    CHECK_UNARY(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
+    auto root_signature = CreateRootSignatureLocal(device.Get(), result);
+    CHECK_NE(root_signature, nullptr);
+    auto shader_object = GetShaderObject(result);
+    CHECK_NE(shader_object, nullptr);
+    struct {
+      PsoDescRootSignature rootsig;
+      PsoDescShaderBytecode shader_object;
+    } desc{};
+    desc.rootsig.root_signature = root_signature;
+    desc.shader_object.type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
+    desc.shader_object.shader_bytecode = {.pShaderBytecode=shader_object->GetBufferPointer(), .BytecodeLength=shader_object->GetBufferSize()};
+    auto pso_cs = CreatePipelineState(device.Get(), sizeof(desc), &desc);
+    shader_object->Release();
+    CHECK_NE(pso_cs, nullptr);
+    CHECK_EQ(pso_cs->Release(), 0);
+    CHECK_EQ(root_signature->Release(), 0);
+    device.Term();
+    dxgi_core.Term();
+  }
+  CHECK_EQ(result->Release(), 0);
+  CHECK_EQ(include_handler->Release(), 0);
+  CHECK_EQ(utils->Release(), 0);
+  CHECK_EQ(compiler->Release(), 0);
+  CHECK_UNARY(FreeLibrary(library));
+}
 TEST_CASE("rootsig/pso") {
   using namespace illuminate;
   DxgiCore dxgi_core;

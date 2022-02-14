@@ -325,6 +325,25 @@ auto GetTestJson() {
         "depth_stencil": {
           "depth_enable": false
         }
+      },
+      {
+        "name": "pso prez",
+        "rootsig": "rootsig prez",
+        "unit_list": ["compile unit prez"],
+        "input_element": [
+          {
+            "name": "POSITION",
+            "index": 0,
+            "format": "R32G32B32_FLOAT",
+            "slot": 0,
+            "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+            "slot_class": "PER_VERTEX_DATA",
+            "instance_data_step_rate": 0
+          }
+        ],
+        "depth_stencil": {
+          "format": "D24_UNORM_S8_UINT"
+        }
       }
     ]
   },
@@ -346,10 +365,9 @@ auto GetTestJson() {
         }
       ],
       "pass_vars": {
+        "material": "pso dispatch cs",
         "thread_group_count_x": 32,
-        "thread_group_count_y": 32,
-        "shader": "test.cs.hlsl",
-        "shader_compile_args":["-T", "cs_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+        "thread_group_count_y": 32
       }
     },
     {
@@ -364,8 +382,7 @@ auto GetTestJson() {
         }
       ],
       "pass_vars": {
-        "shader": "prez.vs.hlsl",
-        "shader_compile_args":["-T", "vs_6_6", "-E", "main", "-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+        "material": "pso prez",
         "stencil_val": 255
       }
     },
@@ -649,207 +666,56 @@ auto GetTestTinyGltf() {
 )";
 }
 auto PrepareRenderPassResources(const nlohmann::json& src_render_pass_list, MemoryAllocationJanitor* allocator, RenderPassFuncArgsInit* args) {
-  ShaderCompiler shader_compiler;
-  if (!shader_compiler.Init()) {
-    logerror("shader_compiler.Init failed");
-    assert(false && "shader_compiler.Init failed");
-  }
-  args->shader_compiler = &shader_compiler;
   const auto render_pass_num = static_cast<uint32_t>(src_render_pass_list.size());
   auto render_pass_vars = AllocateArray<void*>(allocator, render_pass_num);
   {
-    auto shader_code_cs = R"(
-RWTexture2D<float4> uav : register(u0);
-#define FillScreenCsRootsig "DescriptorTable(UAV(u0), visibility=SHADER_VISIBILITY_ALL) "
-[RootSignature(FillScreenCsRootsig)]
-[numthreads(32,32,1)]
-void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
-  uav[thread_id.xy] = float4(group_thread_id * rcp(32.0f), 1.0f);
-}
-)";
     const auto index = FindIndex(src_render_pass_list, "name", SID("dispatch cs"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = shader_code_cs;
     render_pass_vars[index] = RenderPassCsDispatch::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
-    auto shader_code_vs = R"(
-struct VsInput {
-  float3 position : POSITION;
-};
-#define PrezRootsig "RootFlags("                                    \
-                         "ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | "    \
-                         "DENY_VERTEX_SHADER_ROOT_ACCESS | "        \
-                         "DENY_HULL_SHADER_ROOT_ACCESS | "          \
-                         "DENY_DOMAIN_SHADER_ROOT_ACCESS | "        \
-                         "DENY_GEOMETRY_SHADER_ROOT_ACCESS | "      \
-                         "DENY_PIXEL_SHADER_ROOT_ACCESS | "         \
-                         "DENY_AMPLIFICATION_SHADER_ROOT_ACCESS | " \
-                         "DENY_MESH_SHADER_ROOT_ACCESS"             \
-                         "), "
-[RootSignature(PrezRootsig)]
-float4 main(const VsInput input) : SV_Position {
-  float4 output = float4(input, 1.0f);
-  return output;
-}
-)";
     const auto index = FindIndex(src_render_pass_list, "name", SID("prez"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = shader_code_vs;
     render_pass_vars[index] = RenderPassPrez::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
-    auto shader_code_vs_ps = R"(
-struct FullscreenTriangleVSOutput {
-  float4 position : SV_POSITION;
-  float2 texcoord : TEXCOORD0;
-};
-FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
-  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
-  FullscreenTriangleVSOutput output;
-  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
-  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
-  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
-  return output;
-}
-Texture2D src : register(t0);
-Texture2D src1;
-Texture2D pingpong;
-SamplerState tex_sampler : register(s0);
-#define CopyFullscreenRootsig " \
-DescriptorTable(SRV(t0, numDescriptors=3), visibility=SHADER_VISIBILITY_PIXEL), \
-DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL) \
-"
-[RootSignature(CopyFullscreenRootsig)]
-float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
-  float4 color = src.Sample(tex_sampler, input.texcoord);
-  color.r = src1.Sample(tex_sampler, input.texcoord).r;
-  color.g = pingpong.Sample(tex_sampler, input.texcoord).b;
-  return color;
-}
-)";
     const auto index = FindIndex(src_render_pass_list, "name", SID("output to swapchain"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = shader_code_vs_ps;
     render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
     const auto index = FindIndex(src_render_pass_list, "name", SID("imgui"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = nullptr;
     render_pass_vars[index] = RenderPassImgui::Init(args);
     CHECK_EQ(render_pass_vars[index], nullptr);
   }
   {
     const auto index = FindIndex(src_render_pass_list, "name", SID("copy resource"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = nullptr;
     render_pass_vars[index] = RenderPassCopyResource::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
-    auto shader_code_vs_ps = R"(
-struct FullscreenTriangleVSOutput {
-  float4 position : SV_POSITION;
-  float2 texcoord : TEXCOORD0;
-};
-FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
-  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
-  FullscreenTriangleVSOutput output;
-  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
-  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
-  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
-  return output;
-}
-float4 cbv_color : register(b0);
-#define CopyFullscreenRootsig "\
-DescriptorTable(CBV(b0), visibility=SHADER_VISIBILITY_PIXEL),    \
-"
-[RootSignature(CopyFullscreenRootsig)]
-float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
-  return cbv_color;
-}
-)";
     const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-a"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = shader_code_vs_ps;
     render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
-    auto shader_code_vs_ps = R"(
-struct FullscreenTriangleVSOutput {
-  float4 position : SV_POSITION;
-  float2 texcoord : TEXCOORD0;
-};
-FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
-  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
-  FullscreenTriangleVSOutput output;
-  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
-  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
-  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
-  return output;
-}
-float4 cbv_color : register(b0);
-Texture2D src : register(t0);
-SamplerState tex_sampler : register(s0);
-#define CopyFullscreenRootsig " \
-DescriptorTable(CBV(b0),                                                \
-                SRV(t0, numDescriptors=1),                              \
-                visibility=SHADER_VISIBILITY_PIXEL),                    \
-DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
-"
-[RootSignature(CopyFullscreenRootsig)]
-float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
-  float4 color = src.Sample(tex_sampler, input.texcoord);
-  return color * cbv_color;
-}
-)";
     const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-b"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = shader_code_vs_ps;
     render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
   {
-    auto shader_code_vs_ps = R"(
-struct FullscreenTriangleVSOutput {
-  float4 position : SV_POSITION;
-  float2 texcoord : TEXCOORD0;
-};
-FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
-  // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
-  FullscreenTriangleVSOutput output;
-  output.texcoord.x = (id == 2) ?  2.0 :  0.0;
-  output.texcoord.y = (id == 1) ?  2.0 :  0.0;
-  output.position = float4(output.texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), 1.0, 1.0);
-  return output;
-}
-float4 cbv_color : register(b0);
-Texture2D src : register(t0);
-SamplerState tex_sampler : register(s0);
-#define CopyFullscreenRootsig " \
-DescriptorTable(CBV(b0),                                                \
-                SRV(t0, numDescriptors=1),                              \
-                visibility=SHADER_VISIBILITY_PIXEL),                    \
-DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
-"
-[RootSignature(CopyFullscreenRootsig)]
-float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
-  float4 color = src.Sample(tex_sampler, input.texcoord);
-  return color * cbv_color;
-}
-)";
     const auto index = FindIndex(src_render_pass_list, "name", SID("pingpong-c"));
     args->json = src_render_pass_list[index].contains("pass_vars") ? &src_render_pass_list[index].at("pass_vars") : nullptr;
-    args->shader_code = shader_code_vs_ps;
     render_pass_vars[index] = RenderPassPostprocess::Init(args);
     CHECK_NE(render_pass_vars[index], nullptr);
   }
-  shader_compiler.Term();
   return render_pass_vars;
 }
 auto FindIndex(const uint32_t render_pass_num, const RenderPass* render_pass_list, const StrHash& name) {
@@ -1285,18 +1151,37 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   return color * cbv_color;
 }
 )";
+      auto shader_code_prez = R"(
+struct VsInput {
+  float3 position : POSITION;
+};
+#define PrezRootsig "RootFlags("                                    \
+                         "ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | "    \
+                         "DENY_VERTEX_SHADER_ROOT_ACCESS | "        \
+                         "DENY_HULL_SHADER_ROOT_ACCESS | "          \
+                         "DENY_DOMAIN_SHADER_ROOT_ACCESS | "        \
+                         "DENY_GEOMETRY_SHADER_ROOT_ACCESS | "      \
+                         "DENY_PIXEL_SHADER_ROOT_ACCESS | "         \
+                         "DENY_AMPLIFICATION_SHADER_ROOT_ACCESS | " \
+                         "DENY_MESH_SHADER_ROOT_ACCESS"             \
+                         "), "
+[RootSignature(PrezRootsig)]
+float4 main(const VsInput input) : SV_Position {
+  float4 output = float4(input, 1.0f);
+  return output;
+}
+)";
       const char* shader_code_list[] = {
         shader_code_dispatch_cs,
         shader_code_output_to_swapchain,
         shader_code_pingpong_a,
         shader_code_pingpong_bc,
+        shader_code_prez,
       };
       CHECK_UNARY(pso_rootsig_manager.Init(json.at("material"), shader_code_list, device.Get(), &allocator));
     }
     RenderPassFuncArgsInit render_pass_func_args_init{
       .json = nullptr,
-      .shader_code = nullptr,
-      .shader_compiler = nullptr,
       .descriptor_cpu = &descriptor_cpu,
       .device = device.Get(),
       .main_buffer_format = main_buffer_format,

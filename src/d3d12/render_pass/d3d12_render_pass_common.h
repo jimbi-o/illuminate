@@ -8,8 +8,6 @@
 namespace illuminate {
 struct RenderPassFuncArgsInit {
   const nlohmann::json* json{nullptr};
-  const char* shader_code{nullptr};
-  ShaderCompiler* shader_compiler{nullptr};
   DescriptorCpu* descriptor_cpu{nullptr};
   D3d12Device* device{nullptr};
   const MainBufferFormat& main_buffer_format{};
@@ -41,6 +39,5 @@ struct RenderPassFuncArgsRender {
 using RenderPassInitFunction = void* (*)(RenderPassFuncArgsInit*);
 using RenderPassUpdateFunction = void (*)(RenderPassFuncArgsUpdate*);
 using RenderPassRenderFunction = void (*)(RenderPassFuncArgsRender*);
-uint32_t GetShaderCompilerArgs(const nlohmann::json& j, const char* const name, MemoryAllocationJanitor* allocator, std::wstring** wstr_args, const wchar_t*** args);
 }
 #endif

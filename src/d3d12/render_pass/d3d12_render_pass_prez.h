@@ -12,40 +12,11 @@ class RenderPassPrez {
   static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
-    std::wstring* wstr_shader_args{nullptr};
-    const wchar_t** shader_args{nullptr};
-    auto allocator = GetTemporalMemoryAllocator();
-    auto shader_args_num = GetShaderCompilerArgs(*args->json, "shader_compile_args", &allocator, &wstr_shader_args, &shader_args);
-    assert(shader_args_num > 0);
-    ShaderCompiler::PsoDescVsPs pso_desc{};
-    pso_desc.depth_stencil_format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    D3D12_INPUT_ELEMENT_DESC input_element_descs[] = {
-      {
-        .SemanticName = "POSITION",
-        .SemanticIndex = 0,
-        .Format = DXGI_FORMAT_R32G32B32_FLOAT,
-        .InputSlot = 0,
-        .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
-        .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-        .InstanceDataStepRate = 0,
-      },
-    };
-    pso_desc.depth_stencil1.StencilEnable = true;
-    pso_desc.input_layout.pInputElementDescs = input_element_descs;
-    pso_desc.input_layout.NumElements = 1;
-    if (!args->shader_compiler->CreateRootSignatureAndPsoVs(args->shader_code, static_cast<uint32_t>(strlen(args->shader_code)), shader_args_num, shader_args, args->device, &pso_desc, &param->rootsig, &param->pso)) {
-      logerror("vs parse error");
-      assert(false && "vs parse error");
-    }
-    SetD3d12Name(param->rootsig, "rootsig_prez");
-    SetD3d12Name(param->pso, "pso_prez");
+    args->pso_rootsig_manager->FindMaterial(args->json->at("material"), &param->rootsig, &param->pso);
     param->stencil_val = GetNum(*args->json, "stencil_val", 0);
     return param;
   }
-  static void Term(void* ptr) {
-    auto param = static_cast<Param*>(ptr);
-    param->pso->Release();
-    param->rootsig->Release();
+  static void Term([[maybe_unused]]void* ptr) {
   }
   static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
   }
