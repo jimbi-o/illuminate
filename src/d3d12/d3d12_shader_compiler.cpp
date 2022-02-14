@@ -278,8 +278,8 @@ struct PsoDescGraphicsMisc {
   D3D12_RT_FORMAT_ARRAY render_target_formats{};
   D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil_format{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT};
   DXGI_FORMAT depth_stencil_format{};
-  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil1{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1};
-  D3D12_DEPTH_STENCIL_DESC1 depth_stencil1{
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1};
+  D3D12_DEPTH_STENCIL_DESC1 depth_stencil{
     .DepthEnable = true,
     .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
     .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
@@ -381,6 +381,10 @@ void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* com
     for (uint32_t i = 0; i < graphics_misc->render_target_formats.NumRenderTargets; i++) {
       graphics_misc->render_target_formats.RTFormats[i] = GetDxgiFormat(GetStringView(render_target_formats[i]).data());
     }
+  }
+  if (pso.contains("depth_stencil")) {
+    auto& depth_stencil = pso.at("depth_stencil");
+    graphics_misc->depth_stencil.DepthEnable = GetBool(depth_stencil,  "depth_enable", true);
   }
 }
 auto ParseShaderConfigJson(const nlohmann::json& json, MemoryAllocationJanitor* allocator) {
@@ -685,7 +689,11 @@ TEST_CASE("rootsig/pso") {
     {
       "name": "pso output to swapchain",
       "rootsig": "rootsig output to swapchain",
-      "unit_list": ["compile unit output to swapchain vs", "compile unit output to swapchain ps"]
+      "unit_list": ["compile unit output to swapchain vs", "compile unit output to swapchain ps"],
+      "render_target_formats": ["R8G8B8A8_UNORM"],
+      "depth_stencil": {
+        "depth_enable": false
+      }
     }
   ]
 }
@@ -806,6 +814,10 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
       CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature))->shader_bytecode.BytecodeLength, shader_object_list[1]->GetBufferSize());
       CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode))->shader_bytecode.pShaderBytecode, shader_object_list[2]->GetBufferPointer());
       CHECK_EQ(IncrementPtr<PsoDescShaderBytecode>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode))->shader_bytecode.BytecodeLength, shader_object_list[2]->GetBufferSize());
+      auto graphics_misc = IncrementPtr<PsoDescGraphicsMisc>(shader_config.pso_config_list[1].pso_desc, sizeof(PsoDescRootSignature) + sizeof(PsoDescShaderBytecode) * 2);
+      CHECK_EQ(graphics_misc->render_target_formats.NumRenderTargets, 1);
+      CHECK_EQ(graphics_misc->render_target_formats.RTFormats[0], DXGI_FORMAT_R8G8B8A8_UNORM);
+      CHECK_EQ(graphics_misc->depth_stencil.DepthEnable, FALSE);
     }
     pso_list[i] = CreatePipelineState(device.Get(), config.pso_size, config.pso_desc);
   }
@@ -850,6 +862,3 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   dxgi_core.Term();
   gSystemMemoryAllocator->Reset();
 }
-// TODO configure depth enable = false
-// TODO configure rtv format
-// TODO check d3d12 debug layer messages

@@ -297,26 +297,34 @@ auto GetTestJson() {
       {
         "name": "pso dispatch cs",
         "rootsig": "rootsig dispatch cs",
-        "unit_list": ["compile unit dispatch cs"],
-        "render_target_formats": ["R8G8B8A8_UNORM"]
+        "unit_list": ["compile unit dispatch cs"]
       },
       {
         "name": "pso output to swapchain",
         "rootsig": "rootsig output to swapchain",
         "unit_list": ["compile unit output to swapchain vs", "compile unit output to swapchain ps"],
-        "render_target_formats": ["R8G8B8A8_UNORM"]
+        "render_target_formats": ["R8G8B8A8_UNORM"],
+        "depth_stencil": {
+          "depth_enable": false
+        }
       },
       {
         "name": "pso pingpong-a",
         "rootsig": "rootsig pingpong-a",
         "unit_list": ["compile unit pingpong-a vs", "compile unit pingpong-a ps"],
-        "render_target_formats": ["R8G8B8A8_UNORM"]
+        "render_target_formats": ["R8G8B8A8_UNORM"],
+        "depth_stencil": {
+          "depth_enable": false
+        }
       },
       {
         "name": "pso pingpong-bc",
         "rootsig": "rootsig pingpong-bc",
         "unit_list": ["compile unit pingpong-bc vs", "compile unit pingpong-bc ps"],
-        "render_target_formats": ["R8G8B8A8_UNORM"]
+        "render_target_formats": ["R8G8B8A8_UNORM"],
+        "depth_stencil": {
+          "depth_enable": false
+        }
       }
     ]
   },
