@@ -1013,7 +1013,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
                                       render_graph.command_list_num_per_queue,
                                       render_graph.frame_buffer_num,
                                       render_graph.command_allocator_num_per_queue_type));
-    CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height)); // NOLINT
+    CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height, nullptr)); // NOLINT
     CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, render_graph.frame_buffer_num + 1, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
     main_buffer_size = MainBufferSize{
       .swapchain = {
@@ -1215,6 +1215,7 @@ float4 main(const VsInput input) : SV_Position {
     prev_command_list[i] = nullptr;
   }
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
+    window.ProcessMessage();
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);

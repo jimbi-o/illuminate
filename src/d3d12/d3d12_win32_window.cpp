@@ -2,15 +2,11 @@
 #include "d3d12_src_common.h"
 namespace illuminate {
 namespace {
-LRESULT CALLBACK WindowCallbackFunc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-  return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-}
-static HWND InitWindow(const char* const title, const uint32_t width, const uint32_t height, WNDPROC proc) {
+static HWND InitWindow(const char* const title, const uint32_t width, const uint32_t height, WindowCallback callback_func) {
   WNDCLASSEX wc;
   wc.cbSize = sizeof(WNDCLASSEX);
   wc.style = CS_HREDRAW | CS_VREDRAW;
-  wc.lpfnWndProc = proc == nullptr ? WindowCallbackFunc : proc;
+  wc.lpfnWndProc = callback_func;
   wc.cbClsExtra = 0;
   wc.cbWndExtra = 0;
   wc.hInstance = GetModuleHandle(nullptr);
@@ -44,7 +40,7 @@ static HWND InitWindow(const char* const title, const uint32_t width, const uint
   UpdateWindow(hwnd);
   return hwnd;
 }
-static bool CloseWindow(HWND hwnd, const char* const title) {
+bool CloseWindow(HWND hwnd, const char* const title) {
   if (!DestroyWindow(hwnd)) {
     logwarn("DestroyWindow failed. {}", GetLastError());
     return false;
@@ -55,7 +51,6 @@ static bool CloseWindow(HWND hwnd, const char* const title) {
   }
   return true;
 }
-namespace {
 bool SetWindowStyle(HWND hwnd, const UINT windowStyle) {
   SetLastError(0);
   if (SetWindowLongPtrW(hwnd, GWL_STYLE, windowStyle) != 0) return true;
@@ -71,7 +66,6 @@ RECT GetCurrentDisplayRectInfo(HWND hwnd) {
   GetMonitorInfo(monitor, &info);
   return info.rcMonitor;
 }
-}
 static RECT GetCurrentWindowRectInfo(HWND hwnd) {
   RECT rect = {};
   if (!GetWindowRect(hwnd, &rect)) {
@@ -80,14 +74,12 @@ static RECT GetCurrentWindowRectInfo(HWND hwnd) {
   }
   return rect;
 }
-namespace {
 bool SetWindowPos(HWND hwnd, HWND hWndInsertAfter, const RECT& rect) {
   if (::SetWindowPos(hwnd, hWndInsertAfter, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_FRAMECHANGED | SWP_NOACTIVATE)) return true;
   logwarn("SetWindowPos failed. {}", GetLastError());
   return false;
 }
-}
-static bool SetFullscreenMode(HWND hwnd) {
+bool SetFullscreenMode(HWND hwnd) {
   // not sure if this (FSBW) works for HDR mode.
   // use SetFullscreenState() in such case.
   // also unsure about if FPS caps unlike exclusive fullscreen mode.
@@ -96,32 +88,22 @@ static bool SetFullscreenMode(HWND hwnd) {
   ShowWindow(hwnd, SW_MAXIMIZE);
   return true;
 }
-static bool SetBackToWindowMode(HWND hwnd, const RECT& rect) {
+bool SetBackToWindowMode(HWND hwnd, const RECT& rect) {
   if (!SetWindowStyle(hwnd, WS_OVERLAPPEDWINDOW)) return false;
   if (!SetWindowPos(hwnd, HWND_NOTOPMOST, rect)) return false;
   ShowWindow(hwnd, SW_NORMAL);
   return true;
 }
-namespace {
-std::vector<WindowCallback> callbacks;
-}
-bool Window::Init(const char* const title, const uint32_t width, const uint32_t height) {
-  title_ = title;
-  hwnd_ = illuminate::InitWindow(title_.c_str(), width, height, CallbackFunc);
+} // anonymous namespace
+bool Window::Init(const char* const title, const uint32_t width, const uint32_t height, WindowCallback callback_func) {
+  const auto str_len  = strlen(title) + 1;
+  title_ = AllocateArray<char>(gSystemMemoryAllocator, str_len);
+  strcpy_s(title_, str_len, title);
+  hwnd_ = illuminate::InitWindow(title_, width, height, callback_func == nullptr ? DefWindowProc : callback_func);
   return hwnd_ != nullptr;
 }
 void Window::Term() {
-  std::vector<WindowCallback>().swap(callbacks);
-  illuminate::CloseWindow(hwnd_, title_.c_str());
-}
-LRESULT Window::CallbackFunc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-  for (auto&& func : callbacks) {
-    if (func(hwnd, msg, wParam, lParam)) return 0;
-  }
-  return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-void Window::AddCallback(WindowCallback&& func) {
-  callbacks.push_back(std::move(func));
+  illuminate::CloseWindow(hwnd_, title_);
 }
 void Window::ProcessMessage() {
   MSG msg = {};
@@ -133,7 +115,7 @@ void Window::ProcessMessage() {
 }
 #include "doctest/doctest.h"
 TEST_CASE("win32 windows func test") { // NOLINT
-  auto hwnd = illuminate::InitWindow("test window", 200, 100, nullptr);
+  auto hwnd = illuminate::InitWindow("test window", 200, 100, DefWindowProc);
   CHECK(hwnd != nullptr); // NOLINT
   auto windowRect = illuminate::GetCurrentWindowRectInfo(hwnd);
   CHECK(windowRect.right - windowRect.left == 200); // NOLINT
@@ -144,8 +126,7 @@ TEST_CASE("win32 windows func test") { // NOLINT
 }
 TEST_CASE("win32 window class") { // NOLINT
   illuminate::Window window;
-  REQUIRE(window.Init("hello", 100, 200));
-  window.AddCallback([&]([[maybe_unused]]HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) { loginfo("hello from callback msg:{0:x} wParam:{0:x} lParam:{0:x}", msg, wParam, lParam); return false; });
+  REQUIRE(window.Init("hello", 100, 200, nullptr));
   window.ProcessMessage();
   window.Term();
 }

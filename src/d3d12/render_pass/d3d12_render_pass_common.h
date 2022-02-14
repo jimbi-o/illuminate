@@ -37,8 +37,5 @@ struct RenderPassFuncArgsRender {
   SceneData* scene_data{nullptr};
   uint32_t frame_index{0};
 };
-using RenderPassInitFunction = void* (*)(RenderPassFuncArgsInit*);
-using RenderPassUpdateFunction = void (*)(RenderPassFuncArgsUpdate*);
-using RenderPassRenderFunction = void (*)(RenderPassFuncArgsRender*);
 }
 #endif
