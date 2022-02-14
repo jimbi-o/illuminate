@@ -273,6 +273,12 @@ auto GetTestJson() {
         "target": "ps",
         "entry": "MainPs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit prez",
+        "filename": "prez",
+        "target": "vs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       }
     ],
     "rootsig": [
@@ -291,6 +297,10 @@ auto GetTestJson() {
       {
         "name": "rootsig pingpong-bc",
         "unit_name": "compile unit pingpong-bc ps"
+      },
+      {
+        "name": "rootsig prez",
+        "unit_name": "compile unit prez"
       }
     ],
     "pso": [
