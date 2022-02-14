@@ -2,6 +2,7 @@
 #define ILLUMINATE_RENDER_PASS_D3D12_COMMON_H
 #include "../d3d12_descriptors.h"
 #include "../d3d12_header_common.h"
+#include "../d3d12_json_parser.h"
 #include "../d3d12_scene.h"
 #include "../d3d12_shader_compiler.h"
 #include "../d3d12_src_common.h"

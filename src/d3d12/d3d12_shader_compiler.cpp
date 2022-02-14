@@ -1,5 +1,5 @@
 #include "d3d12_shader_compiler.h"
-#include "d3d12_render_graph_json_parser.h"
+#include "d3d12_json_parser.h"
 #include "d3d12_src_common.h"
 #include "illuminate/util/hash_map.h"
 #include "../win32_dll_util_macro.h"
