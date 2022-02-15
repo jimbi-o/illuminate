@@ -21,7 +21,9 @@ class RenderPassImgui {
       logerror("ImGui_ImplDX12_CreateDeviceObjects failed.");
       assert(false);
     }
-    return nullptr;
+    auto ptr = Allocate<uint32_t>(args->allocator);
+    *ptr = 0;
+    return ptr;
   }
   static void Term([[maybe_unused]]void* ptr) {
     ImGui_ImplDX12_Shutdown();

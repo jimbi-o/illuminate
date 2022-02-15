@@ -6,16 +6,19 @@ void RenderPassImgui::RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, R
     ImGui::Text("select visible buffer:");
     auto label_select_output_buffer = "##select output buffer";
     if (ImGui::BeginListBox(label_select_output_buffer)) {
-      static uint32_t current_item = 0;
+      auto selected_item = static_cast<uint32_t*>(args_per_pass->pass_vars_ptr);
       for (uint32_t i = 0; i < args_common->buffer_list->buffer_allocation_num; i++) {
         if (args_common->buffer_list->resource_list[i] == nullptr) { continue; }
         const auto len = 128;
         char buffer_name[len]{};
         GetD3d12Name(args_common->buffer_list->resource_list[i], len, buffer_name);
-        if (ImGui::Selectable(buffer_name, i == current_item)) {
-          current_item = i;
+        if (strncmp(buffer_name, "swapchain", 9) == 0) {
+          buffer_name[9] = '\0';
         }
-        if (i == current_item) {
+        if (ImGui::Selectable(buffer_name, i == *selected_item)) {
+          *selected_item = i;
+        }
+        if (i == *selected_item) {
           ImGui::SetItemDefaultFocus();
         }
       }
