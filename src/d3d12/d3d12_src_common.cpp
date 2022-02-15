@@ -46,3 +46,20 @@ TEST_CASE("CopyStrToWstrContainer") {
   CHECK_NE(dst, nullptr);
   CHECK_EQ(wcscmp(dst2, L"hellow world2"), 0);
 }
+#include "d3d12_device.h"
+#include "d3d12_dxgi_core.h"
+TEST_CASE("GetSetD3d12Name") {
+  using namespace illuminate; // NOLINT
+  DxgiCore dxgi_core;
+  CHECK_UNARY(dxgi_core.Init()); // NOLINT
+  Device device;
+  CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
+  const auto device_name = "device_name";
+  SetD3d12Name(device.Get(), device_name);
+  const uint32_t num = 128;
+  char dst[num]{};
+  CHECK_EQ(GetD3d12Name(device.Get(), num, dst), strlen(device_name) + 1);
+  CHECK_EQ(strcmp(dst, device_name), 0);
+  device.Term();
+  dxgi_core.Term();
+}
