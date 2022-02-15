@@ -138,6 +138,5 @@ TEST_CASE("win32 windows func test") { // NOLINT
 TEST_CASE("win32 window class") { // NOLINT
   illuminate::Window window;
   REQUIRE(window.Init("hello", 100, 200, nullptr));
-  window.ProcessMessage();
   window.Term();
 }
