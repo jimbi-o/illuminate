@@ -21,7 +21,7 @@ struct RenderPassFuncArgsInit {
   BufferConfig* buffer_config_list{nullptr};
 };
 struct RenderPassConfigDynamicData {
-  uint32_t buffer_selected{0};
+  uint32_t selected_debug_buffer{~0U};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
