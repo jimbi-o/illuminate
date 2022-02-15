@@ -20,6 +20,9 @@ struct RenderPassFuncArgsInit {
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
 };
+struct RenderPassConfigDynamicData {
+  uint32_t buffer_selected{0};
+};
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
   SceneData* scene_data{nullptr};
@@ -27,6 +30,7 @@ struct RenderPassFuncArgsRenderCommon {
   PsoRootsigManager* pso_rootsig_manager{nullptr};
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
+  RenderPassConfigDynamicData* dynamic_data{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};

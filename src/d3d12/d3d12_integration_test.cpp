@@ -1209,6 +1209,7 @@ float4 main(const VsInput input) : SV_Position {
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
   }
+  RenderPassConfigDynamicData dynamic_data{};
   for (uint32_t i = 0; i < kFrameLoopNum; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();
@@ -1249,6 +1250,7 @@ float4 main(const VsInput input) : SV_Position {
       .pso_rootsig_manager = &pso_rootsig_manager,
       .buffer_list = &buffer_list,
       .buffer_config_list = render_graph.buffer_list,
+      .dynamic_data = &dynamic_data,
     };
     auto prepass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
