@@ -246,7 +246,9 @@ void FillPsoDescWithJsonConfig(const uint32_t shader_bytecode_num, uint32_t* com
   if (pso.contains("depth_stencil")) {
     auto& depth_stencil = pso.at("depth_stencil");
     graphics_misc->depth_stencil.DepthEnable = GetBool(depth_stencil,  "depth_enable", true);
-    graphics_misc->depth_stencil_format = GetDxgiFormat(depth_stencil, "format");
+    if (graphics_misc->depth_stencil.DepthEnable) {
+      graphics_misc->depth_stencil_format = GetDxgiFormat(depth_stencil, "format");
+    }
   }
   if (pso.contains("input_element")) {
     const auto& input_element_json = pso.at("input_element");
