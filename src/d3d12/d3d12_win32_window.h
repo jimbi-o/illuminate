@@ -11,10 +11,11 @@ class Window {
   bool Init(const char* const title, const uint32_t width, const uint32_t height, WindowCallback callback_func);
   void Term();
   HWND GetHwnd() const { return hwnd_; }
-  void ProcessMessage();
+  bool ProcessMessage();
  private:
   char* title_{nullptr};
   HWND hwnd_{nullptr};
+  bool windows_closed_{false};
 };
 }
 #endif

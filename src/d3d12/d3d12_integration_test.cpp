@@ -18,6 +18,7 @@
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_prez.h"
 #include "render_pass/d3d12_render_pass_copy_resource.h"
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
 auto GetTestJson() {
@@ -978,6 +979,17 @@ auto CreateCpuHandleWithView(const BufferConfig& buffer_config, const uint32_t b
   }
   return ret;
 }
+// Win32 message handler
+LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+  if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) { return true; }
+  switch (msg) {
+    case WM_DESTROY: {
+      ::PostQuitMessage(0);
+      return 0;
+    }
+  }
+  return ::DefWindowProc(hWnd, msg, wParam, lParam);
+}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
@@ -1013,7 +1025,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
                                       render_graph.command_list_num_per_queue,
                                       render_graph.frame_buffer_num,
                                       render_graph.command_allocator_num_per_queue_type));
-    CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height, nullptr)); // NOLINT
+    CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height, WndProc)); // NOLINT
     CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, render_graph.frame_buffer_num + 1, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
     main_buffer_size = MainBufferSize{
       .swapchain = {
@@ -1215,7 +1227,7 @@ float4 main(const VsInput input) : SV_Position {
     prev_command_list[i] = nullptr;
   }
   for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
-    window.ProcessMessage();
+    if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);

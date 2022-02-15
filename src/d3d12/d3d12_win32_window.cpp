@@ -96,21 +96,32 @@ bool SetBackToWindowMode(HWND hwnd, const RECT& rect) {
 }
 } // anonymous namespace
 bool Window::Init(const char* const title, const uint32_t width, const uint32_t height, WindowCallback callback_func) {
-  const auto str_len  = strlen(title) + 1;
+  const auto str_len = GetUint32(strlen(title)) + 1;
   title_ = AllocateArray<char>(gSystemMemoryAllocator, str_len);
   strcpy_s(title_, str_len, title);
   hwnd_ = illuminate::InitWindow(title_, width, height, callback_func == nullptr ? DefWindowProc : callback_func);
   return hwnd_ != nullptr;
 }
 void Window::Term() {
-  illuminate::CloseWindow(hwnd_, title_);
+  if (!windows_closed_) {
+    if (!DestroyWindow(hwnd_)) {
+      logwarn("DestroyWindow failed. {} {}", title_, GetLastError());
+    }
+  }
+  if (!UnregisterClass(title_, GetModuleHandle(nullptr))) {
+    logwarn("UnregisterClass failed. {} {}", title_, GetLastError());
+  }
 }
-void Window::ProcessMessage() {
+bool Window::ProcessMessage() {
   MSG msg = {};
   while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
+    if (msg.message == WM_QUIT) {
+      windows_closed_ = true;
+    }
   }
+  return !windows_closed_;
 }
 }
 #include "doctest/doctest.h"
