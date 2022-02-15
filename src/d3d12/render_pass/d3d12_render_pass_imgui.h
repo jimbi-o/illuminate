@@ -28,18 +28,18 @@ class RenderPassImgui {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
   }
-  static void Update([[maybe_unused]]RenderPassFuncArgsUpdate* args) {
-  }
-  static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
-  static auto Render(RenderPassFuncArgsRender* args) {
+  static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
-    ImGui::GetIO().Fonts->SetTexID((ImTextureID)args->gpu_handles[0].ptr);
+    ImGui::GetIO().Fonts->SetTexID((ImTextureID)args_per_pass->gpu_handles[0].ptr);
     ImGui::NewFrame();
     RegisterGUI();
+  }
+  static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
+  static auto Render([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     ImGui::Render();
-    args->command_list->OMSetRenderTargets(1, &args->cpu_handles[1], true, nullptr);
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), args->command_list);
+    args_per_pass->command_list->OMSetRenderTargets(1, &args_per_pass->cpu_handles[1], true, nullptr);
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), args_per_pass->command_list);
   }
  private:
   static void RegisterGUI();

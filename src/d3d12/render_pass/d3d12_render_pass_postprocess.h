@@ -32,33 +32,33 @@ class RenderPassPostprocess {
   }
   static void Term([[maybe_unused]]void* ptr) {
   }
-  static void Update(RenderPassFuncArgsUpdate* args) {
-    if (!args->ptr) { return; }
-    auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
+  static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+    if (!args_per_pass->ptr) { return; }
+    auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
     if (!pass_vars->cbv_ptr) { return; }
-    memcpy(pass_vars->cbv_ptr, args->ptr, pass_vars->cbv_size);
+    memcpy(pass_vars->cbv_ptr, args_per_pass->ptr, pass_vars->cbv_size);
   }
   static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
-  static auto Render(RenderPassFuncArgsRender* args) {
-    auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
-    auto& buffer_size = (pass_vars->size_type == BufferSizeRelativeness::kPrimaryBufferRelative) ? args->main_buffer_size->primarybuffer : args->main_buffer_size->swapchain;
+  static auto Render([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+    auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
+    auto& buffer_size = (pass_vars->size_type == BufferSizeRelativeness::kPrimaryBufferRelative) ? args_common->main_buffer_size->primarybuffer : args_common->main_buffer_size->swapchain;
     auto& width = buffer_size.width;
     auto& height = buffer_size.height;
-    args->command_list->SetGraphicsRootSignature(GetRenderPassRootSig(args));
+    args_per_pass->command_list->SetGraphicsRootSignature(GetRenderPassRootSig(args_common, args_per_pass));
     D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
-    args->command_list->RSSetViewports(1, &viewport);
+    args_per_pass->command_list->RSSetViewports(1, &viewport);
     D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
-    args->command_list->RSSetScissorRects(1, &scissor_rect);
-    args->command_list->SetPipelineState(GetRenderPassPso(args));
-    args->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    args->command_list->OMSetRenderTargets(1, &args->cpu_handles[pass_vars->rtv_index], true, nullptr);
+    args_per_pass->command_list->RSSetScissorRects(1, &scissor_rect);
+    args_per_pass->command_list->SetPipelineState(GetRenderPassPso(args_common, args_per_pass));
+    args_per_pass->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    args_per_pass->command_list->OMSetRenderTargets(1, &args_per_pass->cpu_handles[pass_vars->rtv_index], true, nullptr);
     if (pass_vars->use_views) {
-      args->command_list->SetGraphicsRootDescriptorTable(0, args->gpu_handles[0]);
+      args_per_pass->command_list->SetGraphicsRootDescriptorTable(0, args_per_pass->gpu_handles[0]);
     }
     if (pass_vars->use_sampler) {
-      args->command_list->SetGraphicsRootDescriptorTable(1, args->gpu_handles[1]);
+      args_per_pass->command_list->SetGraphicsRootDescriptorTable(1, args_per_pass->gpu_handles[1]);
     }
-    args->command_list->DrawInstanced(3, 1, 0, 0);
+    args_per_pass->command_list->DrawInstanced(3, 1, 0, 0);
   }
  private:
   RenderPassPostprocess() = delete;

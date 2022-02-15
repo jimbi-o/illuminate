@@ -749,53 +749,48 @@ void ReleaseRenderPassResources(const uint32_t render_pass_num, const RenderPass
     }
   }
 }
-void RenderPassUpdate(const RenderPass& render_pass, void** render_pass_vars, SceneData* scene_data, const uint32_t frame_index) {
-  RenderPassFuncArgsUpdate args{
-    .pass_vars_ptr = render_pass_vars[render_pass.index],
-    .scene_data = scene_data,
-    .frame_index = frame_index,
-  };
-  switch (render_pass.name) {
+void RenderPassUpdate(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  switch (args_per_pass->render_pass->name) {
     case SID("dispatch cs"): {
-      RenderPassCsDispatch::Update(&args);
+      RenderPassCsDispatch::Update(args_common, args_per_pass);
       return;
     }
     case SID("prez"): {
-      RenderPassPrez::Update(&args);
+      RenderPassPrez::Update(args_common, args_per_pass);
       return;
     }
     case SID("output to swapchain"): {
-      RenderPassPostprocess::Update(&args);
+      RenderPassPostprocess::Update(args_common, args_per_pass);
       return;
     }
     case SID("imgui"): {
-      RenderPassImgui::Update(&args);
+      RenderPassImgui::Update(args_common, args_per_pass);
       return;
     }
     case SID("copy resource"): {
-      RenderPassCopyResource::Update(&args);
+      RenderPassCopyResource::Update(args_common, args_per_pass);
       return;
     }
     case SID("pingpong-a"): {
       float c[4]{0.0f,1.0f,1.0f,1.0f};
-      args.ptr = c;
-      RenderPassPostprocess::Update(&args);
+      args_per_pass->ptr = c;
+      RenderPassPostprocess::Update(args_common, args_per_pass);
       return;
     }
     case SID("pingpong-b"): {
       float c[4]{1.0f,0.0f,1.0f,1.0f};
-      args.ptr = c;
-      RenderPassPostprocess::Update(&args);
+      args_per_pass->ptr = c;
+      RenderPassPostprocess::Update(args_common, args_per_pass);
       return;
     }
     case SID("pingpong-c"): {
       float c[4]{1.0f,1.0f,1.0f,1.0f};
-      args.ptr = c;
-      RenderPassPostprocess::Update(&args);
+      args_per_pass->ptr = c;
+      RenderPassPostprocess::Update(args_common, args_per_pass);
       return;
     }
   }
-  logerror("Update not registered {}", render_pass.name);
+  logerror("Update not registered {}", args_per_pass->render_pass->name);
   assert(false && "Update not registered");
 }
 auto IsRenderNeeded(const RenderPass& render_pass, void** render_pass_vars) {
@@ -840,48 +835,37 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
   }
   return std::make_tuple(resource_list, cpu_handle_list);
 }
-auto RenderPassRender(const RenderPass& render_pass, const MainBufferSize& main_buffer_size, void** render_pass_vars, D3d12CommandList* command_list, ID3D12Resource** resource_list, D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list, D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handle_list, SceneData* scene_data, const uint32_t frame_index, PsoRootsigManager* pso_rootsig_manager) {
-  RenderPassFuncArgsRender args{
-    .command_list = command_list,
-    .main_buffer_size = &main_buffer_size,
-    .pass_vars_ptr = render_pass_vars[render_pass.index],
-    .gpu_handles = gpu_handle_list,
-    .cpu_handles = cpu_handle_list,
-    .resources = resource_list,
-    .scene_data = scene_data,
-    .frame_index = frame_index,
-    .pso_rootsig_manager = pso_rootsig_manager,
-    .render_pass = &render_pass,
-  };
-  switch (render_pass.name) {
+auto RenderPassRender(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  switch (args_per_pass->render_pass->name) {
     case SID("dispatch cs"): {
-      RenderPassCsDispatch::Render(&args);
+      RenderPassCsDispatch::Render(args_common, args_per_pass);
       return;
     }
     case SID("prez"): {
-      RenderPassPrez::Render(&args);
+      RenderPassPrez::Render(args_common, args_per_pass);
       return;
     }
     case SID("pingpong-a"):
     case SID("pingpong-b"):
     case SID("pingpong-c"):
     case SID("output to swapchain"): {
-      RenderPassPostprocess::Render(&args);
+      RenderPassPostprocess::Render(args_common, args_per_pass);
       return;
     }
     case SID("imgui"): {
-      RenderPassImgui::Render(&args);
+      RenderPassImgui::Render(args_common, args_per_pass);
       return;
     }
     case SID("copy resource"): {
-      RenderPassCopyResource::Render(&args);
+      RenderPassCopyResource::Render(args_common, args_per_pass);
       return;
     }
   }
-  logerror("Render not registered {}", render_pass.name);
+  logerror("Render not registered {}", args_per_pass->render_pass->name);
   assert(false && "Render not registered");
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
+  if (barrier_num == 0) { return; }
   auto allocator = GetTemporalMemoryAllocator();
   auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
@@ -909,14 +893,13 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   }
   command_list->ResourceBarrier(barrier_num, barriers);
 }
-auto ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, const BufferList& buffer_list) {
-  if (barrier_num == 0) { return; }
-  auto allocator = GetTemporalMemoryAllocator();
-  auto resource_list = AllocateArray<ID3D12Resource*>(&allocator, barrier_num);
+ID3D12Resource** PrepareBarrierResourceList(const uint32_t barrier_num, const Barrier* barrier_config, const BufferList& buffer_list, MemoryAllocationJanitor* allocator) {
+  if (barrier_num == 0) { return nullptr; }
+  auto resource_list = AllocateArray<ID3D12Resource*>(allocator, barrier_num);
   for (uint32_t i = 0; i < barrier_num; i++) {
     resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, GetPingPongBufferReadWriteTypeFromD3d12ResourceState(barrier_config[i].state_after));
   }
-  ExecuteBarrier(command_list, barrier_num, barrier_config, resource_list);
+  return resource_list;
 }
 auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
   auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, 2); // 0:view 1:sampler
@@ -1258,9 +1241,30 @@ float4 main(const VsInput input) : SV_Position {
         assert(false  && "increase RenderGraph::gpu_handle_num_view");
       }
     }
+    // set up render pass args
+    RenderPassFuncArgsRenderCommon args_common {
+      .main_buffer_size = &main_buffer_size,
+      .scene_data = &scene_data,
+      .frame_index = frame_index,
+      .pso_rootsig_manager = &pso_rootsig_manager,
+    };
+    auto prepass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
+    auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
+    auto postpass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
+    for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
+      const auto& render_pass = render_graph.render_pass_list[k];
+      args_per_pass[k] = {};
+      args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
+      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, &single_frame_allocator);
+      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+      args_per_pass[k].render_pass = &render_pass;
+      prepass_barrier_resource_list[k] = PrepareBarrierResourceList(render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, &single_frame_allocator);
+      FlipPingPongBuffer(&buffer_list, render_pass.flip_pingpong_num, render_pass.flip_pingpong_index_list);
+      postpass_barrier_resource_list[k] = PrepareBarrierResourceList(render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, &single_frame_allocator);
+    }
     // update
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
-      RenderPassUpdate(render_graph.render_pass_list[k], render_pass_vars, &scene_data, frame_index);
+      RenderPassUpdate(&args_common, &args_per_pass[k]);
     }
     // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
@@ -1275,15 +1279,13 @@ float4 main(const VsInput input) : SV_Position {
         command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
         prev_command_list[render_pass.command_queue_index] = command_list;
       }
+      args_per_pass[k].command_list = command_list;
       if (command_list && render_graph.command_queue_type[render_pass.command_queue_index] != D3D12_COMMAND_LIST_TYPE_COPY) {
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
-      ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list);
-      auto [resource_list, cpu_handle_list] = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, &render_pass_allocator);
-      auto gpu_handle_list = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, descriptor_cpu, &descriptor_gpu, &render_pass_allocator);
-      RenderPassRender(render_pass, main_buffer_size, render_pass_vars, command_list, resource_list, cpu_handle_list, gpu_handle_list, &scene_data, frame_index, &pso_rootsig_manager);
-      FlipPingPongBuffer(&buffer_list, render_pass.flip_pingpong_num, render_pass.flip_pingpong_index_list);
-      ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list);
+      ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, prepass_barrier_resource_list[k]);
+      RenderPassRender(&args_common, &args_per_pass[k]);
+      ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, postpass_barrier_resource_list[k]);
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
         prev_command_list[render_pass.command_queue_index] = nullptr;

@@ -16,14 +16,14 @@ class RenderPassCopyResource {
     return param;
   }
   static void Term([[maybe_unused]]void* ptr) {}
-  static void Update(RenderPassFuncArgsUpdate* args) {
-    auto param = static_cast<Param*>(args->pass_vars_ptr);
+  static void Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+    auto param = static_cast<Param*>(args_per_pass->pass_vars_ptr);
     if (param->state != State::kUploading) { return; }
-    if (param->initial_frame_index != args->frame_index) { return; }
-    for (uint32_t i = 0; i < args->scene_data->buffer_allocation_num; i++) {
-      ReleaseBufferAllocation(&args->scene_data->buffer_allocation_upload[i]);
-      args->scene_data->buffer_allocation_upload[i].resource   = nullptr;
-      args->scene_data->buffer_allocation_upload[i].allocation = nullptr;
+    if (param->initial_frame_index != args_common->frame_index) { return; }
+    for (uint32_t i = 0; i < args_common->scene_data->buffer_allocation_num; i++) {
+      ReleaseBufferAllocation(&args_common->scene_data->buffer_allocation_upload[i]);
+      args_common->scene_data->buffer_allocation_upload[i].resource   = nullptr;
+      args_common->scene_data->buffer_allocation_upload[i].allocation = nullptr;
     }
     param->state = State::kDone;
   }
@@ -31,13 +31,13 @@ class RenderPassCopyResource {
     auto param = static_cast<const Param*>(args);
     return param->state == State::kUpload;
   }
-  static auto Render(RenderPassFuncArgsRender* args) {
-    auto param = static_cast<Param*>(args->pass_vars_ptr);
+  static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+    auto param = static_cast<Param*>(args_per_pass->pass_vars_ptr);
     assert(param->state == State::kUpload);
-    for (uint32_t i = 0; i < args->scene_data->buffer_allocation_num; i++) {
-      args->command_list->CopyResource(args->scene_data->buffer_allocation_default[i].resource, args->scene_data->buffer_allocation_upload[i].resource);
+    for (uint32_t i = 0; i < args_common->scene_data->buffer_allocation_num; i++) {
+      args_per_pass->command_list->CopyResource(args_common->scene_data->buffer_allocation_default[i].resource, args_common->scene_data->buffer_allocation_upload[i].resource);
     }
-    param->initial_frame_index = args->frame_index;
+    param->initial_frame_index = args_common->frame_index;
     param->state = State::kUploading;
   }
  private:
