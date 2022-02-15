@@ -5,8 +5,6 @@ namespace illuminate {
 class RenderPassPostprocess {
  public:
   struct Param {
-    ID3D12RootSignature* rootsig{nullptr};
-    ID3D12PipelineState* pso{nullptr};
     BufferSizeRelativeness size_type{BufferSizeRelativeness::kPrimaryBufferRelative};
     uint32_t rtv_index{0};
     bool use_views{true};
@@ -17,7 +15,6 @@ class RenderPassPostprocess {
   static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
-    args->pso_rootsig_manager->FindMaterial(args->json->at("material"), &param->rootsig, &param->pso);
     if (args->json->contains("size_type")) {
       param->size_type = (GetStringView(args->json->at("size_type")).compare("swapchain_relative") == 0) ? BufferSizeRelativeness::kSwapchainRelative : BufferSizeRelativeness::kPrimaryBufferRelative;
     }
@@ -47,12 +44,12 @@ class RenderPassPostprocess {
     auto& buffer_size = (pass_vars->size_type == BufferSizeRelativeness::kPrimaryBufferRelative) ? args->main_buffer_size->primarybuffer : args->main_buffer_size->swapchain;
     auto& width = buffer_size.width;
     auto& height = buffer_size.height;
-    args->command_list->SetGraphicsRootSignature(pass_vars->rootsig);
+    args->command_list->SetGraphicsRootSignature(GetRenderPassRootSig(args));
     D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
     args->command_list->RSSetViewports(1, &viewport);
     D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
     args->command_list->RSSetScissorRects(1, &scissor_rect);
-    args->command_list->SetPipelineState(pass_vars->pso);
+    args->command_list->SetPipelineState(GetRenderPassPso(args));
     args->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     args->command_list->OMSetRenderTargets(1, &args->cpu_handles[pass_vars->rtv_index], true, nullptr);
     if (pass_vars->use_views) {

@@ -8,10 +8,11 @@ class PsoRootsigManager {
  public:
   bool Init(const nlohmann::json& material_json, const char** shader_code_list, D3d12Device* device, MemoryAllocationJanitor* allocator);
   void Term();
-  void FindMaterial(const std::string_view material_name, ID3D12RootSignature** rootsig, ID3D12PipelineState** pso) {
-    const auto hash = CalcStrHash(material_name.data());
-    *rootsig = rootsig_list_[*rootsig_index_.Get(hash)];
-    *pso = pso_list_[*pso_index_.Get(hash)];
+  constexpr ID3D12RootSignature* GetRootsig(const uint32_t pso_index) {
+    return rootsig_list_[rootsig_pso_map_[pso_index]];
+  }
+  constexpr ID3D12PipelineState* GetPso(const uint32_t pso_index) {
+    return pso_list_[pso_index];
   }
  private:
   HMODULE library_{nullptr};
@@ -24,6 +25,7 @@ class PsoRootsigManager {
   uint32_t pso_num_{0};
   ID3D12RootSignature** rootsig_list_{nullptr};
   ID3D12PipelineState** pso_list_{nullptr};
+  uint32_t* rootsig_pso_map_{nullptr};
 };
 }
 #endif

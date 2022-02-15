@@ -375,8 +375,8 @@ auto GetTestJson() {
           "state": "uav"
         }
       ],
+      "material": ["pso dispatch cs"],
       "pass_vars": {
-        "material": "pso dispatch cs",
         "thread_group_count_x": 32,
         "thread_group_count_y": 32
       }
@@ -392,8 +392,8 @@ auto GetTestJson() {
           "state": "dsv_write"
         }
       ],
+      "material": ["pso prez"],
       "pass_vars": {
-        "material": "pso prez",
         "stencil_val": 255
       }
     },
@@ -410,7 +410,6 @@ auto GetTestJson() {
           "state": "rtv"
         }
       ],
-      "sampler": ["bilinear"],
       "flip_pingpong": ["pingpong"],
       "postpass_barrier": [
         {
@@ -420,8 +419,8 @@ auto GetTestJson() {
           "state_after": ["srv_ps"]
         }
       ],
+      "material": ["pso pingpong-a"],
       "pass_vars": {
-        "material": "pso pingpong-a",
         "rtv_index": 1,
         "use_sampler": false,
         "cbv": "cbv-a"
@@ -460,8 +459,8 @@ auto GetTestJson() {
           "state_after": ["rtv"]
         }
       ],
+      "material": ["pso pingpong-bc"],
       "pass_vars": {
-        "material": "pso pingpong-bc",
         "rtv_index": 2,
         "cbv": "cbv-b"
       }
@@ -499,8 +498,8 @@ auto GetTestJson() {
           "state_after": ["rtv"]
         }
       ],
+      "material": ["pso pingpong-bc"],
       "pass_vars": {
-        "material": "pso pingpong-bc",
         "rtv_index": 2,
         "cbv": "cbv-c"
       }
@@ -571,8 +570,8 @@ auto GetTestJson() {
           "state_after": ["rtv"]
         }
       ],
+      "material": ["pso output to swapchain"],
       "pass_vars": {
-        "material": "pso output to swapchain",
         "size_type": "swapchain_relative",
         "rtv_index": 2,
         "use_views": true,
@@ -841,7 +840,7 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
   }
   return std::make_tuple(resource_list, cpu_handle_list);
 }
-auto RenderPassRender(const RenderPass& render_pass, const MainBufferSize& main_buffer_size, void** render_pass_vars, D3d12CommandList* command_list, ID3D12Resource** resource_list, D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list, D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handle_list, SceneData* scene_data, const uint32_t frame_index) {
+auto RenderPassRender(const RenderPass& render_pass, const MainBufferSize& main_buffer_size, void** render_pass_vars, D3d12CommandList* command_list, ID3D12Resource** resource_list, D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list, D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handle_list, SceneData* scene_data, const uint32_t frame_index, PsoRootsigManager* pso_rootsig_manager) {
   RenderPassFuncArgsRender args{
     .command_list = command_list,
     .main_buffer_size = &main_buffer_size,
@@ -851,6 +850,8 @@ auto RenderPassRender(const RenderPass& render_pass, const MainBufferSize& main_
     .resources = resource_list,
     .scene_data = scene_data,
     .frame_index = frame_index,
+    .pso_rootsig_manager = pso_rootsig_manager,
+    .render_pass = &render_pass,
   };
   switch (render_pass.name) {
     case SID("dispatch cs"): {
@@ -1202,7 +1203,6 @@ float4 main(const VsInput input) : SV_Position {
       .named_buffer_config_index = &named_buffer_config_index,
       .buffer_list = &buffer_list,
       .buffer_config_list = render_graph.buffer_list,
-      .pso_rootsig_manager = &pso_rootsig_manager,
     };
     render_pass_vars = PrepareRenderPassResources(json.at("render_pass"), render_graph.render_pass_num, render_graph.render_pass_list, &allocator, &render_pass_func_args_init);
   }
@@ -1281,7 +1281,7 @@ float4 main(const VsInput input) : SV_Position {
       ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list);
       auto [resource_list, cpu_handle_list] = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, &render_pass_allocator);
       auto gpu_handle_list = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, descriptor_cpu, &descriptor_gpu, &render_pass_allocator);
-      RenderPassRender(render_pass, main_buffer_size, render_pass_vars, command_list, resource_list, cpu_handle_list, gpu_handle_list, &scene_data, frame_index);
+      RenderPassRender(render_pass, main_buffer_size, render_pass_vars, command_list, resource_list, cpu_handle_list, gpu_handle_list, &scene_data, frame_index, &pso_rootsig_manager);
       FlipPingPongBuffer(&buffer_list, render_pass.flip_pingpong_num, render_pass.flip_pingpong_index_list);
       ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list);
       if (render_pass.execute) {

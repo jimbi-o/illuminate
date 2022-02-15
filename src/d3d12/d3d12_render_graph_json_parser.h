@@ -139,6 +139,20 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
           }
         }
       } // sampler
+      if (src_pass.contains("material")) {
+        auto& material = src_pass.at("material");
+        auto& material_config = j.at("material").at("pso");
+        const auto num = GetUint32(material.size());
+        dst_pass.material_list = AllocateArray<uint32_t>(allocator, num);
+        for (uint32_t m = 0; m < num; m++) {
+          for (uint32_t n = 0; n < material_config.size(); n++) {
+            if (material[m] == material_config[n].at("name")) {
+              dst_pass.material_list[m] = n;
+              break;
+            }
+          }
+        }
+      } // material
       if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");
         dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());

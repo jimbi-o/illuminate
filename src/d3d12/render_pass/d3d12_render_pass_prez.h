@@ -5,14 +5,11 @@ namespace illuminate {
 class RenderPassPrez {
  public:
   struct Param {
-    ID3D12RootSignature* rootsig{nullptr};
-    ID3D12PipelineState* pso{nullptr};
     uint32_t stencil_val;
   };
   static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
-    args->pso_rootsig_manager->FindMaterial(args->json->at("material"), &param->rootsig, &param->pso);
     param->stencil_val = GetNum(*args->json, "stencil_val", 0);
     return param;
   }
@@ -27,12 +24,12 @@ class RenderPassPrez {
     auto pass_vars = static_cast<const Param*>(args->pass_vars_ptr);
     auto& width = args->main_buffer_size->primarybuffer.width;
     auto& height = args->main_buffer_size->primarybuffer.height;
-    args->command_list->SetGraphicsRootSignature(pass_vars->rootsig);
+    args->command_list->SetGraphicsRootSignature(GetRenderPassRootSig(args));
     D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
     args->command_list->RSSetViewports(1, &viewport);
     D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
     args->command_list->RSSetScissorRects(1, &scissor_rect);
-    args->command_list->SetPipelineState(pass_vars->pso);
+    args->command_list->SetPipelineState(GetRenderPassPso(args));
     args->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     args->command_list->OMSetRenderTargets(0, nullptr, true, args->cpu_handles);
     args->command_list->OMSetStencilRef(pass_vars->stencil_val);

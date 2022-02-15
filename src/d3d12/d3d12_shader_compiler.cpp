@@ -450,9 +450,9 @@ auto FillPsoPtr(ID3D12RootSignature* rootsig, const uint32_t shader_object_num, 
   }
 }
 void ParseJson(const nlohmann::json& json, const char** shader_code_list, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, D3d12Device* device,
-               HashMap<uint32_t, MemoryAllocationJanitor>* rootsig_index_map, uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
-               HashMap<uint32_t, MemoryAllocationJanitor>* pso_index_map, uint32_t* pso_num, ID3D12PipelineState*** pso_list,
-               MemoryAllocationJanitor* allocator) {
+               uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
+               uint32_t* pso_num, ID3D12PipelineState*** pso_list,
+               uint32_t** rootsig_pso_map, MemoryAllocationJanitor* allocator) {
   auto func_allocator = GetTemporalMemoryAllocator();
   auto shader_config = ParseShaderConfigJson(json, &func_allocator);
   auto compile_unit_list = AllocateArray<IDxcResult*>(&func_allocator, shader_config.compile_unit_num);
@@ -461,6 +461,7 @@ void ParseJson(const nlohmann::json& json, const char** shader_code_list, IDxcCo
   *pso_num = shader_config.pso_num;
   *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, shader_config.rootsig_num);
   *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, shader_config.pso_num);
+  *rootsig_pso_map = AllocateArray<uint32_t>(allocator, shader_config.pso_num);
   for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
     compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[shader_config.compile_unit_filename_index_list[i]], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
@@ -485,10 +486,7 @@ void ParseJson(const nlohmann::json& json, const char** shader_code_list, IDxcCo
   }
   const auto& json_pso_list = json.at("pso");
   for (uint32_t i = 0; i < json_pso_list.size(); i++) {
-    const auto name = GetStringView(json_pso_list[i], "name");
-    const auto hash = CalcStrHash(name.data());
-    rootsig_index_map->Insert(hash, std::move(shader_config.pso_config_list[i].rootsig_index));
-    pso_index_map->InsertCopy(hash, i);
+    (*rootsig_pso_map)[i] = shader_config.pso_config_list[i].rootsig_index;
     SetD3d12Name((*rootsig_list)[i], json_pso_list[i].at("rootsig"));
     SetD3d12Name((*pso_list)[i], json_pso_list[i].at("name"));
   }
@@ -505,7 +503,7 @@ bool PsoRootsigManager::Init(const nlohmann::json& material_json, const char** s
   if (include_handler_ == nullptr) { return false; }
   rootsig_index_.SetAllocator(allocator);
   pso_index_.SetAllocator(allocator);
-  ParseJson(material_json, shader_code_list, compiler_, include_handler_, device, &rootsig_index_, &rootsig_num_, &rootsig_list_, &pso_index_, &pso_num_, &pso_list_, allocator);
+  ParseJson(material_json, shader_code_list, compiler_, include_handler_, device, &rootsig_num_, &rootsig_list_, &pso_num_, &pso_list_, &rootsig_pso_map_, allocator);
   return true;
 }
 void PsoRootsigManager::Term() {
@@ -797,23 +795,20 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
     compile_unit_list[i]->Release();
   }
   {
-    HashMap<uint32_t, MemoryAllocationJanitor> rootsig_index(&allocator);
-    HashMap<uint32_t, MemoryAllocationJanitor> pso_index(&allocator);
     uint32_t rootsig_num{0};
     uint32_t pso_num{0};
     ID3D12RootSignature** rootsig_list_check_parse_json{nullptr};
     ID3D12PipelineState** pso_list_check_parse_json{nullptr};
-    ParseJson(json, shader_code_list, compiler, include_handler, device.Get(), &rootsig_index, &rootsig_num, &rootsig_list_check_parse_json, &pso_index, &pso_num, &pso_list_check_parse_json, &allocator);
+    uint32_t* rootsig_pso_map{nullptr};
+    ParseJson(json, shader_code_list, compiler, include_handler, device.Get(), &rootsig_num, &rootsig_list_check_parse_json, &pso_num, &pso_list_check_parse_json, &rootsig_pso_map, &allocator);
     CHECK_EQ(rootsig_num, 2);
     CHECK_EQ(pso_num, 2);
     CHECK_NE(rootsig_list_check_parse_json[0], nullptr);
     CHECK_NE(rootsig_list_check_parse_json[1], nullptr);
     CHECK_NE(pso_list_check_parse_json[0], nullptr);
     CHECK_NE(pso_list_check_parse_json[1], nullptr);
-    CHECK_EQ(*(rootsig_index.Get(SID("pso dispatch cs"))), 0);
-    CHECK_EQ(*(rootsig_index.Get(SID("pso output to swapchain"))), 1);
-    CHECK_EQ(*(pso_index.Get(SID("pso dispatch cs"))), 0);
-    CHECK_EQ(*(pso_index.Get(SID("pso output to swapchain"))), 1);
+    CHECK_EQ(rootsig_pso_map[0], 0);
+    CHECK_EQ(rootsig_pso_map[1], 1);
     rootsig_list_check_parse_json[0]->Release();
     rootsig_list_check_parse_json[1]->Release();
     pso_list_check_parse_json[0]->Release();

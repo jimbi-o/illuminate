@@ -19,7 +19,6 @@ struct RenderPassFuncArgsInit {
   const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_config_index{nullptr};
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
-  PsoRootsigManager* pso_rootsig_manager{nullptr};
 };
 struct RenderPassFuncArgsUpdate {
   void* pass_vars_ptr{nullptr};
@@ -36,6 +35,14 @@ struct RenderPassFuncArgsRender {
   ID3D12Resource** resources{nullptr};
   SceneData* scene_data{nullptr};
   uint32_t frame_index{0};
+  PsoRootsigManager* pso_rootsig_manager{nullptr};
+  const RenderPass* render_pass{nullptr};
 };
+constexpr inline ID3D12RootSignature* GetRenderPassRootSig(RenderPassFuncArgsRender* args, const uint32_t index = 0) {
+  return args->pso_rootsig_manager->GetRootsig(args->render_pass->material_list[index]);
+}
+constexpr inline ID3D12PipelineState* GetRenderPassPso(RenderPassFuncArgsRender* args, const uint32_t index = 0) {
+  return args->pso_rootsig_manager->GetPso(args->render_pass->material_list[index]);
+}
 }
 #endif
