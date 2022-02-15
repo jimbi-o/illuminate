@@ -18,6 +18,7 @@
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_prez.h"
 #include "render_pass/d3d12_render_pass_copy_resource.h"
+static const uint32_t kFrameLoopNum = 3;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
@@ -25,7 +26,6 @@ auto GetTestJson() {
   return R"(
 {
   "frame_buffer_num": 2,
-  "frame_loop_num": 5,
   "primarybuffer_width": 300,
   "primarybuffer_height": 400,
   "primarybuffer_format": "R8G8B8A8_UNORM",
@@ -1226,7 +1226,7 @@ float4 main(const VsInput input) : SV_Position {
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
   }
-  for (uint32_t i = 0; i < render_graph.frame_loop_num; i++) {
+  for (uint32_t i = 0; i < kFrameLoopNum; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;

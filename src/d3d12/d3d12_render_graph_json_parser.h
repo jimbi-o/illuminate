@@ -14,7 +14,6 @@ template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
-  j.at("frame_loop_num").get_to(r.frame_loop_num);
   r.primarybuffer_width = GetNum(j, "primarybuffer_width", 1);
   r.primarybuffer_height = GetNum(j, "primarybuffer_height", 1);
   r.primarybuffer_format = GetDxgiFormat(j, "primarybuffer_format");
