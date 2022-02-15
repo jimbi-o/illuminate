@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_RENDER_PASS_D3D12_CS_DISPATCH_H
-#define ILLUMINATE_RENDER_PASS_D3D12_CS_DISPATCH_H
+#ifndef ILLUMINATE_D3D12_RENDER_PASS_CS_DISPATCH_H
+#define ILLUMINATE_D3D12_RENDER_PASS_CS_DISPATCH_H
 #include "d3d12_render_pass_common.h"
 namespace illuminate {
 class RenderPassCsDispatch {

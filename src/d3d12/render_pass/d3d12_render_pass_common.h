@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_RENDER_PASS_D3D12_COMMON_H
-#define ILLUMINATE_RENDER_PASS_D3D12_COMMON_H
+#ifndef ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
+#define ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
 #include "../d3d12_descriptors.h"
 #include "../d3d12_header_common.h"
 #include "../d3d12_json_parser.h"

@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_RENDER_PASS_D3D12_IMGUI_H
-#define ILLUMINATE_RENDER_PASS_D3D12_IMGUI_H
+#ifndef ILLUMINATE_D3D12_RENDER_PASS_IMGUI_H
+#define ILLUMINATE_D3D12_RENDER_PASS_IMGUI_H
 #include "d3d12_render_pass_common.h"
 #include "imgui.h"
 #include "backends/imgui_impl_win32.h"
