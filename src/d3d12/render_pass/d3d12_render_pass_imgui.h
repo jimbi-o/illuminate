@@ -28,12 +28,12 @@ class RenderPassImgui {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
   }
-  static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  static void Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::GetIO().Fonts->SetTexID((ImTextureID)args_per_pass->gpu_handles[0].ptr);
     ImGui::NewFrame();
-    RegisterGUI();
+    RegisterGUI(args_common, args_per_pass);
   }
   static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
   static auto Render([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
@@ -42,7 +42,7 @@ class RenderPassImgui {
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), args_per_pass->command_list);
   }
  private:
-  static void RegisterGUI();
+  static void RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
   RenderPassImgui() = delete;
 };
 }

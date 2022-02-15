@@ -18,7 +18,7 @@
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_prez.h"
 #include "render_pass/d3d12_render_pass_copy_resource.h"
-static const uint32_t kFrameLoopNum = 3;
+static const uint32_t kFrameLoopNum = 1000;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
@@ -26,13 +26,13 @@ auto GetTestJson() {
   return R"(
 {
   "frame_buffer_num": 2,
-  "primarybuffer_width": 300,
-  "primarybuffer_height": 400,
+  "primarybuffer_width": 1920,
+  "primarybuffer_height": 1080,
   "primarybuffer_format": "R8G8B8A8_UNORM",
   "window": {
     "title": "integration test",
-    "width": 500,
-    "height" : 300
+    "width": 1920,
+    "height" : 1080
   },
   "command_queue": [
     {
@@ -1247,6 +1247,8 @@ float4 main(const VsInput input) : SV_Position {
       .scene_data = &scene_data,
       .frame_index = frame_index,
       .pso_rootsig_manager = &pso_rootsig_manager,
+      .buffer_list = &buffer_list,
+      .buffer_config_list = render_graph.buffer_list,
     };
     auto prepass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);

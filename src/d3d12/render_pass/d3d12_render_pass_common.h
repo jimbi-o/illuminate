@@ -25,6 +25,8 @@ struct RenderPassFuncArgsRenderCommon {
   SceneData* scene_data{nullptr};
   uint32_t frame_index{0};
   PsoRootsigManager* pso_rootsig_manager{nullptr};
+  BufferList* buffer_list{nullptr};
+  BufferConfig* buffer_config_list{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};
