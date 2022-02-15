@@ -10,7 +10,8 @@
 #define logerror spdlog::error
 #define logfatal spdlog::critical
 namespace illuminate {
-void SetD3d12Name(ID3D12Object* obj, const std::string& name);
+void SetD3d12Name(ID3D12Object* obj, const std::string_view name);
+uint32_t GetD3d12Name(ID3D12Object* obj, const uint32_t dst_size, char* dst);
 void CopyStrToWstrContainer(wchar_t** dst, const std::string_view src, MemoryAllocationJanitor* allocator);
 template <typename N>
 uint32_t GetUint32(const N& n) {
