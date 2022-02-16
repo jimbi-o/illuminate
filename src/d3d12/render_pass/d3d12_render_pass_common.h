@@ -31,6 +31,7 @@ struct RenderPassFuncArgsRenderCommon {
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
   RenderPassConfigDynamicData* dynamic_data{nullptr};
+  const RenderPass* render_pass_list{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};
@@ -38,14 +39,17 @@ struct RenderPassFuncArgsRenderPerPass {
   const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles{nullptr};
   const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles{nullptr};
   ID3D12Resource** resources{nullptr};
-  const RenderPass* render_pass{nullptr};
+  uint32_t render_pass_index{};
   void* ptr{nullptr};
 };
+constexpr inline const RenderPass& GetRenderPass(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  return args_common->render_pass_list[args_per_pass->render_pass_index];
+}
 constexpr inline ID3D12RootSignature* GetRenderPassRootSig(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t index = 0) {
-  return args_common->pso_rootsig_manager->GetRootsig(args_per_pass->render_pass->material_list[index]);
+  return args_common->pso_rootsig_manager->GetRootsig(GetRenderPass(args_common, args_per_pass).material_list[index]);
 }
 constexpr inline ID3D12PipelineState* GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t index = 0) {
-  return args_common->pso_rootsig_manager->GetPso(args_per_pass->render_pass->material_list[index]);
+  return args_common->pso_rootsig_manager->GetPso(GetRenderPass(args_common, args_per_pass).material_list[index]);
 }
 }
 #endif

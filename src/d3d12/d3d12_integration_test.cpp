@@ -750,7 +750,7 @@ void ReleaseRenderPassResources(const uint32_t render_pass_num, const RenderPass
   }
 }
 void RenderPassUpdate(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  switch (args_per_pass->render_pass->name) {
+  switch (GetRenderPass(args_common, args_per_pass).name) {
     case SID("dispatch cs"): {
       RenderPassCsDispatch::Update(args_common, args_per_pass);
       return;
@@ -790,7 +790,7 @@ void RenderPassUpdate(RenderPassFuncArgsRenderCommon* args_common, RenderPassFun
       return;
     }
   }
-  logerror("Update not registered {}", args_per_pass->render_pass->name);
+  logerror("Update not registered {}", GetRenderPass(args_common, args_per_pass).name);
   assert(false && "Update not registered");
 }
 auto IsRenderNeeded(const RenderPass& render_pass, void** render_pass_vars) {
@@ -836,7 +836,7 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
   return std::make_tuple(resource_list, cpu_handle_list);
 }
 auto RenderPassRender(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  switch (args_per_pass->render_pass->name) {
+  switch (GetRenderPass(args_common, args_per_pass).name) {
     case SID("dispatch cs"): {
       RenderPassCsDispatch::Render(args_common, args_per_pass);
       return;
@@ -861,7 +861,7 @@ auto RenderPassRender(RenderPassFuncArgsRenderCommon* args_common, RenderPassFun
       return;
     }
   }
-  logerror("Render not registered {}", args_per_pass->render_pass->name);
+  logerror("Render not registered {}", GetRenderPass(args_common, args_per_pass).name);
   assert(false && "Render not registered");
 }
 void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
@@ -1251,6 +1251,7 @@ float4 main(const VsInput input) : SV_Position {
       .buffer_list = &buffer_list,
       .buffer_config_list = render_graph.buffer_list,
       .dynamic_data = &dynamic_data,
+      .render_pass_list = render_graph.render_pass_list,
     };
     auto prepass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
@@ -1259,9 +1260,9 @@ float4 main(const VsInput input) : SV_Position {
       const auto& render_pass = render_graph.render_pass_list[k];
       args_per_pass[k] = {};
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
+      args_per_pass[k].render_pass_index = k;
       std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, &single_frame_allocator);
       args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
-      args_per_pass[k].render_pass = &render_pass;
       prepass_barrier_resource_list[k] = PrepareBarrierResourceList(render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, &single_frame_allocator);
       FlipPingPongBuffer(&buffer_list, render_pass.flip_pingpong_num, render_pass.flip_pingpong_index_list);
       postpass_barrier_resource_list[k] = PrepareBarrierResourceList(render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, &single_frame_allocator);
