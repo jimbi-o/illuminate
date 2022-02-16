@@ -42,14 +42,41 @@ struct RenderPassFuncArgsRenderPerPass {
   uint32_t render_pass_index{};
   void* ptr{nullptr};
 };
+using RenderPassFuncInit = void* (*)(RenderPassFuncArgsInit* args);
+using RenderPassFuncTerm = void (*)(void);
+using RenderPassFuncUpdate = void (*)(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
+using RenderPassFuncIsRenderNeeded = bool (*)(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
+using RenderPassFuncRender = void (*)(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
+struct RenderPassFunctionList {
+  RenderPassFuncInit* init{nullptr};
+  RenderPassFuncTerm* term{nullptr};
+  RenderPassFuncUpdate* update{nullptr};
+  RenderPassFuncIsRenderNeeded* is_render_needed{nullptr};
+  RenderPassFuncRender* render{nullptr};
+};
 constexpr inline const RenderPass& GetRenderPass(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   return args_common->render_pass_list[args_per_pass->render_pass_index];
 }
-constexpr inline ID3D12RootSignature* GetRenderPassRootSig(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t index = 0) {
-  return args_common->pso_rootsig_manager->GetRootsig(GetRenderPass(args_common, args_per_pass).material_list[index]);
+constexpr inline auto RenderPassInit(RenderPassFunctionList* render_pass_function_list, RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
+  return render_pass_function_list->init[render_pass_index](args);
 }
-constexpr inline ID3D12PipelineState* GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t index = 0) {
-  return args_common->pso_rootsig_manager->GetPso(GetRenderPass(args_common, args_per_pass).material_list[index]);
+constexpr inline auto RenderPassTerm(RenderPassFunctionList* render_pass_function_list, const uint32_t render_pass_index) {
+  return render_pass_function_list->term[render_pass_index]();
+}
+constexpr inline auto RenderPassUpdate(RenderPassFunctionList* render_pass_function_list, RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  return render_pass_function_list->update[args_per_pass->render_pass_index](args_common, args_per_pass);
+}
+constexpr inline auto IsRenderPassRenderNeeded(RenderPassFunctionList* render_pass_function_list, RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  return render_pass_function_list->is_render_needed[args_per_pass->render_pass_index](args_common, args_per_pass);
+}
+constexpr inline auto RenderPassRender(RenderPassFunctionList* render_pass_function_list, RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  return render_pass_function_list->render[args_per_pass->render_pass_index](args_common, args_per_pass);
+}
+constexpr inline ID3D12RootSignature* GetRenderPassRootSig(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t material_index = 0) {
+  return args_common->pso_rootsig_manager->GetRootsig(GetRenderPass(args_common, args_per_pass).material_list[material_index]);
+}
+constexpr inline ID3D12PipelineState* GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t material_index = 0) {
+  return args_common->pso_rootsig_manager->GetPso(GetRenderPass(args_common, args_per_pass).material_list[material_index]);
 }
 }
 #endif

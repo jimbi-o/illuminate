@@ -9,13 +9,13 @@ class RenderPassCopyResource {
     uint32_t initial_frame_index{};
     State state;
   };
-  static void* Init([[maybe_unused]]RenderPassFuncArgsInit* args) {
+  static void* Init(RenderPassFuncArgsInit* args) {
     auto param = Allocate<Param>(args->allocator);
     param->initial_frame_index = 0;
     param->state = State::kUpload;
     return param;
   }
-  static void Term([[maybe_unused]]void* ptr) {}
+  static void Term() {}
   static void Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     auto param = static_cast<Param*>(args_per_pass->pass_vars_ptr);
     if (param->state != State::kUploading) { return; }
@@ -27,8 +27,8 @@ class RenderPassCopyResource {
     }
     param->state = State::kDone;
   }
-  static auto IsRenderNeeded(const void* args) {
-    auto param = static_cast<const Param*>(args);
+  static bool IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+    auto param = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
     return param->state == State::kUpload;
   }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {

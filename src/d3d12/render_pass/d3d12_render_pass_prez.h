@@ -13,11 +13,11 @@ class RenderPassPrez {
     param->stencil_val = GetNum(*args->json, "stencil_val", 0);
     return param;
   }
-  static void Term([[maybe_unused]]void* ptr) {
+  static void Term() {
   }
   static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) {
   }
-  static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
+  static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     PIXScopedEvent(args_per_pass->command_list, 0, "prez"); // https://devblogs.microsoft.com/pix/winpixeventruntime/
     args_per_pass->command_list->ClearDepthStencilView(args_per_pass->cpu_handles[0], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);

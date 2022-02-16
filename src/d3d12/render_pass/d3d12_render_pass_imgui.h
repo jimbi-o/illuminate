@@ -23,7 +23,7 @@ class RenderPassImgui {
     }
     return nullptr;
   }
-  static void Term([[maybe_unused]]void* ptr) {
+  static void Term() {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -35,7 +35,7 @@ class RenderPassImgui {
     ImGui::NewFrame();
     RegisterGUI(args_common, args_per_pass);
   }
-  static auto IsRenderNeeded([[maybe_unused]]const void* args) { return true; }
+  static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     ImGui::Render();
     args_per_pass->command_list->OMSetRenderTargets(1, &args_per_pass->cpu_handles[1], true, nullptr);
