@@ -32,6 +32,15 @@ IDxcIncludeHandler* CreateDxcIncludeHandler(IDxcUtils* utils) {
   logerror("CreateDefaultIncludeHandler failed. {}", hr);
   return nullptr;
 }
+IDxcBlobEncoding* LoadShaderFile(IDxcUtils* utils, LPCWSTR filename) {
+  IDxcBlobEncoding* blob{nullptr};
+  auto hr = utils->LoadFile(filename, nullptr, &blob);
+  if (SUCCEEDED(hr)) { return blob; }
+  if (blob) {
+    blob->Release();
+  }
+  return nullptr;
+}
 IDxcResult* CompileShader(IDxcCompiler3* compiler, const uint32_t len, const void* data, const uint32_t compiler_arg_num, LPCWSTR* compiler_args, IDxcIncludeHandler* include_handler) {
   DxcBuffer buffer{
     .Ptr = data,
@@ -437,6 +446,15 @@ IDxcResult* CompileShader(IDxcCompiler3* compiler, IDxcIncludeHandler* include_h
   result->Release();
   return nullptr;
 }
+IDxcResult* CompileShaderFile(IDxcUtils* utils, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, LPCWSTR filename, const uint32_t compile_args_num, LPCWSTR* compile_args) {
+  auto blob = LoadShaderFile(utils, filename);
+  if (blob == nullptr) { return nullptr; }
+  auto result = CompileShader(compiler, static_cast<uint32_t>(blob->GetBufferSize()), blob->GetBufferPointer(), compile_args_num, compile_args, include_handler);
+  blob->Release();
+  if (IsCompileSuccessful(result)) { return result; }
+  result->Release();
+  return nullptr;
+}
 auto FillPsoPtr(ID3D12RootSignature* rootsig, const uint32_t shader_object_num, IDxcBlob** shader_object_list, void* dst) {
   {
     auto dst_rootsig =  static_cast<PsoDescRootSignature*>(dst);
@@ -821,4 +839,38 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   device.Term();
   dxgi_core.Term();
   gSystemMemoryAllocator->Reset();
+}
+TEST_CASE("compile shader file") { // NOLINT
+  const wchar_t* compiler_args[] = {
+    L"-T", L"ps_6_6",
+    L"-E", L"main",
+    L"-Zi",
+    L"-Zpr",
+    L"-Qstrip_debug",
+    L"-Qstrip_reflect",
+    L"-Qstrip_rootsignature",
+  };
+  using namespace illuminate; // NOLINT
+  auto library = LoadDxcLibrary();
+  CHECK_NE(library, nullptr);
+  auto compiler = CreateDxcShaderCompiler(library);
+  CHECK_NE(compiler, nullptr); // NOLINT
+  auto utils = CreateDxcUtils(library);
+  CHECK_NE(utils, nullptr); // NOLINT
+  auto include_handler = CreateDxcIncludeHandler(utils);
+  CHECK_NE(include_handler, nullptr); // NOLINT
+  auto blob = LoadShaderFile(utils, L"shader/shader.test.hlsl");
+  CHECK_NE(blob, nullptr); // NOLINT
+  auto result = CompileShader(compiler, static_cast<uint32_t>(blob->GetBufferSize()), blob->GetBufferPointer(), sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args, include_handler);
+  CHECK_NE(result, nullptr);
+  CHECK_UNARY(IsCompileSuccessful(result));
+  CHECK_EQ(blob->Release(), 0);
+  result = CompileShaderFile(utils, compiler, include_handler, L"shader/shader.test.hlsl", sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args);
+  CHECK_NE(result, nullptr);
+  CHECK_UNARY(IsCompileSuccessful(result));
+  CHECK_EQ(result->Release(), 0);
+  CHECK_EQ(include_handler->Release(), 0);
+  CHECK_EQ(utils->Release(), 0);
+  CHECK_EQ(compiler->Release(), 0);
+  CHECK_UNARY(FreeLibrary(library));
 }

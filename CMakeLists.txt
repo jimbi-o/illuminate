@@ -5,8 +5,6 @@ project(illuminate
   LANGUAGES CXX
 )
 
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT illuminate)
-
 include(cmake/CPM.cmake)
 CPMAddPackage("gh:onqtam/doctest#2.4.6")
 CPMAddPackage(
@@ -146,3 +144,6 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
   "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.pdb>"
   "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
 )
+
+set_directory_properties(PROPERTIES VS_STARTUP_PROJECT illuminate)
+set_target_properties(illuminate PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource")
