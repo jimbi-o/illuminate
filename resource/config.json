@@ -129,6 +129,25 @@
       "initial_state": "common"
     },
     {
+      "name": "cbv-selectedbuffer",
+      "need_name_cache": true,
+      "format": "UNKNOWN",
+      "heap_type": "upload",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "width": 256,
+      "height": 1,
+      "depth_or_array_size": 1,
+      "miplevels": 1,
+      "sample_count": 1,
+      "sample_quality": 0,
+      "layout": "row_major",
+      "mip_width": 0,
+      "mip_height": 0,
+      "mip_depth": 0,
+      "initial_state": "common"
+    },
+    {
       "name": "dsv",
       "format": "D24_UNORM_S8_UINT",
       "heap_type": "default",
@@ -240,6 +259,13 @@
         "filename": "shader/test/prez.vs.hlsl",
         "target": "vs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      },
+      {
+        "name": "compile unit render selected buffer",
+        "filename": "shader/test/render_selected_buffer.ps.hlsl",
+        "target": "ps",
+        "entry": "MainPs",
+        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       }
     ],
     "rootsig": [
@@ -262,6 +288,10 @@
       {
         "name": "rootsig prez",
         "unit_name": "compile unit prez"
+      },
+      {
+        "name": "rootsig render selected buffer",
+        "unit_name": "compile unit render selected buffer"
       }
     ],
     "pso": [
@@ -314,6 +344,15 @@
         ],
         "depth_stencil": {
           "format": "D24_UNORM_S8_UINT"
+        }
+      },
+      {
+        "name": "pso render selected buffer",
+        "rootsig": "rootsig render selected buffer",
+        "unit_list": ["compile unit output to swapchain vs", "compile unit render selected buffer"],
+        "render_target_formats": ["R8G8B8A8_UNORM"],
+        "depth_stencil": {
+          "depth_enable": false
         }
       }
     ]
@@ -553,16 +592,20 @@
       "execute": true,
       "buffer_list": [
         {
+          "name": "swapchain",
+          "state": "rtv"
+        },
+        {
+          "name": "cbv-selectedbuffer",
+          "state": "cbv"
+        },
+        {
           "name": "uav",
           "state": "srv_ps"
         },
         {
           "name": "dsv",
           "state": "srv_ps"
-        },
-        {
-          "name": "swapchain",
-          "state": "rtv"
         },
         {
           "name": "pingpong",
@@ -612,10 +655,10 @@
           "state_after": ["rtv"]
         }
       ],
-      "material": ["pso output to swapchain"],
+      "material": ["pso render selected buffer"],
       "pass_vars": {
         "size_type": "swapchain_relative",
-        "rtv_index": 2,
+        "rtv_index": 0,
         "use_views": true,
         "use_sampler": true
       }

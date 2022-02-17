@@ -36,7 +36,7 @@ class RenderPassPostprocess {
     if (!args_per_pass->ptr) { return; }
     auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
     if (!pass_vars->cbv_ptr) { return; }
-    memcpy(pass_vars->cbv_ptr, args_per_pass->ptr, pass_vars->cbv_size);
+    memcpy(pass_vars->cbv_ptr, args_per_pass->ptr, args_per_pass->ptr_size);
   }
   static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {

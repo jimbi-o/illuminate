@@ -102,16 +102,25 @@ auto GetTestTinyGltf() {
 void UpdatePingpongA(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   float c[4]{0.0f,1.0f,1.0f,1.0f};
   args_per_pass->ptr = c;
+  args_per_pass->ptr_size = GetUint32(sizeof(float)) * 4;
   RenderPassPostprocess::Update(args_common, args_per_pass);
 }
 void UpdatePingpongB(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   float c[4]{1.0f,0.0f,1.0f,1.0f};
   args_per_pass->ptr = c;
+  args_per_pass->ptr_size = GetUint32(sizeof(float)) * 4;
   RenderPassPostprocess::Update(args_common, args_per_pass);
 }
 void UpdatePingpongC(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   float c[4]{1.0f,1.0f,1.0f,1.0f};
   args_per_pass->ptr = c;
+  args_per_pass->ptr_size = GetUint32(sizeof(float)) * 4;
+  RenderPassPostprocess::Update(args_common, args_per_pass);
+}
+void RenderSelectedBuffer(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  uint32_t index = 0;
+  args_per_pass->ptr = &index;
+  args_per_pass->ptr_size = GetUint32(sizeof(index));
   RenderPassPostprocess::Update(args_common, args_per_pass);
 }
 auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
@@ -164,7 +173,7 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
             break;
           }
           case SID("debug buffer"): {
-            funcs.update[i] = RenderPassPostprocess::Update;
+            funcs.update[i] = RenderSelectedBuffer;
             break;
           }
         }
