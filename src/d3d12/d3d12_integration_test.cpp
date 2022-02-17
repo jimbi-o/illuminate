@@ -801,6 +801,7 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
       case SID("pingpong-a"):
       case SID("pingpong-b"):
       case SID("pingpong-c"):
+      case SID("debug buffer"):
       case SID("output to swapchain"): {
         funcs.init[i] = RenderPassPostprocess::Init;
         funcs.term[i] = RenderPassPostprocess::Term;
@@ -818,6 +819,10 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
             break;
           }
           case SID("output to swapchain"): {
+            funcs.update[i] = RenderPassPostprocess::Update;
+            break;
+          }
+          case SID("debug buffer"): {
             funcs.update[i] = RenderPassPostprocess::Update;
             break;
           }
@@ -840,14 +845,6 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         funcs.update[i] = RenderPassCopyResource::Update;
         funcs.is_render_needed[i] = RenderPassCopyResource::IsRenderNeeded;
         funcs.render[i] = RenderPassCopyResource::Render;
-        break;
-      }
-      case SID("debug buffer"): {
-        funcs.init[i] = RenderPassPostprocess::Init;
-        funcs.term[i] = RenderPassPostprocess::Term;
-        funcs.update[i] = RenderPassPostprocess::Update;
-        funcs.is_render_needed[i] = RenderPassPostprocess::IsRenderNeeded;
-        funcs.render[i] = RenderPassPostprocess::Render;
         break;
       }
       default: {
