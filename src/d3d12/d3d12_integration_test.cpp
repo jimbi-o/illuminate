@@ -586,6 +586,81 @@ auto GetTestJson() {
       }
     },
     {
+      "name": "debug:show selected buffer",
+      "enabled": false,
+      "command_queue": "queue_graphics",
+      "wait_pass": ["dispatch cs"],
+      "execute": true,
+      "buffer_list": [
+        {
+          "name": "uav",
+          "state": "srv_ps"
+        },
+        {
+          "name": "dsv",
+          "state": "srv_ps"
+        },
+        {
+          "name": "swapchain",
+          "state": "rtv"
+        },
+        {
+          "name": "pingpong",
+          "state": "srv_ps"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "flip_pingpong": ["pingpong"],
+      "prepass_barrier": [
+        {
+          "buffer_name": "swapchain",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": ["present"],
+          "state_after": ["rtv"]
+        },
+        {
+          "buffer_name": "uav",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["srv_ps"]
+        },
+        {
+          "buffer_name": "dsv",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["srv_ps"]
+        }
+      ],
+      "postpass_barrier": [
+        {
+          "buffer_name": "uav",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["uav"]
+        },
+        {
+          "buffer_name": "dsv",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["dsv_write"]
+        },
+        {
+          "buffer_name": "pingpong",
+          "type": "transition",
+          "split_type": "none",
+          "state_after": ["rtv"]
+        }
+      ],
+      "material": ["pso output to swapchain"],
+      "pass_vars": {
+        "size_type": "swapchain_relative",
+        "rtv_index": 2,
+        "use_views": true,
+        "use_sampler": true
+      }
+    },
+    {
       "name": "imgui",
       "enabled": true,
       "command_queue": "queue_graphics",
@@ -765,6 +840,14 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         funcs.update[i] = RenderPassCopyResource::Update;
         funcs.is_render_needed[i] = RenderPassCopyResource::IsRenderNeeded;
         funcs.render[i] = RenderPassCopyResource::Render;
+        break;
+      }
+      case SID("debug:show selected buffer"): {
+        funcs.init[i] = RenderPassPostprocess::Init;
+        funcs.term[i] = RenderPassPostprocess::Term;
+        funcs.update[i] = RenderPassPostprocess::Update;
+        funcs.is_render_needed[i] = RenderPassPostprocess::IsRenderNeeded;
+        funcs.render[i] = RenderPassPostprocess::Render;
         break;
       }
       default: {
