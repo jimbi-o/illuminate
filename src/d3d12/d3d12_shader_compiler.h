@@ -6,7 +6,7 @@
 namespace illuminate {
 class PsoRootsigManager {
  public:
-  bool Init(const nlohmann::json& material_json, const char** shader_code_list, D3d12Device* device, MemoryAllocationJanitor* allocator);
+  bool Init(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator);
   void Term();
   constexpr ID3D12RootSignature* GetRootsig(const uint32_t pso_index) {
     return rootsig_list_[rootsig_pso_map_[pso_index]];

@@ -179,10 +179,7 @@ struct PsoConfig {
   uint32_t pso_size{0};
 };
 struct ShaderConfig {
-  uint32_t file_num{0};
-  char** filename_list{nullptr};
   uint32_t compile_unit_num{0};
-  uint32_t* compile_unit_filename_index_list{nullptr};
   uint32_t* compile_args_num{nullptr};
   wchar_t*** compile_args{nullptr};
   uint32_t rootsig_num{0};
@@ -298,56 +295,12 @@ auto ParseShaderConfigJson(const nlohmann::json& json, MemoryAllocationJanitor* 
   const auto& compile_unit = json.at("compile_unit");
   {
     config.compile_unit_num = GetUint32(compile_unit.size());
-    for (uint32_t i = 0; i < config.compile_unit_num; i++) {
-      const auto str = GetStringView(compile_unit[i], "filename");
-      bool duplicate = false;
-      for (uint32_t j = 0; j < i; j++) {
-        if (str.compare(GetStringView(compile_unit[j], "filename")) == 0) {
-          duplicate = true;
-          break;
-        }
-      }
-      if (!duplicate) {
-        config.file_num++;
-      }
-    }
-    config.filename_list = AllocateArray<char*>(allocator, config.file_num);
-    uint32_t file_index = 0;
-    for (uint32_t i = 0; i < config.compile_unit_num; i++) {
-      const auto str = GetStringView(compile_unit[i], "filename");
-      bool duplicate = false;
-      for (uint32_t j = 0; j < i; j++) {
-        if (str.compare(GetStringView(compile_unit[j], "filename")) == 0) {
-          duplicate = true;
-          break;
-        }
-      }
-      if (!duplicate) {
-        const auto char_num = GetUint32(str.size() + 1);
-        config.filename_list[file_index] = AllocateArray<char>(allocator, char_num);
-        strcpy_s(config.filename_list[file_index], char_num, str.data());
-        file_index++;
-      }
-    }
-    assert(file_index == config.file_num && "pso creation file count bug");
-  }
-  {
     const auto& compile_default = json.at("compile_default");
-    config.compile_unit_filename_index_list = AllocateArray<uint32_t>(allocator, config.compile_unit_num);
     config.compile_args_num = AllocateArray<uint32_t>(allocator, config.compile_unit_num);
     config.compile_args = AllocateArray<wchar_t**>(allocator, config.compile_unit_num);
     for (uint32_t i = 0; i < config.compile_unit_num; i++) {
       config.compile_args_num[i] = 4;
       const auto& unit = compile_unit[i];
-      {
-        const auto filename = GetStringView(unit, "filename");
-        for (uint32_t j = 0; j < config.file_num; j++) {
-          if (strcmp(filename.data(), config.filename_list[j]) == 0) {
-            config.compile_unit_filename_index_list[i] = j;
-            break;
-          }
-        }
-      }
       if (unit.contains("args")) {
         config.compile_args_num[i] += GetUint32(unit.at("args").size());
       }
@@ -467,7 +420,7 @@ auto FillPsoPtr(ID3D12RootSignature* rootsig, const uint32_t shader_object_num, 
     shader_bytecode_list[i].shader_bytecode.BytecodeLength = shader_object_list[i]->GetBufferSize();
   }
 }
-void ParseJson(const nlohmann::json& json, const char** shader_code_list, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, D3d12Device* device,
+void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
                uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
                uint32_t* pso_num, ID3D12PipelineState*** pso_list,
                uint32_t** rootsig_pso_map, MemoryAllocationJanitor* allocator) {
@@ -482,7 +435,8 @@ void ParseJson(const nlohmann::json& json, const char** shader_code_list, IDxcCo
   *rootsig_pso_map = AllocateArray<uint32_t>(allocator, shader_config.pso_num);
   for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
-    compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[shader_config.compile_unit_filename_index_list[i]], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
+    auto filename = CopyStrToWstrContainer(GetStringView(json.at("compile_unit")[i], "filename"), &tmp_allocator);
+    compile_unit_list[i] = CompileShaderFile(utils, compiler, include_handler, filename, shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
     shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
   }
   for (uint32_t i = 0; i < shader_config.rootsig_num; i++) {
@@ -510,7 +464,7 @@ void ParseJson(const nlohmann::json& json, const char** shader_code_list, IDxcCo
   }
 }
 } // anonymous namespace
-bool PsoRootsigManager::Init(const nlohmann::json& material_json, const char** shader_code_list, D3d12Device* device, MemoryAllocationJanitor* allocator) {
+bool PsoRootsigManager::Init(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator) {
   library_ = LoadDxcLibrary();
   if (library_ == nullptr) { return false; }
   compiler_ = CreateDxcShaderCompiler(library_);
@@ -521,7 +475,7 @@ bool PsoRootsigManager::Init(const nlohmann::json& material_json, const char** s
   if (include_handler_ == nullptr) { return false; }
   rootsig_index_.SetAllocator(allocator);
   pso_index_.SetAllocator(allocator);
-  ParseJson(material_json, shader_code_list, compiler_, include_handler_, device, &rootsig_num_, &rootsig_list_, &pso_num_, &pso_list_, &rootsig_pso_map_, allocator);
+  ParseJson(material_json, compiler_, include_handler_, utils_, device, &rootsig_num_, &rootsig_list_, &pso_num_, &pso_list_, &rootsig_pso_map_, allocator);
   return true;
 }
 void PsoRootsigManager::Term() {
@@ -632,20 +586,20 @@ TEST_CASE("rootsig/pso") {
   "compile_unit": [
     {
       "name": "compile unit dispatch cs",
-      "filename": "dispatch cs",
+      "filename": "shader/test/dispatch.cs.hlsl",
       "target": "cs",
       "args": ["-Zi","-Qstrip_reflect"]
     },
     {
       "name": "compile unit output to swapchain vs",
-      "filename": "output to swapchain",
+      "filename": "shader/test/output_to_swapchain.vs.ps.hlsl",
       "target": "vs",
       "entry": "MainVs",
       "args": []
     },
     {
       "name": "compile unit output to swapchain ps",
-      "filename": "output to swapchain",
+      "filename": "shader/test/output_to_swapchain.vs.ps.hlsl",
       "target": "ps",
       "entry": "MainPs",
       "args": ["-Qstrip_reflect"]
@@ -681,13 +635,7 @@ TEST_CASE("rootsig/pso") {
 )"_json;
   auto allocator = GetTemporalMemoryAllocator();
   auto shader_config = ParseShaderConfigJson(json, &allocator);
-  CHECK_EQ(shader_config.file_num, 2);
-  CHECK_EQ(strcmp(shader_config.filename_list[0], "dispatch cs"), 0);
-  CHECK_EQ(strcmp(shader_config.filename_list[1], "output to swapchain"), 0);
   CHECK_EQ(shader_config.compile_unit_num, 3);
-  CHECK_EQ(shader_config.compile_unit_filename_index_list[0], 0);
-  CHECK_EQ(shader_config.compile_unit_filename_index_list[1], 1);
-  CHECK_EQ(shader_config.compile_unit_filename_index_list[2], 1);
   CHECK_EQ(shader_config.compile_args_num[0], 6);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][0], L"-T"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][1], L"cs_6_6"), 0);
@@ -770,7 +718,7 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
   auto pso_list = AllocateArray<ID3D12PipelineState*>(&allocator, shader_config.pso_num);
   for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
-    compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[shader_config.compile_unit_filename_index_list[i]], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
+    compile_unit_list[i] = CompileShader(compiler, include_handler, shader_code_list[i == 0 ? 0 : 1], shader_config.compile_args_num[i], (LPCWSTR*)shader_config.compile_args[i]);
     CHECK_UNARY(compile_unit_list[i]);
     shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
     CHECK_UNARY(shader_object_list[i]);
@@ -818,7 +766,7 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
     ID3D12RootSignature** rootsig_list_check_parse_json{nullptr};
     ID3D12PipelineState** pso_list_check_parse_json{nullptr};
     uint32_t* rootsig_pso_map{nullptr};
-    ParseJson(json, shader_code_list, compiler, include_handler, device.Get(), &rootsig_num, &rootsig_list_check_parse_json, &pso_num, &pso_list_check_parse_json, &rootsig_pso_map, &allocator);
+    ParseJson(json, compiler, include_handler, utils, device.Get(), &rootsig_num, &rootsig_list_check_parse_json, &pso_num, &pso_list_check_parse_json, &rootsig_pso_map, &allocator);
     CHECK_EQ(rootsig_num, 2);
     CHECK_EQ(pso_num, 2);
     CHECK_NE(rootsig_list_check_parse_json[0], nullptr);

@@ -203,41 +203,41 @@
     "compile_unit": [
       {
         "name": "compile unit dispatch cs",
-        "filename": "dispatch cs",
+        "filename": "shader/test/dispatch.cs.hlsl",
         "target": "cs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       },
       {
         "name": "compile unit output to swapchain vs",
-        "filename": "output to swapchain",
+        "filename": "shader/test/output_to_swapchain.vs.ps.hlsl",
         "target": "vs",
         "entry": "MainVs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       },
       {
         "name": "compile unit output to swapchain ps",
-        "filename": "output to swapchain",
+        "filename": "shader/test/output_to_swapchain.vs.ps.hlsl",
         "target": "ps",
         "entry": "MainPs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       },
       {
         "name": "compile unit pingpong-a ps",
-        "filename": "pingpong-a",
+        "filename": "shader/test/pingong_a.ps.hlsl",
         "target": "ps",
         "entry": "MainPs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       },
       {
         "name": "compile unit pingpong-bc ps",
-        "filename": "pingpong-bc",
+        "filename": "shader/test/pingong_bc.ps.hlsl",
         "target": "ps",
         "entry": "MainPs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       },
       {
         "name": "compile unit prez",
-        "filename": "prez",
+        "filename": "shader/test/prez.vs.hlsl",
         "target": "vs",
         "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
       }

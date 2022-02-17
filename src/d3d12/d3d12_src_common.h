@@ -13,6 +13,11 @@ namespace illuminate {
 void SetD3d12Name(ID3D12Object* obj, const std::string_view name);
 uint32_t GetD3d12Name(ID3D12Object* obj, const uint32_t dst_size, char* dst);
 void CopyStrToWstrContainer(wchar_t** dst, const std::string_view src, MemoryAllocationJanitor* allocator);
+inline auto CopyStrToWstrContainer(const std::string_view src, MemoryAllocationJanitor* allocator) {
+  wchar_t* dst = nullptr;
+  CopyStrToWstrContainer(&dst, src, allocator);
+  return dst;
+}
 template <typename N>
 uint32_t GetUint32(const N& n) {
   return static_cast<uint32_t>(n);
