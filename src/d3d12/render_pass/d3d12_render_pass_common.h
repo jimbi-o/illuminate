@@ -22,6 +22,7 @@ struct RenderPassFuncArgsInit {
 };
 struct RenderPassConfigDynamicData {
   uint32_t selected_debug_buffer{~0U};
+  bool* render_pass_enable_flag{nullptr};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};

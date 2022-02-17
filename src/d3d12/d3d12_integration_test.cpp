@@ -361,11 +361,13 @@ auto GetTestJson() {
   "render_pass": [
     {
       "name": "copy resource",
+      "enabled": true,
       "command_queue": "queue_copy",
       "execute": true
     },
     {
       "name": "dispatch cs",
+      "enabled": true,
       "command_queue": "queue_compute",
       "wait_pass": ["output to swapchain"],
       "execute": true,
@@ -383,6 +385,7 @@ auto GetTestJson() {
     },
     {
       "name": "prez",
+      "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["copy resource"],
       "execute": true,
@@ -399,6 +402,7 @@ auto GetTestJson() {
     },
     {
       "name": "pingpong-a",
+      "enabled": true,
       "command_queue": "queue_graphics",
       "buffer_list": [
         {
@@ -428,6 +432,7 @@ auto GetTestJson() {
     },
     {
       "name": "pingpong-b",
+      "enabled": true,
       "command_queue": "queue_graphics",
       "buffer_list": [
         {
@@ -467,6 +472,7 @@ auto GetTestJson() {
     },
     {
       "name": "pingpong-c",
+      "enabled": true,
       "command_queue": "queue_graphics",
       "buffer_list": [
         {
@@ -506,6 +512,7 @@ auto GetTestJson() {
     },
     {
       "name": "output to swapchain",
+      "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
       "execute": true,
@@ -580,6 +587,7 @@ auto GetTestJson() {
     },
     {
       "name": "imgui",
+      "enabled": true,
       "command_queue": "queue_graphics",
       "execute": true,
       "buffer_list": [
@@ -894,6 +902,14 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
+auto InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
+  RenderPassConfigDynamicData dynamic_data{};
+  dynamic_data.render_pass_enable_flag = AllocateArray<bool>(allocator, render_pass_num);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    dynamic_data.render_pass_enable_flag[i] = render_pass_list[i].enabled;
+  }
+  return dynamic_data;
+}
 } // namespace anonymous
 } // namespace illuminate
 TEST_CASE("d3d12 integration test") { // NOLINT
@@ -1135,7 +1151,7 @@ float4 main(const VsInput input) : SV_Position {
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
   }
-  RenderPassConfigDynamicData dynamic_data{};
+  auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
   for (uint32_t i = 0; i < kFrameLoopNum; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();
@@ -1183,6 +1199,7 @@ float4 main(const VsInput input) : SV_Position {
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
     auto postpass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
+      if (!dynamic_data.render_pass_enable_flag[k]) { continue; }
       const auto& render_pass = render_graph.render_pass_list[k];
       args_per_pass[k] = {};
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
@@ -1195,10 +1212,12 @@ float4 main(const VsInput input) : SV_Position {
     }
     // update
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
+      if (!dynamic_data.render_pass_enable_flag[k]) { continue; }
       RenderPassUpdate(&render_pass_function_list, &args_common, &args_per_pass[k]);
     }
     // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
+      if (!dynamic_data.render_pass_enable_flag[k]) { continue; }
       const auto& render_pass = render_graph.render_pass_list[k];
       auto render_pass_allocator = GetTemporalMemoryAllocator();
       for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
