@@ -859,13 +859,13 @@ TEST_CASE("compile shader file") { // NOLINT
   CHECK_NE(utils, nullptr); // NOLINT
   auto include_handler = CreateDxcIncludeHandler(utils);
   CHECK_NE(include_handler, nullptr); // NOLINT
-  auto blob = LoadShaderFile(utils, L"shader/shader.test.hlsl");
+  auto blob = LoadShaderFile(utils, L"shader/test/shader.test.hlsl");
   CHECK_NE(blob, nullptr); // NOLINT
   auto result = CompileShader(compiler, static_cast<uint32_t>(blob->GetBufferSize()), blob->GetBufferPointer(), sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args, include_handler);
   CHECK_NE(result, nullptr);
   CHECK_UNARY(IsCompileSuccessful(result));
   CHECK_EQ(blob->Release(), 0);
-  result = CompileShaderFile(utils, compiler, include_handler, L"shader/shader.test.hlsl", sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args);
+  result = CompileShaderFile(utils, compiler, include_handler, L"shader/test/shader.test.hlsl", sizeof(compiler_args) / sizeof(compiler_args[0]), compiler_args);
   CHECK_NE(result, nullptr);
   CHECK_UNARY(IsCompileSuccessful(result));
   CHECK_EQ(result->Release(), 0);

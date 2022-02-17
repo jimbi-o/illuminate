@@ -1,7 +1,4 @@
-struct FullscreenTriangleVSOutput {
-  float4 position : SV_POSITION;
-  float2 texcoord : TEXCOORD0;
-};
+#include "shader/include/postprocess.hlsli"
 FullscreenTriangleVSOutput MainVs(uint id : SV_VERTEXID) {
   // https://www.reddit.com/r/gamedev/comments/2j17wk/a_slightly_faster_bufferless_vertex_shader_trick/
   FullscreenTriangleVSOutput output;
