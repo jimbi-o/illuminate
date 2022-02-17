@@ -295,8 +295,10 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
     }
     const auto& json_render_pass_list = j.at("render_pass");
     for (uint32_t i = 0; i < r.render_pass_num; i++) {
-      ConfigureBarrierTransition(json_render_pass_list[i], "prepass_barrier", r.render_pass_list[i].prepass_barrier_num, r.render_pass_list[i].prepass_barrier, r.buffer_list, buffer_state, write_to_sub);
-      ConfigureBarrierTransition(json_render_pass_list[i], "postpass_barrier", r.render_pass_list[i].postpass_barrier_num, r.render_pass_list[i].postpass_barrier, r.buffer_list, buffer_state, write_to_sub);
+      if (r.render_pass_list[i].enabled) {
+        ConfigureBarrierTransition(json_render_pass_list[i], "prepass_barrier", r.render_pass_list[i].prepass_barrier_num, r.render_pass_list[i].prepass_barrier, r.buffer_list, buffer_state, write_to_sub);
+        ConfigureBarrierTransition(json_render_pass_list[i], "postpass_barrier", r.render_pass_list[i].postpass_barrier_num, r.render_pass_list[i].postpass_barrier, r.buffer_list, buffer_state, write_to_sub);
+      }
       for (uint32_t f = 0; f < r.render_pass_list[i].flip_pingpong_num; f++) {
         const auto& buffer_index = r.render_pass_list[i].flip_pingpong_index_list[f];
         write_to_sub[buffer_index] = !write_to_sub[buffer_index];

@@ -21,7 +21,7 @@ class RenderPassImgui {
       logerror("ImGui_ImplDX12_CreateDeviceObjects failed.");
       assert(false);
     }
-    return nullptr;
+    return PrepareParam(args->render_graph->render_pass_num, args->render_graph->render_pass_list, args->allocator);
   }
   static void Term() {
     ImGui_ImplDX12_Shutdown();
@@ -42,6 +42,7 @@ class RenderPassImgui {
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), args_per_pass->command_list);
   }
  private:
+  static void* PrepareParam(const uint32_t render_pass_num, RenderPass* render_pass_list, MemoryAllocationJanitor* allocator);
   static void RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
   RenderPassImgui() = delete;
 };

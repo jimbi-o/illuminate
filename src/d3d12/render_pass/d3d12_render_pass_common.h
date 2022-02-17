@@ -19,9 +19,9 @@ struct RenderPassFuncArgsInit {
   const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_config_index{nullptr};
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
+  RenderGraph* render_graph{nullptr};
 };
 struct RenderPassConfigDynamicData {
-  uint32_t selected_debug_buffer{~0U};
   bool* render_pass_enable_flag{nullptr};
 };
 struct RenderPassFuncArgsRenderCommon {

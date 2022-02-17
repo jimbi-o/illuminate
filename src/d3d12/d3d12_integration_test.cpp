@@ -369,7 +369,7 @@ auto GetTestJson() {
       "name": "dispatch cs",
       "enabled": true,
       "command_queue": "queue_compute",
-      "wait_pass": ["output to swapchain"],
+      "wait_pass": ["output to swapchain", "debug buffer"],
       "execute": true,
       "buffer_list": [
         {
@@ -586,7 +586,7 @@ auto GetTestJson() {
       }
     },
     {
-      "name": "debug:show selected buffer",
+      "name": "debug buffer",
       "enabled": false,
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
@@ -842,7 +842,7 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         funcs.render[i] = RenderPassCopyResource::Render;
         break;
       }
-      case SID("debug:show selected buffer"): {
+      case SID("debug buffer"): {
         funcs.init[i] = RenderPassPostprocess::Init;
         funcs.term[i] = RenderPassPostprocess::Term;
         funcs.update[i] = RenderPassPostprocess::Update;
@@ -992,6 +992,35 @@ auto InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass*
     dynamic_data.render_pass_enable_flag[i] = render_pass_list[i].enabled;
   }
   return dynamic_data;
+}
+auto FindPrevBufferState(const uint32_t buffer_index, const D3D12_RESOURCE_STATES next_state, const uint32_t barrier_num, Barrier* barrier_list, D3D12_RESOURCE_STATES* dst_state){
+  for (uint32_t i = 0; i < barrier_num; i++) {
+    if (barrier_list[i].buffer_index != buffer_index) { continue; }
+    if (barrier_list[i].state_after & next_state) { continue; }
+    *dst_state = barrier_list[i].state_after;
+    return true;
+  }
+  return false;
+}
+void ConfigureBarrierTransition(const uint32_t barrier_num, Barrier* barrier_list, const uint32_t current_render_pass_index, const RenderPass* render_pass_list) {
+  if (barrier_num == 0) { return; }
+  for (uint32_t i = 0; i < barrier_num; i++) {
+    auto& barrier = barrier_list[i];
+    if (barrier.state_before != D3D12_RESOURCE_STATE_COMMON) { continue; }
+    assert(current_render_pass_index > 0);
+    for (uint32_t j = current_render_pass_index - 1; j != ~0U; j--) {
+      const auto& proceding_pass = render_pass_list[j];
+      if (FindPrevBufferState(barrier.buffer_index, barrier.state_after, proceding_pass.postpass_barrier_num, proceding_pass.postpass_barrier, &barrier.state_before)
+          || FindPrevBufferState(barrier.buffer_index, barrier.state_after, proceding_pass.prepass_barrier_num, proceding_pass.prepass_barrier, &barrier.state_before)) {
+        break;
+      }
+    }
+  }
+}
+void ConfigureBarrierTransition(const uint32_t current_render_pass_index, const RenderPass* render_pass_list) {
+  const auto& current_render_pass = render_pass_list[current_render_pass_index];
+  ConfigureBarrierTransition(current_render_pass.prepass_barrier_num, current_render_pass.prepass_barrier, current_render_pass_index, render_pass_list);
+  ConfigureBarrierTransition(current_render_pass.postpass_barrier_num, current_render_pass.postpass_barrier, current_render_pass_index, render_pass_list);
 }
 } // namespace anonymous
 } // namespace illuminate
@@ -1210,6 +1239,7 @@ float4 main(const VsInput input) : SV_Position {
         .named_buffer_config_index = &named_buffer_config_index,
         .buffer_list = &buffer_list,
         .buffer_config_list = render_graph.buffer_list,
+        .render_graph = &render_graph,
       };
       render_pass_vars[i] = RenderPassInit(&render_pass_function_list, &render_pass_func_args_init, i);
     }
@@ -1278,13 +1308,17 @@ float4 main(const VsInput input) : SV_Position {
       .dynamic_data = &dynamic_data,
       .render_pass_list = render_graph.render_pass_list,
     };
+    auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
     auto prepass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
     auto postpass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
-      if (!dynamic_data.render_pass_enable_flag[k]) { continue; }
+      render_pass_enable_flag[k] = dynamic_data.render_pass_enable_flag[k];
       const auto& render_pass = render_graph.render_pass_list[k];
-      args_per_pass[k] = {};
+      if (!render_pass_enable_flag[k]) { continue; }
+      if (!render_pass.enabled) {
+        ConfigureBarrierTransition(k, render_graph.render_pass_list);
+      }
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
       args_per_pass[k].render_pass_index = k;
       std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, &single_frame_allocator);
@@ -1295,12 +1329,12 @@ float4 main(const VsInput input) : SV_Position {
     }
     // update
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
-      if (!dynamic_data.render_pass_enable_flag[k]) { continue; }
+      if (!render_pass_enable_flag[k]) { continue; }
       RenderPassUpdate(&render_pass_function_list, &args_common, &args_per_pass[k]);
     }
     // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
-      if (!dynamic_data.render_pass_enable_flag[k]) { continue; }
+      if (!render_pass_enable_flag[k]) { continue; }
       const auto& render_pass = render_graph.render_pass_list[k];
       auto render_pass_allocator = GetTemporalMemoryAllocator();
       for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
