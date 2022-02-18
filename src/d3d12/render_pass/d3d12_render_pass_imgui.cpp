@@ -1,10 +1,10 @@
 #include "d3d12_render_pass_imgui.h"
+#include "d3d12_render_pass_debug_render_selected_buffer.h"
 namespace illuminate {
 namespace {
 struct Param {
   uint32_t render_pass_index_output_to_swapchain{};
   uint32_t render_pass_index_debug_show_selected_buffer{};
-  uint32_t selected_debug_buffer{};
 };
 } // namespace anonymous
 void* RenderPassImgui::PrepareParam(const uint32_t render_pass_num, RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
@@ -21,7 +21,6 @@ void* RenderPassImgui::PrepareParam(const uint32_t render_pass_num, RenderPass* 
       }
     }
   }
-  param->selected_debug_buffer = 0;
   return param;
 }
 void RenderPassImgui::RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) {
@@ -47,13 +46,15 @@ void RenderPassImgui::RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, [
     ImGui::End();
     return;
   }
-  auto selected_item = &param->selected_debug_buffer;
-  for (uint32_t i = 0; i < args_common->buffer_list->buffer_allocation_num; i++) {
-    if (args_common->buffer_list->resource_list[i] == nullptr) { continue; }
+  auto selected_item = &args_common->dynamic_data->debug_render_selected_buffer_allocation_index;
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  uint32_t* buffer_allocation_index_list = nullptr;
+  auto buffer_allocation_index_len = RenderPassDebugRenderSelectedBuffer::GetBufferAllocationIndexList(*args_common->buffer_list, args_common->buffer_config_list, &tmp_allocator, &buffer_allocation_index_list);
+  for (uint32_t i = 0; i < buffer_allocation_index_len; i++) {
+    const auto index = buffer_allocation_index_list[i];
     const auto len = 128;
     char buffer_name[len]{};
-    GetD3d12Name(args_common->buffer_list->resource_list[i], len, buffer_name);
-    if (strncmp(buffer_name, "swapchain", 9) == 0) { continue; }
+    GetD3d12Name(args_common->buffer_list->resource_list[index], len, buffer_name);
     if (ImGui::Selectable(buffer_name, i == *selected_item)) {
       *selected_item = i;
     }

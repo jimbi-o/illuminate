@@ -23,6 +23,7 @@ struct RenderPassFuncArgsInit {
 };
 struct RenderPassConfigDynamicData {
   bool* render_pass_enable_flag{nullptr};
+  uint32_t debug_render_selected_buffer_allocation_index{0};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
@@ -33,6 +34,9 @@ struct RenderPassFuncArgsRenderCommon {
   BufferConfig* buffer_config_list{nullptr};
   RenderPassConfigDynamicData* dynamic_data{nullptr};
   const RenderPass* render_pass_list{nullptr};
+  D3d12Device* device{nullptr};
+  DescriptorGpu* descriptor_gpu{nullptr};
+  DescriptorCpu* descriptor_cpu{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};

@@ -129,25 +129,6 @@
       "initial_state": "common"
     },
     {
-      "name": "cbv-selectedbuffer",
-      "need_name_cache": true,
-      "format": "UNKNOWN",
-      "heap_type": "upload",
-      "dimension": "buffer",
-      "size_type": "absolute",
-      "width": 256,
-      "height": 1,
-      "depth_or_array_size": 1,
-      "miplevels": 1,
-      "sample_count": 1,
-      "sample_quality": 0,
-      "layout": "row_major",
-      "mip_width": 0,
-      "mip_height": 0,
-      "mip_depth": 0,
-      "initial_state": "common"
-    },
-    {
       "name": "dsv",
       "format": "D24_UNORM_S8_UINT",
       "heap_type": "default",
@@ -594,22 +575,6 @@
         {
           "name": "swapchain",
           "state": "rtv"
-        },
-        {
-          "name": "cbv-selectedbuffer",
-          "state": "cbv"
-        },
-        {
-          "name": "uav",
-          "state": "srv_ps"
-        },
-        {
-          "name": "dsv",
-          "state": "srv_ps"
-        },
-        {
-          "name": "pingpong",
-          "state": "srv_ps"
         }
       ],
       "sampler": ["bilinear"],
@@ -621,47 +586,9 @@
           "split_type": "none",
           "state_before": ["present"],
           "state_after": ["rtv"]
-        },
-        {
-          "buffer_name": "uav",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["srv_ps"]
-        },
-        {
-          "buffer_name": "dsv",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["srv_ps"]
         }
       ],
-      "postpass_barrier": [
-        {
-          "buffer_name": "uav",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["uav"]
-        },
-        {
-          "buffer_name": "dsv",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["dsv_write"]
-        },
-        {
-          "buffer_name": "pingpong",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["rtv"]
-        }
-      ],
-      "material": ["pso render selected buffer"],
-      "pass_vars": {
-        "size_type": "swapchain_relative",
-        "rtv_index": 0,
-        "use_views": true,
-        "use_sampler": true
-      }
+      "material": ["pso render selected buffer"]
     },
     {
       "name": "imgui",

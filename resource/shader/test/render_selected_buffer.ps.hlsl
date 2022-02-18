@@ -3,8 +3,8 @@ uint src_index : register(b0);
 Texture2D src[] : register(t0);
 SamplerState tex_sampler : register(s0);
 #define CopyFullscreenRootsig " \
-DescriptorTable(CBV(b0),                                                \
-                SRV(t0, numDescriptors=16),                             \
+RootConstants(num32BitConstants=1, b0, visibility=SHADER_VISIBILITY_PIXEL), \
+DescriptorTable(SRV(t0, numDescriptors=unbounded),                      \
                 visibility=SHADER_VISIBILITY_PIXEL),                    \
 DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
 "

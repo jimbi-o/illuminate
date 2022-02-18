@@ -7,4 +7,5 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_render_pass_postprocess.h
   d3d12_render_pass_prez.h
   d3d12_render_pass_copy_resource.h
+  d3d12_render_pass_debug_render_selected_buffer.h
 )

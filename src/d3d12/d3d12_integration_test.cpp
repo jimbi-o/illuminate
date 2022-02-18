@@ -16,6 +16,7 @@
 #include "d3d12_win32_window.h"
 #include "render_pass/d3d12_render_pass_copy_resource.h"
 #include "render_pass/d3d12_render_pass_cs_dispatch.h"
+#include "render_pass/d3d12_render_pass_debug_render_selected_buffer.h"
 #include "render_pass/d3d12_render_pass_imgui.h"
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_prez.h"
@@ -117,12 +118,6 @@ void UpdatePingpongC(RenderPassFuncArgsRenderCommon* args_common, RenderPassFunc
   args_per_pass->ptr_size = GetUint32(sizeof(float)) * 4;
   RenderPassPostprocess::Update(args_common, args_per_pass);
 }
-void RenderSelectedBuffer(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  uint32_t index = 0;
-  args_per_pass->ptr = &index;
-  args_per_pass->ptr_size = GetUint32(sizeof(index));
-  RenderPassPostprocess::Update(args_common, args_per_pass);
-}
 auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
   RenderPassFunctionList funcs{};
   funcs.init = AllocateArray<RenderPassFuncInit>(allocator, render_pass_num);
@@ -151,7 +146,6 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
       case SID("pingpong-a"):
       case SID("pingpong-b"):
       case SID("pingpong-c"):
-      case SID("debug buffer"):
       case SID("output to swapchain"): {
         funcs.init[i] = RenderPassPostprocess::Init;
         funcs.term[i] = RenderPassPostprocess::Term;
@@ -170,10 +164,6 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
           }
           case SID("output to swapchain"): {
             funcs.update[i] = RenderPassPostprocess::Update;
-            break;
-          }
-          case SID("debug buffer"): {
-            funcs.update[i] = RenderSelectedBuffer;
             break;
           }
         }
@@ -195,6 +185,14 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         funcs.update[i] = RenderPassCopyResource::Update;
         funcs.is_render_needed[i] = RenderPassCopyResource::IsRenderNeeded;
         funcs.render[i] = RenderPassCopyResource::Render;
+        break;
+      }
+      case SID("debug buffer"): {
+        funcs.init[i] = RenderPassDebugRenderSelectedBuffer::Init;
+        funcs.term[i] = RenderPassDebugRenderSelectedBuffer::Term;
+        funcs.update[i] = RenderPassDebugRenderSelectedBuffer::Update;
+        funcs.is_render_needed[i] = RenderPassDebugRenderSelectedBuffer::IsRenderNeeded;
+        funcs.render[i] = RenderPassDebugRenderSelectedBuffer::Render;
         break;
       }
       default: {
@@ -537,6 +535,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .buffer_config_list = render_graph.buffer_list,
       .dynamic_data = &dynamic_data,
       .render_pass_list = render_graph.render_pass_list,
+      .device = device.Get(),
+      .descriptor_gpu = &descriptor_gpu,
+      .descriptor_cpu = &descriptor_cpu,
     };
     auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
     auto prepass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
