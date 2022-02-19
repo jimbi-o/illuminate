@@ -143,4 +143,96 @@ void FlipPingPongBuffer(BufferList* buffer_list, const uint32_t buffer_num, cons
     buffer_list->write_to_sub[buffer_index_list[i]] = !buffer_list->write_to_sub[buffer_index_list[i]];
   }
 }
+void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const RenderPass* render_pass_list, const bool* render_pass_enable_flag, const uint32_t buffer_num, bool** pingpong_buffer_write_to_sub_list) {
+  for (uint32_t buffer_index = 0; buffer_index < buffer_num; buffer_index++) {
+    for (uint32_t i = 0; i < render_pass_num; i++) {
+      pingpong_buffer_write_to_sub_list[buffer_index][i] = false;
+    }
+  }
+  for (uint32_t i = 0; i < render_pass_num - 1; i++) {
+    if (!render_pass_enable_flag[i]) { continue; }
+    for (uint32_t j = 0; j < render_pass_list[i].flip_pingpong_num; j++) {
+      const auto buffer_index = render_pass_list[i].flip_pingpong_index_list[j];
+      const bool write_to_sub = !pingpong_buffer_write_to_sub_list[buffer_index][i];
+      pingpong_buffer_write_to_sub_list[buffer_index][i + 1] = write_to_sub;
+      for (uint32_t k = i + 2; k < render_pass_num; k++) {
+        pingpong_buffer_write_to_sub_list[buffer_index][k] = write_to_sub;
+      }
+    }
+  }
+}
 } // namespace illuminate
+#include "doctest/doctest.h"
+namespace {
+// https://stackoverflow.com/questions/49454005/how-to-get-an-array-size-at-compile-time
+template<std::size_t N, class T>
+constexpr std::size_t countof(T(&)[N]) { return N; }
+}
+TEST_CASE("barrier configuration") { // NOLINT
+  using namespace illuminate;
+  const uint32_t buffer_num = 5;
+  uint32_t flip_pingpong_index_list0[] = {0,1,};
+  uint32_t flip_pingpong_index_list1[] = {0,1,2,3,};
+  uint32_t flip_pingpong_index_list2[] = {0,2,};
+  uint32_t flip_pingpong_index_list3[] = {0,};
+  RenderPass render_pass_list[] = {{},{},{},{},};
+  bool render_pass_enable_flag[] = {true,true,true,true,};
+  static_assert(countof(render_pass_list) == countof(render_pass_enable_flag));
+  const auto render_pass_num = GetUint32(countof(render_pass_list));
+  render_pass_list[0].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list0));
+  render_pass_list[0].flip_pingpong_index_list = flip_pingpong_index_list0;
+  render_pass_list[1].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list1));
+  render_pass_list[1].flip_pingpong_index_list = flip_pingpong_index_list1;
+  render_pass_list[2].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list2));
+  render_pass_list[2].flip_pingpong_index_list = flip_pingpong_index_list2;
+  render_pass_list[3].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list3)); // last flip will be ignored.
+  render_pass_list[3].flip_pingpong_index_list = flip_pingpong_index_list3; // last flip will be ignored.
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto pingpong_buffer_write_to_sub_list = AllocateArray<bool*>(&tmp_allocator, buffer_num);
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    pingpong_buffer_write_to_sub_list[i] = AllocateArray<bool>(&tmp_allocator, render_pass_num);
+  }
+  ConfigurePingPongBufferWriteToSubList(render_pass_num, render_pass_list, render_pass_enable_flag, buffer_num, pingpong_buffer_write_to_sub_list);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][1], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][2], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][3], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][1], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][2], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][3], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][1], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][2], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][3], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][1], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][2], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][3], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][1], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][2], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][3], false);
+  render_pass_enable_flag[1] = false;
+  ConfigurePingPongBufferWriteToSubList(render_pass_num, render_pass_list, render_pass_enable_flag, buffer_num, pingpong_buffer_write_to_sub_list);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][1], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][2], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[0][3], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][1], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][2], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[1][3], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][1], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][2], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[2][3], true);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][1], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][2], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[3][3], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][0], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][1], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][2], false);
+  CHECK_EQ(pingpong_buffer_write_to_sub_list[4][3], false);
+}
