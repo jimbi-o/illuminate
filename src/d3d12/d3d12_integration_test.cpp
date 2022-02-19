@@ -1,4 +1,3 @@
-#include "doctest/doctest.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include "tiny_gltf.h"
@@ -20,10 +19,11 @@
 #include "render_pass/d3d12_render_pass_imgui.h"
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_prez.h"
-static const uint32_t kFrameLoopNum = 1000;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
+static const uint32_t kFrameLoopNum = 1000;
+static const uint32_t kBarrierExecutionTimingNum = 2;
 auto GetTestJson() {
   std::ifstream file("config.json");
   nlohmann::json json;
@@ -204,60 +204,23 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
   }
   return funcs;
 }
-auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, MemoryAllocationJanitor* allocator) {
+auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool** write_to_sub, MemoryAllocationJanitor* allocator) {
   auto resource_list = AllocateArray<ID3D12Resource*>(allocator, render_pass.buffer_num);
   auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, render_pass.buffer_num);
   for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
     auto& buffer = render_pass.buffer_list[b];
-    const auto pingpong_rw = GetPingPongBufferReadWriteType(buffer.state);
-    resource_list[b] = GetResource(buffer_list, buffer.buffer_index, pingpong_rw);
+    const auto pingpong_type = GetPingPongBufferType(buffer.state, write_to_sub[buffer.buffer_index][render_pass.index]);
+    resource_list[b] = GetResource(buffer_list, buffer.buffer_index, pingpong_type);
     const auto descriptor_type = ConvertToDescriptorType(buffer.state);
     if (descriptor_type != DescriptorType::kNum) {
-      cpu_handle_list[b].ptr = descriptor_cpu->GetHandle(GetBufferAllocationIndex(buffer_list, buffer.buffer_index, pingpong_rw), descriptor_type).ptr;
+      cpu_handle_list[b].ptr = descriptor_cpu->GetHandle(GetBufferAllocationIndex(buffer_list, buffer.buffer_index, pingpong_type), descriptor_type).ptr;
     } else {
       cpu_handle_list[b].ptr = 0;
     }
   }
   return std::make_tuple(resource_list, cpu_handle_list);
 }
-void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
-  if (barrier_num == 0) { return; }
-  auto allocator = GetTemporalMemoryAllocator();
-  auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
-  for (uint32_t i = 0; i < barrier_num; i++) {
-    auto& config = barrier_config[i];
-    auto& barrier = barriers[i];
-    barrier.Type  = config.type;
-    barrier.Flags = config.flag;
-    switch (barrier.Type) {
-      case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.pResource   = resource[i];
-        barrier.Transition.StateBefore = config.state_before;
-        barrier.Transition.StateAfter  = config.state_after;
-        break;
-      }
-      case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
-        assert(false && "aliasing barrier not implemented yet");
-        break;
-      }
-      case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
-        barrier.UAV.pResource = resource[i];
-        break;
-      }
-    }
-  }
-  command_list->ResourceBarrier(barrier_num, barriers);
-}
-ID3D12Resource** PrepareBarrierResourceList(const uint32_t barrier_num, const Barrier* barrier_config, const BufferList& buffer_list, MemoryAllocationJanitor* allocator) {
-  if (barrier_num == 0) { return nullptr; }
-  auto resource_list = AllocateArray<ID3D12Resource*>(allocator, barrier_num);
-  for (uint32_t i = 0; i < barrier_num; i++) {
-    resource_list[i] = GetResource(buffer_list, barrier_config[i].buffer_index, GetPingPongBufferReadWriteTypeFromD3d12ResourceState(barrier_config[i].state_after));
-  }
-  return resource_list;
-}
-auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
+auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const bool** write_to_sub, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
   auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, 2); // 0:view 1:sampler
   {
     // view
@@ -265,7 +228,8 @@ auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, co
     auto buffer_id_list = AllocateArray<uint32_t>(&tmp_allocator, render_pass.buffer_num);
     auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, render_pass.buffer_num);
     for (uint32_t j = 0; j < render_pass.buffer_num; j++) {
-      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, render_pass.buffer_list[j].buffer_index, GetPingPongBufferReadWriteType(render_pass.buffer_list[j].state));
+      const auto buffer_index = render_pass.buffer_list[j].buffer_index;
+      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, buffer_index, GetPingPongBufferType(render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index]));
       descriptor_type_list[j] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
     }
     gpu_handle_list[0] = descriptor_gpu->CopyViewDescriptors(device, render_pass.buffer_num, buffer_id_list, descriptor_type_list, descriptor_cpu);
@@ -319,6 +283,35 @@ auto CreateCpuHandleWithView(const BufferConfig& buffer_config, const uint32_t b
   }
   return ret;
 }
+void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, const Barrier* barrier_config, ID3D12Resource** resource) {
+  if (barrier_num == 0) { return; }
+  auto allocator = GetTemporalMemoryAllocator();
+  auto barriers = AllocateArray<D3D12_RESOURCE_BARRIER>(&allocator, barrier_num);
+  for (uint32_t i = 0; i < barrier_num; i++) {
+    auto& config = barrier_config[i];
+    auto& barrier = barriers[i];
+    barrier.Type  = config.type;
+    barrier.Flags = config.flag;
+    switch (barrier.Type) {
+      case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.pResource   = resource[i];
+        barrier.Transition.StateBefore = config.state_before;
+        barrier.Transition.StateAfter  = config.state_after;
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
+        assert(false && "aliasing barrier not implemented yet");
+        break;
+      }
+      case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
+        barrier.UAV.pResource = resource[i];
+        break;
+      }
+    }
+  }
+  command_list->ResourceBarrier(barrier_num, barriers);
+}
 // Win32 message handler
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) { return true; }
@@ -330,45 +323,9 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
-auto InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
-  RenderPassConfigDynamicData dynamic_data{};
-  dynamic_data.render_pass_enable_flag = AllocateArray<bool>(allocator, render_pass_num);
-  for (uint32_t i = 0; i < render_pass_num; i++) {
-    dynamic_data.render_pass_enable_flag[i] = render_pass_list[i].enabled;
-  }
-  return dynamic_data;
-}
-auto FindPrevBufferState(const uint32_t buffer_index, const D3D12_RESOURCE_STATES next_state, const uint32_t barrier_num, Barrier* barrier_list, D3D12_RESOURCE_STATES* dst_state){
-  for (uint32_t i = 0; i < barrier_num; i++) {
-    if (barrier_list[i].buffer_index != buffer_index) { continue; }
-    if (barrier_list[i].state_after & next_state) { continue; }
-    *dst_state = barrier_list[i].state_after;
-    return true;
-  }
-  return false;
-}
-void ConfigureBarrierTransition(const uint32_t barrier_num, Barrier* barrier_list, const uint32_t current_render_pass_index, const RenderPass* render_pass_list) {
-  if (barrier_num == 0) { return; }
-  for (uint32_t i = 0; i < barrier_num; i++) {
-    auto& barrier = barrier_list[i];
-    if (barrier.state_before != D3D12_RESOURCE_STATE_COMMON) { continue; }
-    assert(current_render_pass_index > 0);
-    for (uint32_t j = current_render_pass_index - 1; j != ~0U; j--) {
-      const auto& proceding_pass = render_pass_list[j];
-      if (FindPrevBufferState(barrier.buffer_index, barrier.state_after, proceding_pass.postpass_barrier_num, proceding_pass.postpass_barrier, &barrier.state_before)
-          || FindPrevBufferState(barrier.buffer_index, barrier.state_after, proceding_pass.prepass_barrier_num, proceding_pass.prepass_barrier, &barrier.state_before)) {
-        break;
-      }
-    }
-  }
-}
-void ConfigureBarrierTransition(const uint32_t current_render_pass_index, const RenderPass* render_pass_list) {
-  const auto& current_render_pass = render_pass_list[current_render_pass_index];
-  ConfigureBarrierTransition(current_render_pass.prepass_barrier_num, current_render_pass.prepass_barrier, current_render_pass_index, render_pass_list);
-  ConfigureBarrierTransition(current_render_pass.postpass_barrier_num, current_render_pass.postpass_barrier, current_render_pass_index, render_pass_list);
-}
 } // namespace anonymous
 } // namespace illuminate
+#include "doctest/doctest.h"
 TEST_CASE("d3d12 integration test") { // NOLINT
   using namespace illuminate; // NOLINT
   auto allocator = GetTemporalMemoryAllocator();
@@ -492,11 +449,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
   }
-  auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
+  auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
   for (uint32_t i = 0; i < kFrameLoopNum; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
+    ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
@@ -540,23 +498,25 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .descriptor_cpu = &descriptor_cpu,
     };
     auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
-    auto prepass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
-    auto postpass_barrier_resource_list = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
+    uint32_t* barrier_num[kBarrierExecutionTimingNum]{};
+    Barrier** barrier_config_list[kBarrierExecutionTimingNum]{};
+    ID3D12Resource*** barrier_resource_list[kBarrierExecutionTimingNum]{};
+    for (uint32_t k = 0; k < kBarrierExecutionTimingNum; k++) {
+      barrier_num[k] = AllocateArray<uint32_t>(&single_frame_allocator, render_graph.render_pass_num);
+      barrier_config_list[k] = AllocateArray<Barrier*>(&single_frame_allocator, render_graph.render_pass_num);
+      barrier_resource_list[k] = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
+    }
+    // auto resource_state_list = ConfigureResourceStateChanges(); // TODO
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       render_pass_enable_flag[k] = dynamic_data.render_pass_enable_flag[k];
       const auto& render_pass = render_graph.render_pass_list[k];
       if (!render_pass_enable_flag[k]) { continue; }
-      if (!render_pass.enabled) {
-        ConfigureBarrierTransition(k, render_graph.render_pass_list);
-      }
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
       args_per_pass[k].render_pass_index = k;
-      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, &single_frame_allocator);
-      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
-      prepass_barrier_resource_list[k] = PrepareBarrierResourceList(render_pass.prepass_barrier_num, render_pass.prepass_barrier, buffer_list, &single_frame_allocator);
-      FlipPingPongBuffer(&buffer_list, render_pass.flip_pingpong_num, render_pass.flip_pingpong_index_list);
-      postpass_barrier_resource_list[k] = PrepareBarrierResourceList(render_pass.postpass_barrier_num, render_pass.postpass_barrier, buffer_list, &single_frame_allocator);
+      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, &single_frame_allocator);
+      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+      // TODO prepare barrier configs
     }
     // update
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
@@ -581,9 +541,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (command_list && render_graph.command_queue_type[render_pass.command_queue_index] != D3D12_COMMAND_LIST_TYPE_COPY) {
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
-      ExecuteBarrier(command_list, render_pass.prepass_barrier_num, render_pass.prepass_barrier, prepass_barrier_resource_list[k]);
+      ExecuteBarrier(command_list, barrier_num[0][k], barrier_config_list[0][k], barrier_resource_list[0][k]);
       RenderPassRender(&render_pass_function_list, &args_common, &args_per_pass[k]);
-      ExecuteBarrier(command_list, render_pass.postpass_barrier_num, render_pass.postpass_barrier, postpass_barrier_resource_list[k]);
+      ExecuteBarrier(command_list, barrier_num[1][k], barrier_config_list[1][k], barrier_resource_list[1][k]);
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
         prev_command_list[render_pass.command_queue_index] = nullptr;

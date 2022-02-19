@@ -9,7 +9,6 @@ namespace illuminate {
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetSamplerConfig(const nlohmann::json& j, D3D12_SAMPLER_DESC* sampler_desc);
 void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, const uint32_t barrier_num, Barrier* barrier_list);
-void ConfigureBarrierTransition(const nlohmann::json& json_render_pass_list, const char* const barrier_entity_name, const uint32_t barrier_num, Barrier* barrier_list, const BufferConfig* buffer_config_list, D3D12_RESOURCE_STATES** buffer_state, bool* write_to_sub);
 template <typename A>
 void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
@@ -282,30 +281,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
     r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", 1024);
     r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", 16);
   }
-  // barrier transition
-  {
-    auto tmp_allocator = GetTemporalMemoryAllocator();
-    auto buffer_state = AllocateArray<D3D12_RESOURCE_STATES*>(&tmp_allocator, r.buffer_num);
-    auto write_to_sub = AllocateArray<bool>(&tmp_allocator, r.buffer_num);
-    for (uint32_t i = 0; i < r.buffer_num; i++) {
-      buffer_state[i] = AllocateArray<D3D12_RESOURCE_STATES>(&tmp_allocator, 2);
-      buffer_state[i][0] = ConvertToD3d12ResourceState(r.buffer_list[i].initial_state);
-      buffer_state[i][1] = buffer_state[i][0];
-      write_to_sub[i] = 0;
-    }
-    const auto& json_render_pass_list = j.at("render_pass");
-    for (uint32_t i = 0; i < r.render_pass_num; i++) {
-      if (r.render_pass_list[i].enabled) {
-        ConfigureBarrierTransition(json_render_pass_list[i], "prepass_barrier", r.render_pass_list[i].prepass_barrier_num, r.render_pass_list[i].prepass_barrier, r.buffer_list, buffer_state, write_to_sub);
-        ConfigureBarrierTransition(json_render_pass_list[i], "postpass_barrier", r.render_pass_list[i].postpass_barrier_num, r.render_pass_list[i].postpass_barrier, r.buffer_list, buffer_state, write_to_sub);
-      }
-      for (uint32_t f = 0; f < r.render_pass_list[i].flip_pingpong_num; f++) {
-        const auto& buffer_index = r.render_pass_list[i].flip_pingpong_index_list[f];
-        write_to_sub[buffer_index] = !write_to_sub[buffer_index];
-      }
-    }
-  } // barrier transition
-  // do not allocate from allocator below this line.
 }
 }
 #endif

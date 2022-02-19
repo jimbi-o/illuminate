@@ -19,7 +19,6 @@ void UnmapResource(ID3D12Resource* resource);
 struct BufferList {
   uint32_t* buffer_allocation_index_main{nullptr};
   uint32_t* buffer_allocation_index_sub{nullptr};
-  bool* write_to_sub{nullptr};
   uint32_t buffer_allocation_num{0};
   D3D12MA::Allocation** buffer_allocation_list{nullptr};
   ID3D12Resource** resource_list{nullptr};
@@ -31,7 +30,6 @@ BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_c
   BufferList buffer_list{};
   buffer_list.buffer_allocation_index_main = AllocateArray<uint32_t>(allocator, buffer_num);
   buffer_list.buffer_allocation_index_sub = AllocateArray<uint32_t>(allocator, buffer_num);
-  buffer_list.write_to_sub = AllocateArray<bool>(allocator, buffer_num);
   buffer_list.buffer_allocation_num = buffer_num;
   for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
     if (buffer_config_list[i].pingpong) {
@@ -46,7 +44,6 @@ BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_c
   for (uint32_t i = 0; i < buffer_num; i++) {
     buffer_list.buffer_allocation_index_main[i] = buffer_allocation_index;
     buffer_list.buffer_allocation_index_sub[i] = buffer_allocation_index;
-    buffer_list.write_to_sub[i] = false;
     buffer_list.buffer_config_index[buffer_allocation_index] = i;
     buffer_list.is_sub[buffer_allocation_index] = false;
     auto& buffer_config = buffer_config_list[i];
@@ -70,9 +67,28 @@ BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_c
   return buffer_list;
 }
 void ReleaseBuffers(BufferList* buffer_list);
-ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write = PingPongBufferReadWriteType::kWritable);
-uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write = PingPongBufferReadWriteType::kWritable);
+enum class PingPongBufferType : uint8_t { kMain = 0, kSub, };
+ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type);
+uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type);
+inline ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index) {
+  return GetResource(buffer_list, buffer_index, PingPongBufferType::kMain);
+}
+inline uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index) {
+  return GetBufferAllocationIndex(buffer_list, buffer_index, PingPongBufferType::kMain);
+}
 void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list);
-void FlipPingPongBuffer(BufferList* buffer_list, const uint32_t buffer_num, const uint32_t* buffer_index_list);
+constexpr inline PingPongBufferType GetPingPongBufferType(const ResourceStateType state, const bool write_to_sub) {
+  if (IsResourceStateReadOnly(state)) {
+    if (write_to_sub) {
+      return PingPongBufferType::kMain;
+    }
+    return PingPongBufferType::kSub;
+  }
+  if (write_to_sub) {
+    return PingPongBufferType::kSub;
+  }
+  return PingPongBufferType::kMain;
+}
+void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const RenderPass* render_pass_list, const bool* render_pass_enable_flag, const uint32_t buffer_num, bool** pingpong_buffer_write);
 }
 #endif

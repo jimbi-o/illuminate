@@ -119,17 +119,11 @@ void ReleaseBuffers(BufferList* buffer_list) {
     }
   }
 }
-ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write) {
-  return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_index, read_write)];
+ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type) {
+  return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_index, type)];
 }
-uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferReadWriteType read_write) {
-  if (read_write == PingPongBufferReadWriteType::kReadable) {
-    if (!buffer_list.write_to_sub[buffer_index]) {
-      return buffer_list.buffer_allocation_index_sub[buffer_index];
-    }
-    return buffer_list.buffer_allocation_index_main[buffer_index];
-  }
-  if (buffer_list.write_to_sub[buffer_index]) {
+uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type) {
+  if (type == PingPongBufferType::kSub) {
     return buffer_list.buffer_allocation_index_sub[buffer_index];
   }
   return buffer_list.buffer_allocation_index_main[buffer_index];
@@ -137,11 +131,6 @@ uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t 
 void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list) {
   buffer_list->resource_list[buffer_list->buffer_allocation_index_main[buffer_index]] = resource;
   buffer_list->resource_list[buffer_list->buffer_allocation_index_sub[buffer_index]]  = resource;
-}
-void FlipPingPongBuffer(BufferList* buffer_list, const uint32_t buffer_num, const uint32_t* buffer_index_list) {
-  for (uint32_t i = 0; i < buffer_num; i++) {
-    buffer_list->write_to_sub[buffer_index_list[i]] = !buffer_list->write_to_sub[buffer_index_list[i]];
-  }
 }
 void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const RenderPass* render_pass_list, const bool* render_pass_enable_flag, const uint32_t buffer_num, bool** pingpong_buffer_write_to_sub_list) {
   for (uint32_t buffer_index = 0; buffer_index < buffer_num; buffer_index++) {
@@ -163,11 +152,6 @@ void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
-namespace {
-// https://stackoverflow.com/questions/49454005/how-to-get-an-array-size-at-compile-time
-template<std::size_t N, class T>
-constexpr std::size_t countof(T(&)[N]) { return N; }
-}
 TEST_CASE("barrier configuration") { // NOLINT
   using namespace illuminate;
   const uint32_t buffer_num = 5;
@@ -178,14 +162,14 @@ TEST_CASE("barrier configuration") { // NOLINT
   RenderPass render_pass_list[] = {{},{},{},{},};
   bool render_pass_enable_flag[] = {true,true,true,true,};
   static_assert(countof(render_pass_list) == countof(render_pass_enable_flag));
-  const auto render_pass_num = GetUint32(countof(render_pass_list));
-  render_pass_list[0].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list0));
+  const auto render_pass_num = countof(render_pass_list);
+  render_pass_list[0].flip_pingpong_num = countof(flip_pingpong_index_list0);
   render_pass_list[0].flip_pingpong_index_list = flip_pingpong_index_list0;
-  render_pass_list[1].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list1));
+  render_pass_list[1].flip_pingpong_num = countof(flip_pingpong_index_list1);
   render_pass_list[1].flip_pingpong_index_list = flip_pingpong_index_list1;
-  render_pass_list[2].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list2));
+  render_pass_list[2].flip_pingpong_num = countof(flip_pingpong_index_list2);
   render_pass_list[2].flip_pingpong_index_list = flip_pingpong_index_list2;
-  render_pass_list[3].flip_pingpong_num = GetUint32(countof(flip_pingpong_index_list3)); // last flip will be ignored.
+  render_pass_list[3].flip_pingpong_num = countof(flip_pingpong_index_list3); // last flip will be ignored.
   render_pass_list[3].flip_pingpong_index_list = flip_pingpong_index_list3; // last flip will be ignored.
   auto tmp_allocator = GetTemporalMemoryAllocator();
   auto pingpong_buffer_write_to_sub_list = AllocateArray<bool*>(&tmp_allocator, buffer_num);

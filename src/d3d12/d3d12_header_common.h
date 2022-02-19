@@ -71,6 +71,18 @@ constexpr auto ConvertToDescriptorTypeFlag(const ResourceStateType& state) {
   }
   return kDescriptorTypeFlagNone;
 }
+constexpr inline bool IsResourceStateReadOnly(const ResourceStateType& type) {
+  switch (type) {
+    case ResourceStateType::kCbv:
+    case ResourceStateType::kSrvPs:
+    case ResourceStateType::kSrvNonPs:
+    case ResourceStateType::kCommon:
+    case ResourceStateType::kPresent: {
+      return true;
+    }
+  }
+  return false;
+}
 enum class BufferSizeRelativeness : uint8_t { kAbsolute, kSwapchainRelative, kPrimaryBufferRelative, };
 struct Size2d {
   uint32_t width{};
@@ -87,24 +99,5 @@ struct MainBufferFormat {
 uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT);
-enum class PingPongBufferReadWriteType : uint8_t { kWritable = 0, kReadable, };
-constexpr auto GetPingPongBufferReadWriteType(const ResourceStateType state) {
-  if (state == ResourceStateType::kSrvPs || state == ResourceStateType::kSrvNonPs) {
-    return PingPongBufferReadWriteType::kReadable;
-  }
-  return PingPongBufferReadWriteType::kWritable;
-}
-constexpr auto GetPingPongBufferReadWriteTypeFromD3d12ResourceState(const D3D12_RESOURCE_STATES state) {
-  if (state & D3D12_RESOURCE_STATE_RENDER_TARGET) {
-    return PingPongBufferReadWriteType::kWritable;
-  }
-  if (state & D3D12_RESOURCE_STATE_DEPTH_WRITE) {
-    return PingPongBufferReadWriteType::kWritable;
-  }
-  if (state & D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
-    return PingPongBufferReadWriteType::kWritable;
-  }
-  return PingPongBufferReadWriteType::kReadable;
-}
 }
 #endif

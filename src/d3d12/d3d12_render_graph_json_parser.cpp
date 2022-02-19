@@ -240,7 +240,7 @@ void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, 
       case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
         dst_barrier.state_before = D3D12_RESOURCE_STATE_COMMON;
         dst_barrier.state_after  = D3D12_RESOURCE_STATE_COMMON;
-        if (src_barrier.contains("state_before")) {
+        {
           const auto& state_before = src_barrier.at("state_before");
           for (const auto& state : state_before) {
             dst_barrier.state_before |= ConvertToD3d12ResourceState(GetResourceStateType(state));
@@ -267,26 +267,6 @@ void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, 
         break;
       }
     } // switch
-  }
-}
-void ConfigureBarrierTransition(const nlohmann::json& json_render_pass_list, const char* const barrier_entity_name, const uint32_t barrier_num, Barrier* barrier_list, const BufferConfig* buffer_config_list, D3D12_RESOURCE_STATES** buffer_state, bool* write_to_sub) {
-  if (!json_render_pass_list.contains(barrier_entity_name)) { return; }
-  for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {
-    auto& barrier_config = barrier_list[barrier_index];
-    if (barrier_config.type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION) { continue; }
-    const auto& json_barrier_config = json_render_pass_list.at(barrier_entity_name)[barrier_index];
-    uint32_t buffer_state_index = 0;
-    if (buffer_config_list[barrier_config.buffer_index].pingpong) {
-      const auto rw = GetPingPongBufferReadWriteTypeFromD3d12ResourceState(barrier_config.state_after);
-      if (write_to_sub[barrier_config.buffer_index] && rw == PingPongBufferReadWriteType::kWritable
-          || !write_to_sub[barrier_config.buffer_index] && rw == PingPongBufferReadWriteType::kReadable) {
-        buffer_state_index = 1;
-      }
-    }
-    if (!json_barrier_config.contains("state_before")) {
-      barrier_config.state_before = buffer_state[barrier_config.buffer_index][buffer_state_index];
-    }
-    buffer_state[barrier_config.buffer_index][buffer_state_index] = barrier_config.state_after;
   }
 }
 }

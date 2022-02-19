@@ -24,6 +24,7 @@ struct RenderPassFuncArgsInit {
 struct RenderPassConfigDynamicData {
   bool* render_pass_enable_flag{nullptr};
   uint32_t debug_render_selected_buffer_allocation_index{0};
+  bool** write_to_sub{nullptr};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
@@ -84,5 +85,6 @@ constexpr inline ID3D12RootSignature* GetRenderPassRootSig(RenderPassFuncArgsRen
 constexpr inline ID3D12PipelineState* GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t material_index = 0) {
   return args_common->pso_rootsig_manager->GetPso(GetRenderPass(args_common, args_per_pass).material_list[material_index]);
 }
+RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator);
 }
 #endif
