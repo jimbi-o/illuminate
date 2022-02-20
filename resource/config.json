@@ -395,14 +395,6 @@
         }
       ],
       "flip_pingpong": ["pingpong"],
-      "postpass_barrier": [
-        {
-          "buffer_name": "pingpong",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["srv_ps"]
-        }
-      ],
       "material": ["pso pingpong-a"],
       "pass_vars": {
         "rtv_index": 1,
@@ -430,20 +422,6 @@
       ],
       "sampler": ["bilinear"],
       "flip_pingpong": ["pingpong"],
-      "postpass_barrier": [
-        {
-          "buffer_name": "pingpong",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["srv_ps"]
-        },
-        {
-          "buffer_name": "pingpong",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["rtv"]
-        }
-      ],
       "material": ["pso pingpong-bc"],
       "pass_vars": {
         "rtv_index": 2,
@@ -470,20 +448,6 @@
       ],
       "sampler": ["bilinear"],
       "flip_pingpong": ["pingpong"],
-      "postpass_barrier": [
-        {
-          "buffer_name": "pingpong",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["srv_ps"]
-        },
-        {
-          "buffer_name": "pingpong",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["rtv"]
-        }
-      ],
       "material": ["pso pingpong-bc"],
       "pass_vars": {
         "rtv_index": 2,
@@ -522,32 +486,6 @@
           "split_type": "none",
           "state_before": ["present"],
           "state_after": ["rtv"]
-        },
-        {
-          "buffer_name": "uav",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["srv_ps"]
-        },
-        {
-          "buffer_name": "dsv",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["srv_ps"]
-        }
-      ],
-      "postpass_barrier": [
-        {
-          "buffer_name": "uav",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["uav"]
-        },
-        {
-          "buffer_name": "dsv",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["dsv_write"]
         }
       ],
       "material": ["pso output to swapchain"],
@@ -604,12 +542,6 @@
           "type": "transition",
           "split_type": "none",
           "state_after": ["present"]
-        },
-        {
-          "buffer_name": "pingpong",
-          "type": "transition",
-          "split_type": "none",
-          "state_after": ["rtv"]
         }
       ]
     }

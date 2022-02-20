@@ -23,7 +23,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 namespace illuminate {
 namespace {
 static const uint32_t kFrameLoopNum = 1000;
-static const uint32_t kBarrierExecutionTimingNum = 2;
 auto GetTestJson() {
   std::ifstream file("config.json");
   nlohmann::json json;

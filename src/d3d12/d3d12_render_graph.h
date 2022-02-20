@@ -34,6 +34,7 @@ struct RenderPassBuffer {
 };
 struct Barrier {
   uint32_t buffer_index{};
+  bool is_pingpong_sub_buffer{false};
   D3D12_RESOURCE_BARRIER_TYPE type{};
   D3D12_RESOURCE_BARRIER_FLAGS flag{}; // split begin/end/none
   D3D12_RESOURCE_STATES state_before{};
@@ -88,5 +89,6 @@ struct RenderGraph {
   uint32_t gpu_handle_num_view{0};
   uint32_t gpu_handle_num_sampler{0};
 };
+static const uint32_t kBarrierExecutionTimingNum = 2;
 }
 #endif
