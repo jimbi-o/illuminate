@@ -1,6 +1,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include "tiny_gltf.h"
+#include "d3d12_barriers.h"
 #include "d3d12_command_list.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_descriptors.h"
@@ -311,6 +312,20 @@ void ExecuteBarrier(D3d12CommandList* command_list, const uint32_t barrier_num, 
   }
   command_list->ResourceBarrier(barrier_num, barriers);
 }
+auto PrepareBarrierResourceList(const uint32_t render_pass_num, const uint32_t** barrier_num, const Barrier*** barrier_config_list, const BufferList& buffer_list, MemoryAllocationJanitor* allocator) {
+  auto barrier_resource_list = AllocateArray<ID3D12Resource***>(allocator, kBarrierExecutionTimingNum);
+  for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
+    barrier_resource_list[i] = AllocateArray<ID3D12Resource**>(allocator, render_pass_num);
+    for (uint32_t j = 0; j < render_pass_num; j++) {
+      barrier_resource_list[i][j] = (barrier_num[i][j] == 0) ? nullptr : AllocateArray<ID3D12Resource*>(allocator, barrier_num[i][j]);
+      for (uint32_t k = 0; k < barrier_num[i][j]; k++) {
+        auto& barrier_config = barrier_config_list[i][j][k];
+        barrier_resource_list[i][j][k] = GetResource(buffer_list, barrier_config.buffer_index, barrier_config.pingpong_buffer_type);
+      }
+    }
+  }
+  return barrier_resource_list;
+}
 // Win32 message handler
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) { return true; }
@@ -498,15 +513,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     };
     auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
-    uint32_t* barrier_num[kBarrierExecutionTimingNum]{};
-    Barrier** barrier_config_list[kBarrierExecutionTimingNum]{};
-    ID3D12Resource*** barrier_resource_list[kBarrierExecutionTimingNum]{};
-    for (uint32_t k = 0; k < kBarrierExecutionTimingNum; k++) {
-      barrier_num[k] = AllocateArray<uint32_t>(&single_frame_allocator, render_graph.render_pass_num);
-      barrier_config_list[k] = AllocateArray<Barrier*>(&single_frame_allocator, render_graph.render_pass_num);
-      barrier_resource_list[k] = AllocateArray<ID3D12Resource**>(&single_frame_allocator, render_graph.render_pass_num);
-    }
-    // auto resource_state_list = ConfigureResourceStateChanges(); // TODO
+    auto resouce_state_list = ConfigureRenderPassResourceStates(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, (const bool**)dynamic_data.write_to_sub, (const bool*)dynamic_data.render_pass_enable_flag, &single_frame_allocator);
+    auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, resouce_state_list, &single_frame_allocator);
+    auto barrier_resource_list = PrepareBarrierResourceList(render_graph.render_pass_num, barrier_num, barrier_config_list, buffer_list, &single_frame_allocator);
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       render_pass_enable_flag[k] = dynamic_data.render_pass_enable_flag[k];
       const auto& render_pass = render_graph.render_pass_list[k];
@@ -515,7 +524,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       args_per_pass[k].render_pass_index = k;
       std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, &single_frame_allocator);
       args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
-      // TODO prepare barrier configs
     }
     // update
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
@@ -526,7 +534,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       if (!render_pass_enable_flag[k]) { continue; }
       const auto& render_pass = render_graph.render_pass_list[k];
-      auto render_pass_allocator = GetTemporalMemoryAllocator();
       for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
         CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(render_pass.signal_queue_index[l], render_pass.command_queue_index, render_pass_signal[render_pass.signal_pass_index[l]]));
       }

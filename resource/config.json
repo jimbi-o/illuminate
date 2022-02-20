@@ -541,6 +541,7 @@
           "buffer_name": "swapchain",
           "type": "transition",
           "split_type": "none",
+          "state_before": ["rtv"],
           "state_after": ["present"]
         }
       ]

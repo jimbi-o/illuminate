@@ -19,8 +19,6 @@ class PsoRootsigManager {
   IDxcCompiler3* compiler_{nullptr};
   IDxcUtils* utils_{nullptr};
   IDxcIncludeHandler* include_handler_{nullptr};
-  HashMap<uint32_t, MemoryAllocationJanitor> rootsig_index_;
-  HashMap<uint32_t, MemoryAllocationJanitor> pso_index_;
   uint32_t rootsig_num_{0};
   uint32_t pso_num_{0};
   ID3D12RootSignature** rootsig_list_{nullptr};

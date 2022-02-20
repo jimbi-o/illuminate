@@ -76,7 +76,7 @@ bool IsCompileSuccessful(IDxcResult* result) {
   return result->HasOutput(DXC_OUT_OBJECT);
 }
 ID3D12RootSignature* CreateRootSignatureLocal(D3d12Device* device, IDxcResult* result) {
-  if (!result->HasOutput(DXC_OUT_ROOT_SIGNATURE)) { return nullptr; }
+  assert(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
   IDxcBlob* root_signature_blob = nullptr;
   auto hr = result->GetOutput(DXC_OUT_ROOT_SIGNATURE, IID_PPV_ARGS(&root_signature_blob), nullptr);
   if (FAILED(hr)) {
@@ -424,15 +424,17 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
                uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
                uint32_t* pso_num, ID3D12PipelineState*** pso_list,
                uint32_t** rootsig_pso_map, MemoryAllocationJanitor* allocator) {
+  *rootsig_num = GetUint32(json.at("rootsig").size());
+  *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, *rootsig_num);
+  *pso_num = GetUint32(json.at("pso").size());
+  *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, *pso_num);
+  *rootsig_pso_map = AllocateArray<uint32_t>(allocator, *pso_num);
   auto func_allocator = GetTemporalMemoryAllocator();
   auto shader_config = ParseShaderConfigJson(json, &func_allocator);
+  assert(*rootsig_num == shader_config.rootsig_num);
+  assert(*pso_num == shader_config.pso_num);
   auto compile_unit_list = AllocateArray<IDxcResult*>(&func_allocator, shader_config.compile_unit_num);
   auto shader_object_list = AllocateArray<IDxcBlob*>(&func_allocator, shader_config.compile_unit_num);
-  *rootsig_num = shader_config.rootsig_num;
-  *pso_num = shader_config.pso_num;
-  *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, shader_config.rootsig_num);
-  *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, shader_config.pso_num);
-  *rootsig_pso_map = AllocateArray<uint32_t>(allocator, shader_config.pso_num);
   for (uint32_t i = 0; i < shader_config.compile_unit_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
     auto filename = CopyStrToWstrContainer(GetStringView(json.at("compile_unit")[i], "filename"), &tmp_allocator);
@@ -473,8 +475,6 @@ bool PsoRootsigManager::Init(const nlohmann::json& material_json, D3d12Device* d
   if (compiler_ == nullptr) { return false; }
   include_handler_ = CreateDxcIncludeHandler(utils_);
   if (include_handler_ == nullptr) { return false; }
-  rootsig_index_.SetAllocator(allocator);
-  pso_index_.SetAllocator(allocator);
   ParseJson(material_json, compiler_, include_handler_, utils_, device, &rootsig_num_, &rootsig_list_, &pso_num_, &pso_list_, &rootsig_pso_map_, allocator);
   return true;
 }

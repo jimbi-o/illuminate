@@ -67,7 +67,6 @@ BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_c
   return buffer_list;
 }
 void ReleaseBuffers(BufferList* buffer_list);
-enum class PingPongBufferType : uint8_t { kMain = 0, kSub, };
 ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type);
 uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type);
 inline ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index) {

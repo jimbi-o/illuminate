@@ -99,5 +99,6 @@ struct MainBufferFormat {
 uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT);
+enum class PingPongBufferType : uint8_t { kMain = 0, kSub, };
 }
 #endif
