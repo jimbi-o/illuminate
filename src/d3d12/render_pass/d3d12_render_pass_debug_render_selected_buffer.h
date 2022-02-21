@@ -7,7 +7,7 @@ class RenderPassDebugRenderSelectedBuffer {
  public:
   struct Param {
   };
-  static void* Init(RenderPassFuncArgsInit* args) {
+  static void* Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     return param;

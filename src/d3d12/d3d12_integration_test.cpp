@@ -361,9 +361,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   PsoRootsigManager pso_rootsig_manager;
   RenderGraph render_graph;
   void** render_pass_vars{nullptr};
-  HashMap<uint32_t, MemoryAllocationJanitor> named_buffer_config_index(&allocator);
-  HashMap<uint32_t, MemoryAllocationJanitor> named_buffer_allocator_index(&allocator);
   RenderPassFunctionList render_pass_function_list{};
+  uint32_t swapchain_buffer_config_index = {};
+  uint32_t swapchain_buffer_allocation_index = {};
   {
     auto json = GetTestJson();
     ParseRenderGraphJson(json, &allocator, &render_graph);
@@ -415,11 +415,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       } else {
         SetD3d12Name(buffer_list.resource_list[i], str);
       }
-      if (buffer_config.need_name_cache) {
-        auto index = buffer_config_index;
-        CHECK_UNARY(named_buffer_config_index.Insert(CalcEntityStrHash(json_buffer_list[buffer_config_index], "name"), std::move(index)));
-        index = i;
-        CHECK_UNARY(named_buffer_allocator_index.Insert(CalcEntityStrHash(json_buffer_list[buffer_config_index], "name"), std::move(index)));
+      if (str.compare("swapchain") == 0) {
+        swapchain_buffer_config_index = buffer_config_index;
+        swapchain_buffer_allocation_index = i;
       }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
@@ -440,11 +438,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         .hwnd = window.GetHwnd(),
         .frame_buffer_num = render_graph.frame_buffer_num,
         .allocator = &allocator,
-        .named_buffer_allocator_index = &named_buffer_allocator_index,
-        .named_buffer_config_index = &named_buffer_config_index,
         .buffer_list = &buffer_list,
         .buffer_config_list = render_graph.buffer_list,
-        .render_graph = &render_graph,
+        .render_pass_num = render_graph.render_pass_num,
+        .render_pass_list = render_graph.render_pass_list,
       };
       render_pass_vars[i] = RenderPassInit(&render_pass_function_list, &render_pass_func_args_init, i);
     }
@@ -478,8 +475,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
-    RegisterResource(*named_buffer_config_index.Get(SID("swapchain")), swapchain.GetResource(), &buffer_list);
-    descriptor_cpu.RegisterExternalHandle(*named_buffer_allocator_index.Get(SID("swapchain")), DescriptorType::kRtv, swapchain.GetRtvHandle());
+    RegisterResource(swapchain_buffer_config_index, swapchain.GetResource(), &buffer_list);
+    descriptor_cpu.RegisterExternalHandle(swapchain_buffer_allocation_index, DescriptorType::kRtv, swapchain.GetRtvHandle());
     gpu_descriptor_offset_start[frame_index] = descriptor_gpu.GetViewHandleCount();
     if (gpu_descriptor_offset_start[frame_index] == descriptor_gpu.GetViewHandleTotal()) {
       gpu_descriptor_offset_start[frame_index] = 0;
@@ -578,7 +575,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   pso_rootsig_manager.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();
-  RegisterResource(*named_buffer_config_index.Get(SID("swapchain")), nullptr, &buffer_list);
+  RegisterResource(swapchain_buffer_config_index, nullptr, &buffer_list);
   ReleaseBuffers(&buffer_list);
   buffer_allocator->Release();
   command_queue_signals.Term();

@@ -9,7 +9,7 @@ class RenderPassCopyResource {
     uint32_t initial_frame_index{};
     State state;
   };
-  static void* Init(RenderPassFuncArgsInit* args) {
+  static void* Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
     auto param = Allocate<Param>(args->allocator);
     param->initial_frame_index = 0;
     param->state = State::kUpload;

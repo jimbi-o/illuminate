@@ -8,7 +8,7 @@ class RenderPassCsDispatch {
     uint32_t thread_group_count_x{0};
     uint32_t thread_group_count_y{0};
   };
-  static void* Init(RenderPassFuncArgsInit* args) {
+  static void* Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     param->thread_group_count_x = args->json->at("thread_group_count_x");

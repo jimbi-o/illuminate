@@ -7,8 +7,8 @@
 namespace illuminate {
 class RenderPassImgui {
  public:
-  static void* Init(RenderPassFuncArgsInit* args) {
-    const auto imgui_font_buffer_index = *(args->named_buffer_allocator_index->Get(SID("imgui_font")));
+  static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
+    const auto imgui_font_buffer_index = GetBufferAllocationIndex(*args->buffer_list, args->render_pass_list[render_pass_index].buffer_list[0].buffer_index);
     auto cpu_handle_font = args->descriptor_cpu->GetHandle(imgui_font_buffer_index, DescriptorType::kSrv);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -21,7 +21,7 @@ class RenderPassImgui {
       logerror("ImGui_ImplDX12_CreateDeviceObjects failed.");
       assert(false);
     }
-    return PrepareParam(args->render_graph->render_pass_num, args->render_graph->render_pass_list, args->allocator);
+    return PrepareParam(args->render_pass_num, args->render_pass_list, args->allocator);
   }
   static void Term() {
     ImGui_ImplDX12_Shutdown();

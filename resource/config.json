@@ -150,12 +150,10 @@
     },
     {
       "name": "swapchain",
-      "need_name_cache": true,
       "descriptor_only": true
     },
     {
       "name": "imgui_font",
-      "need_name_cache": true,
       "descriptor_only": true
     }
   ],
@@ -399,7 +397,7 @@
       "pass_vars": {
         "rtv_index": 1,
         "use_sampler": false,
-        "cbv": "cbv-a"
+        "cbv_index": 0
       }
     },
     {
@@ -425,7 +423,7 @@
       "material": ["pso pingpong-bc"],
       "pass_vars": {
         "rtv_index": 2,
-        "cbv": "cbv-b"
+        "cbv_index": 0
       }
     },
     {
@@ -451,7 +449,7 @@
       "material": ["pso pingpong-bc"],
       "pass_vars": {
         "rtv_index": 2,
-        "cbv": "cbv-c"
+        "cbv_index": 0
       }
     },
     {

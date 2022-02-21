@@ -15,11 +15,10 @@ struct RenderPassFuncArgsInit {
   HWND hwnd{nullptr};
   uint32_t frame_buffer_num{0};
   MemoryAllocationJanitor* allocator{nullptr};
-  const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_allocator_index{nullptr};
-  const HashMap<uint32_t, MemoryAllocationJanitor>* named_buffer_config_index{nullptr};
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
-  RenderGraph* render_graph{nullptr};
+  uint32_t render_pass_num{0};
+  RenderPass* render_pass_list{nullptr};
 };
 struct RenderPassConfigDynamicData {
   bool* render_pass_enable_flag{nullptr};
@@ -49,7 +48,7 @@ struct RenderPassFuncArgsRenderPerPass {
   void* ptr{nullptr};
   uint32_t ptr_size{0};
 };
-using RenderPassFuncInit = void* (*)(RenderPassFuncArgsInit* args);
+using RenderPassFuncInit = void* (*)(RenderPassFuncArgsInit* args, const uint32_t render_pass_index);
 using RenderPassFuncTerm = void (*)(void);
 using RenderPassFuncUpdate = void (*)(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
 using RenderPassFuncIsRenderNeeded = bool (*)(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
@@ -65,7 +64,7 @@ constexpr inline const RenderPass& GetRenderPass(RenderPassFuncArgsRenderCommon*
   return args_common->render_pass_list[args_per_pass->render_pass_index];
 }
 constexpr inline auto RenderPassInit(RenderPassFunctionList* render_pass_function_list, RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
-  return render_pass_function_list->init[render_pass_index](args);
+  return render_pass_function_list->init[render_pass_index](args, render_pass_index);
 }
 constexpr inline auto RenderPassTerm(RenderPassFunctionList* render_pass_function_list, const uint32_t render_pass_index) {
   return render_pass_function_list->term[render_pass_index]();

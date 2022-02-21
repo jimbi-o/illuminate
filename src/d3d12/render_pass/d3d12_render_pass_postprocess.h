@@ -12,7 +12,7 @@ class RenderPassPostprocess {
     void* cbv_ptr{nullptr};
     uint32_t cbv_size{0};
   };
-  static void* Init(RenderPassFuncArgsInit* args) {
+  static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     if (args->json->contains("size_type")) {
@@ -21,9 +21,8 @@ class RenderPassPostprocess {
     param->rtv_index = GetNum(*args->json, "rtv_index", 0);
     param->use_views = GetBool(*args->json, "use_views", true);
     param->use_sampler = GetBool(*args->json, "use_sampler", true);
-    if (args->json->contains("cbv")) {
-      const auto cbv_name_hash = CalcEntityStrHash(*args->json, "cbv");
-      const auto buffer_config_index = *(args->named_buffer_config_index->Get(cbv_name_hash));
+    if (args->json->contains("cbv_index")) {
+      const auto buffer_config_index = args->render_pass_list[render_pass_index].buffer_list[GetNum(*args->json, "cbv_index", 0)].buffer_index;
       auto resource = GetResource(*args->buffer_list, buffer_config_index);
       param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
       param->cbv_ptr = MapResource(resource, param->cbv_size);

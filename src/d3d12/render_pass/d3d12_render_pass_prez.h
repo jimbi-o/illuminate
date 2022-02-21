@@ -7,7 +7,7 @@ class RenderPassPrez {
   struct Param {
     uint32_t stencil_val;
   };
-  static void* Init(RenderPassFuncArgsInit* args) {
+  static void* Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     param->stencil_val = GetNum(*args->json, "stencil_val", 0);

@@ -25,7 +25,6 @@ struct BufferConfig {
   D3D12_CLEAR_VALUE clear_value{};
   DescriptorTypeFlag descriptor_type_flags{kDescriptorTypeFlagNone};
   bool descriptor_only{false};
-  bool need_name_cache{false};
   bool pingpong{false};
 };
 struct RenderPassBuffer {
