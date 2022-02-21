@@ -20,8 +20,8 @@ const ResourceStateType*** ConfigureRenderPassResourceStates(const uint32_t rend
       continue;
     }
     auto state_sub  = state_main;
-    auto last_pass_index_main = 0;
-    auto last_pass_index_sub = 0;
+    auto last_pass_index_main = 0U;
+    auto last_pass_index_sub = 0U;
     for (uint32_t j = 0; j < render_pass_num; j++) {
       if (render_pass_enable_flag[j]) {
         uint32_t buffer_count = 0;
@@ -52,12 +52,16 @@ const ResourceStateType*** ConfigureRenderPassResourceStates(const uint32_t rend
       }
     }
     if (resource_state_list[i][last_pass_index_main][0] != buffer_config_list[i].initial_state) {
-      for (uint32_t j = last_pass_index_main + 1; j < render_pass_num; j++) {
+      last_pass_index_main++;
+      for (; last_pass_index_main < render_pass_num && !render_pass_enable_flag[last_pass_index_main]; last_pass_index_main++);
+      for (uint32_t j = last_pass_index_main; j < render_pass_num; j++) {
         resource_state_list[i][j][0] = buffer_config_list[i].initial_state;
       }
     }
     if (pingpong_buffer && resource_state_list[i][last_pass_index_sub][1] != buffer_config_list[i].initial_state) {
-      for (uint32_t j = last_pass_index_sub + 1; j < render_pass_num; j++) {
+      last_pass_index_sub++;
+      for (; last_pass_index_sub < render_pass_num && !render_pass_enable_flag[last_pass_index_sub]; last_pass_index_sub++);
+      for (uint32_t j = last_pass_index_sub; j < render_pass_num; j++) {
         resource_state_list[i][j][1] = buffer_config_list[i].initial_state;
       }
     }

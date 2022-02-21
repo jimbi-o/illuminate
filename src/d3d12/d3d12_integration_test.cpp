@@ -375,6 +375,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
                                       render_graph.command_list_num_per_queue,
                                       render_graph.frame_buffer_num,
                                       render_graph.command_allocator_num_per_queue_type));
+    {
+      const auto& command_queue_name_json = json.at("command_queue");
+      for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
+        SetD3d12Name(command_list_set.GetCommandQueue(i), GetStringView(command_queue_name_json[i], "name"));
+      }
+    }
     CHECK_UNARY(window.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height, WndProc)); // NOLINT
     CHECK_UNARY(swapchain.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, render_graph.frame_buffer_num + 1, render_graph.frame_buffer_num, render_graph.swapchain_usage)); // NOLINT
     main_buffer_size = MainBufferSize{
