@@ -5,7 +5,7 @@ SamplerState tex_sampler : register(s0);
 #define CopyFullscreenRootsig " \
 RootConstants(num32BitConstants=1, b0, visibility=SHADER_VISIBILITY_PIXEL), \
 DescriptorTable(SRV(t0, numDescriptors=unbounded,                       \
-                    flags = DESCRIPTORS_VOLATILE),                      \
+                    flags = DATA_STATIC_WHILE_SET_AT_EXECUTE),          \
                 visibility=SHADER_VISIBILITY_PIXEL),                    \
 DescriptorTable(Sampler(s0), visibility=SHADER_VISIBILITY_PIXEL)        \
 "
