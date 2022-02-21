@@ -37,6 +37,7 @@ struct RenderPassFuncArgsRenderCommon {
   D3d12Device* device{nullptr};
   DescriptorGpu* descriptor_gpu{nullptr};
   DescriptorCpu* descriptor_cpu{nullptr};
+  const ResourceStateType*** resource_state_list{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};

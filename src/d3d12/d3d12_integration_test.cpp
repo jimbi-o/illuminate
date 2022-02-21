@@ -501,6 +501,21 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
     // set up render pass args
+    auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
+    auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
+    auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, (const bool**)dynamic_data.write_to_sub, (const bool*)dynamic_data.render_pass_enable_flag, &single_frame_allocator);
+    auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, resource_state_list, last_user_pass, &single_frame_allocator);
+    auto barrier_resource_list = PrepareBarrierResourceList(render_graph.render_pass_num, barrier_num, barrier_config_list, buffer_list, &single_frame_allocator);
+    for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
+      render_pass_enable_flag[k] = dynamic_data.render_pass_enable_flag[k];
+      const auto& render_pass = render_graph.render_pass_list[k];
+      if (!render_pass_enable_flag[k]) { continue; }
+      args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
+      args_per_pass[k].render_pass_index = k;
+      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, &single_frame_allocator);
+      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+    }
+    // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
       .scene_data = &scene_data,
@@ -513,22 +528,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .device = device.Get(),
       .descriptor_gpu = &descriptor_gpu,
       .descriptor_cpu = &descriptor_cpu,
+      .resource_state_list = resource_state_list,
     };
-    auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
-    auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
-    auto [resouce_state_list, last_user_pass] = ConfigureRenderPassResourceStates(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, (const bool**)dynamic_data.write_to_sub, (const bool*)dynamic_data.render_pass_enable_flag, &single_frame_allocator);
-    auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, resouce_state_list, last_user_pass, &single_frame_allocator);
-    auto barrier_resource_list = PrepareBarrierResourceList(render_graph.render_pass_num, barrier_num, barrier_config_list, buffer_list, &single_frame_allocator);
-    for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
-      render_pass_enable_flag[k] = dynamic_data.render_pass_enable_flag[k];
-      const auto& render_pass = render_graph.render_pass_list[k];
-      if (!render_pass_enable_flag[k]) { continue; }
-      args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
-      args_per_pass[k].render_pass_index = k;
-      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, &single_frame_allocator);
-      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
-    }
-    // update
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       if (!render_pass_enable_flag[k]) { continue; }
       RenderPassUpdate(&render_pass_function_list, &args_common, &args_per_pass[k]);
