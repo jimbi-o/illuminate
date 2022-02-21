@@ -393,12 +393,7 @@
         }
       ],
       "flip_pingpong": ["pingpong"],
-      "material": ["pso pingpong-a"],
-      "pass_vars": {
-        "rtv_index": 1,
-        "use_sampler": false,
-        "cbv_index": 0
-      }
+      "material": ["pso pingpong-a"]
     },
     {
       "name": "pingpong-b",
@@ -420,11 +415,7 @@
       ],
       "sampler": ["bilinear"],
       "flip_pingpong": ["pingpong"],
-      "material": ["pso pingpong-bc"],
-      "pass_vars": {
-        "rtv_index": 2,
-        "cbv_index": 0
-      }
+      "material": ["pso pingpong-bc"]
     },
     {
       "name": "pingpong-c",
@@ -446,11 +437,7 @@
       ],
       "sampler": ["bilinear"],
       "flip_pingpong": ["pingpong"],
-      "material": ["pso pingpong-bc"],
-      "pass_vars": {
-        "rtv_index": 2,
-        "cbv_index": 0
-      }
+      "material": ["pso pingpong-bc"]
     },
     {
       "name": "output to swapchain",
@@ -488,10 +475,7 @@
       ],
       "material": ["pso output to swapchain"],
       "pass_vars": {
-        "size_type": "swapchain_relative",
-        "rtv_index": 2,
-        "use_views": true,
-        "use_sampler": true
+        "size_type": "swapchain_relative"
       }
     },
     {

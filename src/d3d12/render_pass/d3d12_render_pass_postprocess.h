@@ -15,18 +15,33 @@ class RenderPassPostprocess {
   static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
-    if (args->json->contains("size_type")) {
+    if (args->json && args->json->contains("size_type")) {
       param->size_type = (GetStringView(args->json->at("size_type")).compare("swapchain_relative") == 0) ? BufferSizeRelativeness::kSwapchainRelative : BufferSizeRelativeness::kPrimaryBufferRelative;
     }
-    param->rtv_index = GetNum(*args->json, "rtv_index", 0);
-    param->use_views = GetBool(*args->json, "use_views", true);
-    param->use_sampler = GetBool(*args->json, "use_sampler", true);
-    if (args->json->contains("cbv_index")) {
-      const auto buffer_config_index = args->render_pass_list[render_pass_index].buffer_list[GetNum(*args->json, "cbv_index", 0)].buffer_index;
-      auto resource = GetResource(*args->buffer_list, buffer_config_index);
-      param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
-      param->cbv_ptr = MapResource(resource, param->cbv_size);
+    const auto& buffer_list = args->render_pass_list[render_pass_index].buffer_list;
+    for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
+      if (buffer_list[i].state == ResourceStateType::kRtv) {
+        param->rtv_index = i;
+        break;
+      }
     }
+    for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
+      if (buffer_list[i].state == ResourceStateType::kSrvPs) {
+        param->use_views = true;
+        break;
+      }
+    }
+    for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
+      if (buffer_list[i].state == ResourceStateType::kCbv) {
+        const auto buffer_config_index = args->render_pass_list[render_pass_index].buffer_list[i].buffer_index;
+        auto resource = GetResource(*args->buffer_list, buffer_config_index);
+        param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
+        param->cbv_ptr = MapResource(resource, param->cbv_size);
+        param->use_views = true;
+        break;
+      }
+    }
+    param->use_sampler = args->render_pass_list[render_pass_index].sampler_num > 0;
     return param;
   }
   static void Term() {
