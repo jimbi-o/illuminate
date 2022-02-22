@@ -52,6 +52,16 @@ CPMAddPackage(
   VERSION 1.0.220124001
   DOWNLOAD_ONLY yes
 )
+CPMAddPackage(
+  NAME gltf_samples
+  GITHUB_REPOSITORY "KhronosGroup/glTF-Sample-Models"
+  GIT_TAG "b590f6f07cd6931deab8486b9b54e8174386dd49"
+  DOWNLOAD_ONLY yes
+)
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
+  file(COPY "${gltf_samples_SOURCE_DIR}/2.0/Box/glTF-Binary/Box.glb" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
+endif()
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
