@@ -2,12 +2,7 @@
 #include "d3d12_src_common.h"
 namespace illuminate {
 namespace {
-bool GetTinyGltfModel(const char* const gltf_text, const char* const base_dir, tinygltf::Model* model) {
-  using namespace tinygltf;
-  TinyGLTF loader;
-  std::string err;
-  std::string warn;
-  bool ret = loader.LoadASCIIFromString(model, &err, &warn, gltf_text, static_cast<uint32_t>(strlen(gltf_text)), base_dir);
+bool CheckError(const bool ret, const std::string& err, const std::string& warn) {
   if (!warn.empty()) {
     logwarn("tinygltf:{}", warn.c_str());
   }
@@ -15,6 +10,22 @@ bool GetTinyGltfModel(const char* const gltf_text, const char* const base_dir, t
     logerror("tinygltf:{}", err.c_str());
   }
   return ret;
+}
+bool GetTinyGltfModel(const char* const gltf_text, const char* const base_dir, tinygltf::Model* model) {
+  using namespace tinygltf;
+  TinyGLTF loader;
+  std::string err;
+  std::string warn;
+  bool result = loader.LoadASCIIFromString(model, &err, &warn, gltf_text, static_cast<uint32_t>(strlen(gltf_text)), base_dir);
+  return CheckError(result, err, warn);
+}
+bool GetTinyGltfModelFromBinaryFile(const char* const binary_filename, tinygltf::Model* model) {
+  using namespace tinygltf;
+  TinyGLTF loader;
+  std::string err;
+  std::string warn;
+  bool result = loader.LoadBinaryFromFile(model, &err, &warn, binary_filename);
+  return CheckError(result, err, warn);
 }
 auto IsPrimitiveMeshIdentical(const tinygltf::Primitive& a, const tinygltf::Primitive& b) {
   if (a.indices != b.indices) { return false; }
@@ -90,12 +101,7 @@ auto FillResourceData(const tinygltf::Buffer& buffer, const tinygltf::Accessor& 
   return true;
 }
 } // namespace anonymous
-SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* const base_dir, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
-  tinygltf::Model model;
-  if (!GetTinyGltfModel(gltf_text, base_dir, &model)) {
-    logerror("gltf load failed.", gltf_text, base_dir);
-    return {};
-  }
+SceneData ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
   SceneData scene_data{};
   scene_data.model_num = GetModelNum(model.meshes);
   const auto mesh_num = GetMeshNum(model.meshes);
@@ -222,6 +228,22 @@ void ReleaseSceneData(SceneData* scene_data) {
     ReleaseBufferAllocation(&scene_data->buffer_allocation_default[i]);
   }
 }
+SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* const base_dir, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
+  tinygltf::Model model;
+  if (!GetTinyGltfModel(gltf_text, base_dir, &model)) {
+    logerror("gltf load failed. {} {}", gltf_text, base_dir);
+    return {};
+  }
+  return ParseTinyGltfScene(model, gpu_buffer_allocator, allocator);
+}
+SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
+  tinygltf::Model model;
+  if (!GetTinyGltfModelFromBinaryFile(binary_filename, &model)) {
+    logerror("gltf load failed. {}", binary_filename);
+    return {};
+  }
+  return ParseTinyGltfScene(model, gpu_buffer_allocator, allocator);
+}
 } // namespace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_device.h"
@@ -318,6 +340,7 @@ TEST_CASE("load scene/tiny gltf") {
   gpu_buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
+  gSystemMemoryAllocator->Reset();
 }
 TEST_CASE("tinygltf model and mesh count") {
   using namespace illuminate;
@@ -361,4 +384,32 @@ TEST_CASE("tinygltf model and mesh count") {
   meshes.back().primitives.back().indices = 5;
   CHECK_EQ(GetModelNum(meshes),  8);
   CHECK_EQ(GetMeshNum(meshes), 4);
+  gSystemMemoryAllocator->Reset();
+}
+TEST_CASE("load scene/tiny gltf binary file") {
+  using namespace illuminate;
+  tinygltf::Model model;
+  const auto filename = "scenedata/Box.glb";
+  CHECK_UNARY(GetTinyGltfModelFromBinaryFile(filename, &model));
+  DxgiCore dxgi_core;
+  CHECK_UNARY(dxgi_core.Init()); // NOLINT
+  Device device;
+  CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
+  auto gpu_buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto scene_data = GetSceneFromTinyGltfBinary(filename, gpu_buffer_allocator, &tmp_allocator);
+  CHECK_EQ(scene_data.model_num, 1);
+  CHECK_EQ(scene_data.model_mesh_index[0], 0);
+  CHECK_GT(scene_data.mesh_index_buffer_len[0], 0);
+  CHECK_NE(scene_data.mesh_index_buffer_view[0].BufferLocation, 0);
+  CHECK_GT(scene_data.mesh_index_buffer_view[0].SizeInBytes, 0);
+  CHECK_EQ(scene_data.mesh_index_buffer_view[0].Format, DXGI_FORMAT_R16_UINT);
+  CHECK_NE(scene_data.mesh_vertex_buffer_view_position[0].BufferLocation, 0);
+  CHECK_GT(scene_data.mesh_vertex_buffer_view_position[0].SizeInBytes, 0);
+  CHECK_EQ(scene_data.mesh_vertex_buffer_view_position[0].StrideInBytes, 12);
+  ReleaseSceneData(&scene_data);
+  gpu_buffer_allocator->Release();
+  device.Term();
+  dxgi_core.Term();
+  gSystemMemoryAllocator->Reset();
 }
