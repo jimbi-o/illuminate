@@ -30,76 +30,6 @@ auto GetTestJson() {
   file >> json;
   return json;
 }
-auto GetTestTinyGltf() {
-  return R"(
-{
-  "scene": 0,
-  "scenes" : [
-    {
-      "nodes" : [ 0 ]
-    }
-  ],
-  "nodes" : [
-    {
-      "mesh" : 0
-    }
-  ],
-  "meshes" : [
-    {
-      "primitives" : [ {
-        "attributes" : {
-          "POSITION" : 1
-        },
-        "indices" : 0
-      } ]
-    }
-  ],
-  "buffers" : [
-    {
-      "uri" : "data:application/octet-stream;base64,AAABAAIAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAA=",
-      "byteLength" : 44
-    }
-  ],
-  "bufferViews" : [
-    {
-      "buffer" : 0,
-      "byteOffset" : 0,
-      "byteLength" : 6,
-      "target" : 34963
-    },
-    {
-      "buffer" : 0,
-      "byteOffset" : 8,
-      "byteLength" : 36,
-      "target" : 34962
-    }
-  ],
-  "accessors" : [
-    {
-      "bufferView" : 0,
-      "byteOffset" : 0,
-      "componentType" : 5123,
-      "count" : 3,
-      "type" : "SCALAR",
-      "max" : [ 2 ],
-      "min" : [ 0 ]
-    },
-    {
-      "bufferView" : 1,
-      "byteOffset" : 0,
-      "componentType" : 5126,
-      "count" : 3,
-      "type" : "VEC3",
-      "max" : [ 1.0, 1.0, 0.0 ],
-      "min" : [ 0.0, 0.0, 0.0 ]
-    }
-  ],
-  "asset" : {
-    "version" : "2.0"
-  }
-}
-)";
-}
 void UpdatePingpongA(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   float c[4]{0.0f,1.0f,1.0f,1.0f};
   args_per_pass->ptr = c;
@@ -461,7 +391,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     render_pass_signal[i] = 0UL;
   }
-  auto scene_data = GetSceneFromTinyGltfText(GetTestTinyGltf(), "", buffer_allocator, &allocator);
+  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", buffer_allocator, &allocator);
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;

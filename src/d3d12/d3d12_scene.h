@@ -16,6 +16,7 @@ struct SceneData {
 };
 class MemoryAllocationJanitor;
 SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* const base_dir, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator);
+SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator);
 void ReleaseSceneData(SceneData* scene_data);
 }
 #endif
