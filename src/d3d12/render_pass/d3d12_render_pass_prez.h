@@ -51,7 +51,7 @@ class RenderPassPrez {
         const auto submesh_index = scene_data->model_submesh_index[i][j];
         command_list->IASetIndexBuffer(&scene_data->submesh_index_buffer_view[submesh_index]);
         D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[] = {
-          scene_data->submesh_vertex_buffer_view_position[submesh_index],
+          scene_data->submesh_vertex_buffer_view[kVertexBufferTypePosition][submesh_index],
         };
         command_list->IASetVertexBuffers(0, 1, vertex_buffer_view);
         command_list->DrawIndexedInstanced(scene_data->submesh_index_buffer_len[submesh_index], scene_data->model_instance_num[i], 0, 0, 0);

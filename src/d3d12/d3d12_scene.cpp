@@ -159,9 +159,10 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
   }
   scene_data.submesh_index_buffer_len = AllocateArray<uint32_t>(allocator, mesh_num);
   scene_data.submesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
-  scene_data.submesh_vertex_buffer_view_position = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
-  static const uint32_t kMeshBufferTypeNum = 2; // index, position
-  scene_data.buffer_allocation_num = mesh_num * kMeshBufferTypeNum + 1/*transform buffer*/;
+  for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
+    scene_data.submesh_vertex_buffer_view[i] = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
+  }
+  scene_data.buffer_allocation_num = mesh_num * kVertexBufferTypeNum + 1/*transform buffer*/;
   scene_data.buffer_allocation_upload  = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
   scene_data.buffer_allocation_default = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
   uint32_t buffer_allocation_index = 0;
@@ -177,12 +178,25 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
       }
       if (primitive.attributes.contains("POSITION")) {
         // position buffer
-        auto& view = scene_data.submesh_vertex_buffer_view_position[mesh_index];
+        auto& view = scene_data.submesh_vertex_buffer_view[kVertexBufferTypePosition][mesh_index];
         FillResourceData(model, primitive.attributes.at("POSITION"), &scene_data, &buffer_allocation_index, &view.BufferLocation, nullptr, &view.SizeInBytes, nullptr, &view.StrideInBytes, gpu_buffer_allocator, ("mesh_vbpos" + std::to_string(mesh_index)).data());
       } else {
-        logerror("missing POSITION. {} {} {}", i, j, mesh_index);
+        logwarn("missing POSITION. {} {} {}", i, j, mesh_index);
       }
-      // TODO normal, tangent
+      if (primitive.attributes.contains("NORMAL")) {
+        // normal buffer
+        auto& view = scene_data.submesh_vertex_buffer_view[kVertexBufferTypeNormal][mesh_index];
+        FillResourceData(model, primitive.attributes.at("NORMAL"), &scene_data, &buffer_allocation_index, &view.BufferLocation, nullptr, &view.SizeInBytes, nullptr, &view.StrideInBytes, gpu_buffer_allocator, ("mesh_vbpos" + std::to_string(mesh_index)).data());
+      } else {
+        logwarn("missing NORMAL. {} {} {}", i, j, mesh_index);
+      }
+      if (primitive.attributes.contains("TANGENT")) {
+        // tangent buffer
+        auto& view = scene_data.submesh_vertex_buffer_view[kVertexBufferTypeTangent][mesh_index];
+        FillResourceData(model, primitive.attributes.at("TANGENT"), &scene_data, &buffer_allocation_index, &view.BufferLocation, nullptr, &view.SizeInBytes, nullptr, &view.StrideInBytes, gpu_buffer_allocator, ("mesh_vbpos" + std::to_string(mesh_index)).data());
+      } else {
+        logwarn("missing TANGENT. {} {} {}", i, j, mesh_index);
+      }
     }
   }
   for (const auto& node : model.scenes[0].nodes) {

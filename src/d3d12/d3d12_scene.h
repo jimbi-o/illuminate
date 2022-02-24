@@ -3,6 +3,12 @@
 #include "d3d12_header_common.h"
 #include "d3d12_gpu_buffer_allocator.h"
 namespace illuminate {
+enum VertexBufferType : uint8_t {
+  kVertexBufferTypePosition = 0,
+  kVertexBufferTypeNormal,
+  kVertexBufferTypeTangent,
+  kVertexBufferTypeNum,
+};
 struct SceneData {
   uint32_t model_num{0};
   // per model data
@@ -13,7 +19,7 @@ struct SceneData {
   // per submesh data
   uint32_t* submesh_index_buffer_len{nullptr};
   D3D12_INDEX_BUFFER_VIEW*  submesh_index_buffer_view{nullptr};
-  D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view_position{nullptr};
+  D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view[kVertexBufferTypeNum]{};
   // buffer allocations
   uint32_t buffer_allocation_num{0};
   BufferAllocation* buffer_allocation_upload{nullptr};
