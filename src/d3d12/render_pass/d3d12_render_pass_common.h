@@ -1,5 +1,6 @@
 #ifndef ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
 #define ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
+#include "illuminate/math/math.h"
 #include "../d3d12_descriptors.h"
 #include "../d3d12_header_common.h"
 #include "../d3d12_json_parser.h"
@@ -24,6 +25,7 @@ struct RenderPassConfigDynamicData {
   bool* render_pass_enable_flag{nullptr};
   uint32_t debug_render_selected_buffer_allocation_index{0};
   bool** write_to_sub{nullptr};
+  matrix view_matrix{};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};

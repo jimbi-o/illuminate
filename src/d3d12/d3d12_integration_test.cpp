@@ -14,6 +14,7 @@
 #include "d3d12_swapchain.h"
 #include "d3d12_view_util.h"
 #include "d3d12_win32_window.h"
+#include "illuminate/math/math.h"
 #include "render_pass/d3d12_render_pass_copy_resource.h"
 #include "render_pass/d3d12_render_pass_cs_dispatch.h"
 #include "render_pass/d3d12_render_pass_debug_render_selected_buffer.h"
@@ -287,6 +288,15 @@ auto GetSceneData(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list,
   device->CreateShaderResourceView(resource, &desc, cpu_handle);
   return scene_data;
 }
+void UpdateViewMatrix(const uint32_t frame_index, matrix& view_matrix) {
+  float f = static_cast<float>(frame_index);
+  f *= frame_index * 0.01f;
+  const float  * radius = 10.0f;
+  float x = cosf(f) * radius;
+  float y = cosf(f) * radius;
+  float3 at{}, eye{x, y, 1.2f,}, up{0.0f, 1.0f, 0.0f,};
+  GetLookAtLH(at, eye, up, view_matrix);
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -423,6 +433,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
   for (uint32_t i = 0; i < kFrameLoopNum; i++) {
     if (!window.ProcessMessage()) { break; }
+    UpdateViewMatrix(i, dynamic_data.view_matrix);
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
