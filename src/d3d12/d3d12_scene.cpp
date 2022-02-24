@@ -220,7 +220,6 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
     default_buffer = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
     transform_buffer = MapResource(upload_buffer.resource, transform_buffer_size);
   }
-  // TODO fill transform_buffer
   auto tmp_allocator = GetTemporalMemoryAllocator();
   auto transform_offset_index = AllocateArray<uint32_t>(&tmp_allocator, scene_data.model_num);
   for (uint32_t i = 0; i < scene_data.model_num; i++) {
