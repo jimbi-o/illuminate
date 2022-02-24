@@ -176,7 +176,7 @@ auto CreateCpuHandleWithViewImpl(const BufferConfig& buffer_config, const uint32
     logwarn("no cpu_handle {} {}", buffer_config.buffer_index, descriptor_type);
     return false;
   }
-  if (resource == nullptr) { return true; }
+  if (buffer_config.descriptor_only) { return true; }
   return CreateView(device, descriptor_type, buffer_config, resource, cpu_handle);
 }
 auto CreateCpuHandleWithView(const BufferConfig& buffer_config, const uint32_t buffer_id, ID3D12Resource* resource, DescriptorCpu* descriptor_cpu, D3d12Device* device) {
@@ -267,6 +267,26 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
+auto GetSceneData(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list, MemoryAllocationJanitor* allocator, const uint32_t transform_buffer_config_index, DescriptorCpu* descriptor_cpu, D3d12Device* device) {
+  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", buffer_allocator, allocator);
+  auto resource = scene_data.buffer_allocation_default[scene_data.transform_buffer_allocation_index].resource;
+  RegisterResource(transform_buffer_config_index, resource, buffer_list);
+  const auto transform_buffer_allocation_index = GetBufferAllocationIndex(*buffer_list, transform_buffer_config_index);
+  auto cpu_handle = descriptor_cpu->GetHandle(transform_buffer_allocation_index, DescriptorType::kSrv);
+  auto desc = D3D12_SHADER_RESOURCE_VIEW_DESC{
+    .Format = DXGI_FORMAT_UNKNOWN,
+    .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+    .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+    .Buffer = {
+      .FirstElement = 0,
+      .NumElements = scene_data.transform_element_num,
+      .StructureByteStride = scene_data.transform_buffer_stride_size,
+      .Flags = D3D12_BUFFER_SRV_FLAG_NONE,
+    },
+  };
+  device->CreateShaderResourceView(resource, &desc, cpu_handle);
+  return scene_data;
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -292,8 +312,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   RenderGraph render_graph;
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
-  uint32_t swapchain_buffer_config_index = {};
-  uint32_t swapchain_buffer_allocation_index = {};
+  uint32_t swapchain_buffer_config_index{};
+  uint32_t swapchain_buffer_allocation_index{};
+  uint32_t transform_buffer_config_index{};
   {
     auto json = GetTestJson();
     ParseRenderGraphJson(json, &allocator, &render_graph);
@@ -342,12 +363,15 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         } else {
           SetD3d12Name(buffer_list.resource_list[i], str + "_A");
         }
-      } else {
+      } else if (!buffer_config.descriptor_only) {
         SetD3d12Name(buffer_list.resource_list[i], str);
       }
       if (str.compare("swapchain") == 0) {
         swapchain_buffer_config_index = buffer_config_index;
         swapchain_buffer_allocation_index = i;
+      }
+      if (str.compare("transforms") == 0) {
+        transform_buffer_config_index = buffer_config_index;
       }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
@@ -391,7 +415,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     render_pass_signal[i] = 0UL;
   }
-  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", buffer_allocator, &allocator);
+  auto scene_data = GetSceneData(buffer_allocator, &buffer_list, &allocator, transform_buffer_config_index, &descriptor_cpu, device.Get());
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
@@ -507,6 +531,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   descriptor_gpu.Term();
   descriptor_cpu.Term();
   RegisterResource(swapchain_buffer_config_index, nullptr, &buffer_list);
+  RegisterResource(transform_buffer_config_index, nullptr, &buffer_list);
   ReleaseBuffers(&buffer_list);
   buffer_allocator->Release();
   command_queue_signals.Term();

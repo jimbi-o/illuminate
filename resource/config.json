@@ -155,6 +155,10 @@
     {
       "name": "imgui_font",
       "descriptor_only": true
+    },
+    {
+      "name": "transforms",
+      "descriptor_only": true
     }
   ],
   "sampler": [
@@ -368,6 +372,10 @@
       "wait_pass": ["copy resource"],
       "execute": true,
       "buffer_list": [
+        {
+          "name": "transforms",
+          "state": "srv_non_ps"
+        },
         {
           "name": "dsv",
           "state": "dsv_write"

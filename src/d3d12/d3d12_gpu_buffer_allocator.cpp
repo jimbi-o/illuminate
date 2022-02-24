@@ -90,8 +90,12 @@ BufferAllocation CreateBuffer(const BufferConfig& config, const MainBufferSize& 
   return buffer_allocation;
 }
 void ReleaseBufferAllocation(BufferAllocation* b) {
-  b->allocation->Release();
-  b->resource->Release();
+  if (b->allocation) {
+    b->allocation->Release();
+  }
+  if (b->resource) {
+    b->resource->Release();
+  }
 }
 void* MapResource(ID3D12Resource* resource, const uint32_t size, const uint32_t read_begin, const uint32_t read_end) {
   D3D12_RANGE read_range{

@@ -1,4 +1,5 @@
 #include "d3d12_scene.h"
+#include "illuminate/math/math.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
 namespace {
@@ -27,45 +28,6 @@ bool GetTinyGltfModelFromBinaryFile(const char* const binary_filename, tinygltf:
   bool result = loader.LoadBinaryFromFile(model, &err, &warn, binary_filename);
   return CheckError(result, err, warn);
 }
-auto IsPrimitiveMeshIdentical(const tinygltf::Primitive& a, const tinygltf::Primitive& b) {
-  if (a.indices != b.indices) { return false; }
-  if (a.attributes.size() != b.attributes.size()) { return false; }
-  for (const auto& [key, val] : a.attributes) {
-    if (!b.attributes.contains(key)) { return false; }
-    if (val != b.attributes.at(key)) { return false; }
-  }
-  return true;
-}
-auto IsIdenticalMeshExists(const std::vector<tinygltf::Mesh>& meshes, const uint32_t m_target, const uint32_t p_target) {
-  const auto& target_primitive = meshes[m_target].primitives[p_target];
-  for (uint32_t m = 0; m <= m_target; m++) {
-    const auto p_max = m == m_target ? p_target : static_cast<uint32_t>(meshes[m].primitives.size());
-    for (uint32_t p = 0; p < p_max; p++) {
-      if (IsPrimitiveMeshIdentical(meshes[m].primitives[p], target_primitive)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-auto GetModelNum(const std::vector<tinygltf::Mesh>& meshes) {
-  uint32_t model_num = 0;
-  for (const auto& mesh : meshes) {
-    model_num += static_cast<uint32_t>(mesh.primitives.size());
-  }
-  return model_num;
-}
-auto GetMeshNum(const std::vector<tinygltf::Mesh>& meshes) {
-  uint32_t mesh_num = 0;
-  for (uint32_t m = 0; m < meshes.size(); m++) {
-    for (uint32_t p = 0; p < meshes[m].primitives.size(); p++) {
-      if (!IsIdenticalMeshExists(meshes, m, p)) {
-        mesh_num++;
-      }
-    }
-  }
-  return mesh_num;
-}
 auto GetIndexBufferDxgiFormat(const uint32_t tinygltf_type, const uint32_t tinygltf_component_type) {
   assert(tinygltf_type == TINYGLTF_TYPE_SCALAR);
   if (tinygltf_type != TINYGLTF_TYPE_SCALAR) {
@@ -93,141 +55,173 @@ auto GetVertexBufferStrideInBytes(const uint32_t tinygltf_type, const uint32_t t
   assert(false && "invalid vertex buffer setup");
   return 0U;
 }
-auto FillResourceData(const tinygltf::Buffer& buffer, const tinygltf::Accessor& accessor, const tinygltf::BufferView& buffer_view, const uint32_t size_in_bytes, ID3D12Resource* resource) {
+void FillResourceData(const tinygltf::Buffer& buffer, const tinygltf::Accessor& accessor, const tinygltf::BufferView& buffer_view, const uint32_t size_in_bytes, ID3D12Resource* resource) {
   auto dst = MapResource(resource, size_in_bytes);
-  if (dst == nullptr) { return false; }
+  if (dst == nullptr) {
+    logerror("MapResource failed. {}", size_in_bytes);
+    assert(false);
+  }
   memcpy(dst, &buffer.data[accessor.byteOffset + buffer_view.byteOffset], size_in_bytes);
   UnmapResource(resource);
-  return true;
 }
-} // namespace anonymous
-SceneData ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
-  SceneData scene_data{};
-  scene_data.model_num = GetModelNum(model.meshes);
-  const auto mesh_num = GetMeshNum(model.meshes);
-  scene_data.model_mesh_index = AllocateArray<uint32_t>(allocator, scene_data.model_num);
-  scene_data.mesh_index_buffer_len = AllocateArray<uint32_t>(allocator, mesh_num);
-  scene_data.mesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
-  scene_data.mesh_vertex_buffer_view_position = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
-  scene_data.buffer_allocation_num = mesh_num * kMeshBufferTypeNum;
-  scene_data.buffer_allocation_upload  = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
-  scene_data.buffer_allocation_default = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
-  uint32_t model_index = 0;
-  uint32_t mesh_index = 0;
-  for (uint32_t m = 0; m < model.meshes.size(); m++) {
-    for (uint32_t p = 0; p < model.meshes[m].primitives.size(); p++) {
-      const auto& target_primitive = model.meshes[m].primitives[p];
-      bool identical_mesh_exists = false;
-      uint32_t identical_mesh_index = 0;
-      for (uint32_t m_processed = 0; m_processed <= m; m_processed++) {
-        const auto p_max = m_processed == m ? p : static_cast<uint32_t>(model.meshes[m].primitives.size());
-        for (uint32_t p_processed = 0; p_processed < p_max; p_processed++) {
-          if (IsPrimitiveMeshIdentical(model.meshes[m_processed].primitives[p_processed], target_primitive)) {
-            identical_mesh_exists = true;
-            scene_data.model_mesh_index[model_index] = scene_data.model_mesh_index[identical_mesh_index];
-            model_index++;
-            break;
-          } // if IsPrimitiveMeshIdentical
-          identical_mesh_index++;
-        } // p_processed
-        if (identical_mesh_exists) { break; }
-      } // m_processed
-      if (identical_mesh_exists) { continue; }
-      scene_data.model_mesh_index[model_index] = mesh_index;
-      model_index++;
-      const auto buffer_allocation_index_base = mesh_index * kMeshBufferTypeNum;
-      {
-        // index buffer
-        const auto& accessor = model.accessors[target_primitive.indices];
-        const auto& buffer_view = model.bufferViews[accessor.bufferView];
-        scene_data.mesh_index_buffer_len[mesh_index] = static_cast<uint32_t>(accessor.count);
-        D3D12_RESOURCE_DESC1 resource_desc{
-          .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-          .Alignment = 0,
-          .Width = buffer_view.byteLength,
-          .Height = 1,
-          .DepthOrArraySize = 1,
-          .MipLevels = 1,
-          .Format = DXGI_FORMAT_UNKNOWN,
-          .SampleDesc = {
-            .Count = 1,
-            .Quality = 0,
-          },
-          .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-          .Flags = D3D12_RESOURCE_FLAG_NONE,
-          .SamplerFeedbackMipRegion = {
-            .Width = 0,
-            .Height = 0,
-            .Depth = 0,
-          },
-        };
-        auto buffer_allocation_upload  = &scene_data.buffer_allocation_upload[buffer_allocation_index_base];
-        *buffer_allocation_upload = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        auto buffer_allocation_default = &scene_data.buffer_allocation_default[buffer_allocation_index_base];
-        *buffer_allocation_default = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        SetD3d12Name(buffer_allocation_default->resource, "mesh_ib" + std::to_string(mesh_index));
-        auto& d3d12_buffer_view = scene_data.mesh_index_buffer_view[mesh_index];
-        d3d12_buffer_view.BufferLocation = buffer_allocation_default->resource->GetGPUVirtualAddress();
-        d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
-        d3d12_buffer_view.Format = GetIndexBufferDxgiFormat(accessor.type, accessor.componentType);
-        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation_upload->resource)) {
-          logerror("resource map failed for index buffer {} {} {}", m, p, d3d12_buffer_view.SizeInBytes);
-          assert(false && "resource map failed for index buffer");
-        }
-      }
-      if (target_primitive.attributes.contains("POSITION")) {
-        // vertex buffer POSITION
-        const auto& accessor = model.accessors[target_primitive.attributes.at("POSITION")];
-        const auto& buffer_view = model.bufferViews[accessor.bufferView];
-        auto& d3d12_buffer_view = scene_data.mesh_vertex_buffer_view_position[mesh_index];
-        D3D12_RESOURCE_DESC1 resource_desc{
-          .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-          .Alignment = 0,
-          .Width = buffer_view.byteLength,
-          .Height = 1,
-          .DepthOrArraySize = 1,
-          .MipLevels = 1,
-          .Format = DXGI_FORMAT_UNKNOWN,
-          .SampleDesc = {
-            .Count = 1,
-            .Quality = 0,
-          },
-          .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-          .Flags = D3D12_RESOURCE_FLAG_NONE,
-          .SamplerFeedbackMipRegion = {
-            .Width = 0,
-            .Height = 0,
-            .Depth = 0,
-          },
-        };
-        auto buffer_allocation_upload  = &scene_data.buffer_allocation_upload[buffer_allocation_index_base + 1];
-        *buffer_allocation_upload = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        auto buffer_allocation_default = &scene_data.buffer_allocation_default[buffer_allocation_index_base + 1];
-        *buffer_allocation_default = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-        SetD3d12Name(buffer_allocation_default->resource, "mesh_pos" + std::to_string(mesh_index));
-        d3d12_buffer_view.BufferLocation = buffer_allocation_default->resource->GetGPUVirtualAddress();
-        d3d12_buffer_view.SizeInBytes = static_cast<uint32_t>(resource_desc.Width);
-        d3d12_buffer_view.StrideInBytes = GetVertexBufferStrideInBytes(accessor.type, accessor.componentType);
-        if (!FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, d3d12_buffer_view.SizeInBytes, buffer_allocation_upload->resource)) {
-          logerror("resource map failed for vertex buffer position {} {} {}", m, p, d3d12_buffer_view.SizeInBytes);
-          assert(false && "resource map failed for vertex buffer position");
-        }
-      } else {
-        logwarn("no position buffer. m:{} p:{} model:{} mesh:{}", m, p, model_index, mesh_index);
-      }
-      mesh_index++;
-    } // p
-  } // m
-  return scene_data;
+auto GetBufferDesc(const uint32_t buffer_size) {
+  return D3D12_RESOURCE_DESC1{
+    .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+    .Alignment = 0,
+    .Width = buffer_size,
+    .Height = 1,
+    .DepthOrArraySize = 1,
+    .MipLevels = 1,
+    .Format = DXGI_FORMAT_UNKNOWN,
+    .SampleDesc = {
+      .Count = 1,
+      .Quality = 0,
+    },
+    .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+    .Flags = D3D12_RESOURCE_FLAG_NONE,
+    .SamplerFeedbackMipRegion = {
+      .Width = 0,
+      .Height = 0,
+      .Depth = 0,
+    },
+  };
 }
-void ReleaseSceneData(SceneData* scene_data) {
-  for (uint32_t i = 0; i < scene_data->buffer_allocation_num; i++) {
-    if (scene_data->buffer_allocation_upload[i].resource) {
-      ReleaseBufferAllocation(&scene_data->buffer_allocation_upload[i]);
-    }
-    ReleaseBufferAllocation(&scene_data->buffer_allocation_default[i]);
+void FillResourceData(const tinygltf::Model& model, const uint32_t accessor_index, SceneData* scene_data, uint32_t* buffer_allocation_index, D3D12_GPU_VIRTUAL_ADDRESS* buffer_location, uint32_t* index, uint32_t* size, DXGI_FORMAT* format, uint32_t* stride, D3D12MA::Allocator* gpu_buffer_allocator, const char* buffer_name) {
+  const auto& accessor = model.accessors[accessor_index];
+  const auto& buffer_view = model.bufferViews[accessor.bufferView];
+  const auto buffer_size = GetUint32(buffer_view.byteLength);
+  auto resource_desc  = GetBufferDesc(buffer_size);
+  auto& upload_buffer = scene_data->buffer_allocation_upload[*buffer_allocation_index];
+  upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+  auto& default_buffer = scene_data->buffer_allocation_default[*buffer_allocation_index];
+  default_buffer = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+  SetD3d12Name(upload_buffer.resource, buffer_name);
+  FillResourceData(model.buffers[buffer_view.buffer], accessor, buffer_view, buffer_size, upload_buffer.resource);
+  *buffer_location = default_buffer.resource->GetGPUVirtualAddress();
+  if (index) {
+    *index = GetUint32(accessor.count);
+  }
+  if (size) {
+    *size = buffer_size;
+  }
+  if (format) {
+    *format = GetIndexBufferDxgiFormat(accessor.type, accessor.componentType);
+  }
+  if (stride) {
+    *stride = GetVertexBufferStrideInBytes(accessor.type, accessor.componentType);
+  }
+  (*buffer_allocation_index)++;
+}
+void CountModelInstanceNum(const tinygltf::Model& model, const uint32_t node_index, uint32_t* model_instance_num) {
+  const auto& node = model.nodes[node_index];
+  if (node.mesh != -1) {
+    model_instance_num[node.mesh]++;
+  }
+  for (auto& child : node.children) {
+    CountModelInstanceNum(model, child, model_instance_num);
   }
 }
+void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const matrix& parent_transform, const uint32_t* transform_offset, uint32_t* transform_offset_index, matrix* transform_buffer) {
+  const auto& node = model.nodes[node_index];
+  if (node.mesh != -1) {
+    const auto index = transform_offset[node.mesh] + transform_offset_index[node.mesh];
+    memcpy(&(transform_buffer[index]), &parent_transform, sizeof(transform_buffer[index]));
+    transform_offset_index[node.mesh]++;
+  }
+  matrix transform{};
+  if (!node.matrix.empty()) {
+    matrix t{};
+    FillMatrix(node.matrix.data(), t);
+    MultiplyMatrix(parent_transform, t, transform);
+  } else {
+    CopyMatrix(parent_transform, transform);
+  }
+  for (auto& child : node.children) {
+    SetTransform(model, child, transform, transform_offset, transform_offset_index, transform_buffer);
+  }
+}
+auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
+  SceneData scene_data{};
+  scene_data.model_num = GetUint32(model.meshes.size());
+  scene_data.model_instance_num = AllocateArray<uint32_t>(allocator, scene_data.model_num);
+  scene_data.model_submesh_num = AllocateArray<uint32_t>(allocator, scene_data.model_num);
+  scene_data.model_submesh_index = AllocateArray<uint32_t*>(allocator, scene_data.model_num);
+  scene_data.transform_offset = AllocateArray<uint32_t>(allocator, scene_data.model_num);
+  uint32_t mesh_num = 0;
+  for (uint32_t i = 0; i < scene_data.model_num; i++) {
+    scene_data.model_instance_num[i] = 0;
+    scene_data.model_submesh_num[i] = GetUint32(model.meshes[i].primitives.size());
+    scene_data.model_submesh_index[i] = AllocateArray<uint32_t>(allocator, scene_data.model_submesh_num[i]);
+    for (uint32_t j = 0; j < scene_data.model_submesh_num[i]; j++) {
+      scene_data.model_submesh_index[i][j] = mesh_num;
+      mesh_num++;
+    }
+  }
+  scene_data.submesh_index_buffer_len = AllocateArray<uint32_t>(allocator, mesh_num);
+  scene_data.submesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
+  scene_data.submesh_vertex_buffer_view_position = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
+  static const uint32_t kMeshBufferTypeNum = 2; // index, position
+  scene_data.buffer_allocation_num = mesh_num * kMeshBufferTypeNum + 1/*transform buffer*/;
+  scene_data.buffer_allocation_upload  = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
+  scene_data.buffer_allocation_default = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
+  uint32_t buffer_allocation_index = 0;
+  for (uint32_t i = 0; i < scene_data.model_num; i++) {
+    const auto& primitives = model.meshes[i].primitives;
+    for (uint32_t j = 0; j < scene_data.model_submesh_num[i]; j++) {
+      const auto& primitive = primitives[j];
+      const auto mesh_index = scene_data.model_submesh_index[i][j];
+      {
+        // index buffer
+        auto& view = scene_data.submesh_index_buffer_view[mesh_index];
+        FillResourceData(model, primitive.indices, &scene_data, &buffer_allocation_index, &view.BufferLocation, &scene_data.submesh_index_buffer_len[mesh_index], &view.SizeInBytes, &view.Format, nullptr, gpu_buffer_allocator, ("mesh_ib" + std::to_string(mesh_index)).data());
+      }
+      if (primitive.attributes.contains("POSITION")) {
+        // position buffer
+        auto& view = scene_data.submesh_vertex_buffer_view_position[mesh_index];
+        FillResourceData(model, primitive.attributes.at("POSITION"), &scene_data, &buffer_allocation_index, &view.BufferLocation, nullptr, &view.SizeInBytes, nullptr, &view.StrideInBytes, gpu_buffer_allocator, ("mesh_vbpos" + std::to_string(mesh_index)).data());
+      } else {
+        logerror("missing POSITION. {} {} {}", i, j, mesh_index);
+      }
+      // TODO normal, tangent
+    }
+  }
+  for (const auto& node : model.scenes[0].nodes) {
+    CountModelInstanceNum(model, node, scene_data.model_instance_num);
+  }
+  scene_data.transform_element_num = 0;
+  for (uint32_t i = 0; i < scene_data.model_num; i++) {
+    scene_data.transform_offset[i] = scene_data.transform_element_num;
+    scene_data.transform_element_num += scene_data.model_instance_num[i];
+  }
+  scene_data.transform_buffer_allocation_index = buffer_allocation_index;
+  buffer_allocation_index++;
+  void* transform_buffer = nullptr;
+  {
+    scene_data.transform_buffer_stride_size = GetUint32(sizeof(matrix));
+    const auto transform_buffer_size = scene_data.transform_buffer_stride_size * scene_data.transform_element_num;
+    auto resource_desc = GetBufferDesc(transform_buffer_size);
+    auto& upload_buffer = scene_data.buffer_allocation_upload[scene_data.transform_buffer_allocation_index];
+    upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+    auto& default_buffer = scene_data.buffer_allocation_default[scene_data.transform_buffer_allocation_index];
+    default_buffer = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+    transform_buffer = MapResource(upload_buffer.resource, transform_buffer_size);
+  }
+  // TODO fill transform_buffer
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto transform_offset_index = AllocateArray<uint32_t>(&tmp_allocator, scene_data.model_num);
+  for (uint32_t i = 0; i < scene_data.model_num; i++) {
+    transform_offset_index[i] = 0;
+  }
+  for (const auto& node : model.scenes[0].nodes) {
+    matrix m{};
+    GetIdentityMatrix(m);
+    SetTransform(model, node, m, scene_data.transform_offset, transform_offset_index, static_cast<matrix*>(transform_buffer));
+  }
+  UnmapResource(scene_data.buffer_allocation_upload[scene_data.transform_buffer_allocation_index].resource);
+  assert(scene_data.buffer_allocation_num == buffer_allocation_index);
+  return scene_data;
+}
+} // namespace anonymous
 SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* const base_dir, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
   tinygltf::Model model;
   if (!GetTinyGltfModel(gltf_text, base_dir, &model)) {
@@ -244,172 +238,10 @@ SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA:
   }
   return ParseTinyGltfScene(model, gpu_buffer_allocator, allocator);
 }
-} // namespace illuminate
-#include "doctest/doctest.h"
-#include "d3d12_device.h"
-#include "d3d12_dxgi_core.h"
-TEST_CASE("load scene/tiny gltf") {
-  auto gltf_text = R"(
-{
-  "scene": 0,
-  "scenes" : [
-    {
-      "nodes" : [ 0 ]
-    }
-  ],
-  "nodes" : [
-    {
-      "mesh" : 0
-    }
-  ],
-  "meshes" : [
-    {
-      "primitives" : [ {
-        "attributes" : {
-          "POSITION" : 1
-        },
-        "indices" : 0
-      } ]
-    }
-  ],
-  "buffers" : [
-    {
-      "uri" : "data:application/octet-stream;base64,AAABAAIAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAA=",
-      "byteLength" : 44
-    }
-  ],
-  "bufferViews" : [
-    {
-      "buffer" : 0,
-      "byteOffset" : 0,
-      "byteLength" : 6,
-      "target" : 34963
-    },
-    {
-      "buffer" : 0,
-      "byteOffset" : 8,
-      "byteLength" : 36,
-      "target" : 34962
-    }
-  ],
-  "accessors" : [
-    {
-      "bufferView" : 0,
-      "byteOffset" : 0,
-      "componentType" : 5123,
-      "count" : 3,
-      "type" : "SCALAR",
-      "max" : [ 2 ],
-      "min" : [ 0 ]
-    },
-    {
-      "bufferView" : 1,
-      "byteOffset" : 0,
-      "componentType" : 5126,
-      "count" : 3,
-      "type" : "VEC3",
-      "max" : [ 1.0, 1.0, 0.0 ],
-      "min" : [ 0.0, 0.0, 0.0 ]
-    }
-  ],
-  "asset" : {
-    "version" : "2.0"
+void ReleaseSceneData(SceneData* scene_data) {
+  for (uint32_t i = 0; i < scene_data->buffer_allocation_num; i++) {
+    ReleaseBufferAllocation(&scene_data->buffer_allocation_upload[i]);
+    ReleaseBufferAllocation(&scene_data->buffer_allocation_default[i]);
   }
 }
-)";
-  using namespace illuminate;
-  tinygltf::Model model;
-  CHECK_UNARY(GetTinyGltfModel(gltf_text, "", &model));
-  DxgiCore dxgi_core;
-  CHECK_UNARY(dxgi_core.Init()); // NOLINT
-  Device device;
-  CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
-  auto gpu_buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto scene_data = GetSceneFromTinyGltfText(gltf_text, "", gpu_buffer_allocator, &tmp_allocator);
-  CHECK_EQ(scene_data.model_num, 1);
-  CHECK_EQ(scene_data.model_mesh_index[0], 0);
-  CHECK_EQ(scene_data.mesh_index_buffer_len[0], 3);
-  CHECK_NE(scene_data.mesh_index_buffer_view[0].BufferLocation, 0);
-  CHECK_EQ(scene_data.mesh_index_buffer_view[0].SizeInBytes, 6);
-  CHECK_EQ(scene_data.mesh_index_buffer_view[0].Format, DXGI_FORMAT_R16_UINT);
-  CHECK_NE(scene_data.mesh_vertex_buffer_view_position[0].BufferLocation, 0);
-  CHECK_EQ(scene_data.mesh_vertex_buffer_view_position[0].SizeInBytes, 12 * 3);
-  CHECK_EQ(scene_data.mesh_vertex_buffer_view_position[0].StrideInBytes, 12);
-  ReleaseSceneData(&scene_data);
-  gpu_buffer_allocator->Release();
-  device.Term();
-  dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
-}
-TEST_CASE("tinygltf model and mesh count") {
-  using namespace illuminate;
-  std::vector<tinygltf::Mesh> meshes;
-  CHECK_EQ(GetModelNum(meshes),  0);
-  CHECK_EQ(GetMeshNum(meshes), 0);
-  meshes.push_back({});
-  CHECK_EQ(GetModelNum(meshes),  0);
-  CHECK_EQ(GetMeshNum(meshes), 0);
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 0;
-  CHECK_EQ(GetModelNum(meshes),  1);
-  CHECK_EQ(GetMeshNum(meshes), 1);
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 1;
-  CHECK_EQ(GetModelNum(meshes),  2);
-  CHECK_EQ(GetMeshNum(meshes), 2);
-  meshes.push_back({});
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 2;
-  CHECK_EQ(GetModelNum(meshes),  3);
-  CHECK_EQ(GetMeshNum(meshes), 3);
-  meshes.back().primitives.back().indices = 1;
-  CHECK_EQ(GetModelNum(meshes),  3);
-  CHECK_EQ(GetMeshNum(meshes), 2);
-  meshes.front().primitives.front().indices = 1;
-  CHECK_EQ(GetModelNum(meshes),  3);
-  CHECK_EQ(GetMeshNum(meshes), 1);
-  meshes.push_back({});
-  meshes.push_back({});
-  meshes.push_back({});
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 2;
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 1;
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 4;
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 2;
-  meshes.back().primitives.push_back({});
-  meshes.back().primitives.back().indices = 5;
-  CHECK_EQ(GetModelNum(meshes),  8);
-  CHECK_EQ(GetMeshNum(meshes), 4);
-  gSystemMemoryAllocator->Reset();
-}
-TEST_CASE("load scene/tiny gltf binary file") {
-  using namespace illuminate;
-  tinygltf::Model model;
-  const auto filename = "scenedata/Box.glb";
-  CHECK_UNARY(GetTinyGltfModelFromBinaryFile(filename, &model));
-  DxgiCore dxgi_core;
-  CHECK_UNARY(dxgi_core.Init()); // NOLINT
-  Device device;
-  CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
-  auto gpu_buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto scene_data = GetSceneFromTinyGltfBinary(filename, gpu_buffer_allocator, &tmp_allocator);
-  CHECK_EQ(scene_data.model_num, 1);
-  CHECK_EQ(scene_data.model_mesh_index[0], 0);
-  CHECK_GT(scene_data.mesh_index_buffer_len[0], 0);
-  CHECK_NE(scene_data.mesh_index_buffer_view[0].BufferLocation, 0);
-  CHECK_GT(scene_data.mesh_index_buffer_view[0].SizeInBytes, 0);
-  CHECK_EQ(scene_data.mesh_index_buffer_view[0].Format, DXGI_FORMAT_R16_UINT);
-  CHECK_NE(scene_data.mesh_vertex_buffer_view_position[0].BufferLocation, 0);
-  CHECK_GT(scene_data.mesh_vertex_buffer_view_position[0].SizeInBytes, 0);
-  CHECK_EQ(scene_data.mesh_vertex_buffer_view_position[0].StrideInBytes, 12);
-  ReleaseSceneData(&scene_data);
-  gpu_buffer_allocator->Release();
-  device.Term();
-  dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
-}
+} // namespace illuminate
