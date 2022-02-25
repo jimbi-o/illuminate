@@ -5,6 +5,8 @@ project(illuminate
   LANGUAGES CXX
 )
 
+option(USE_D3D12_AGILITY_SDK "enable d3d12 agility SDK" OFF)
+
 include(cmake/CPM.cmake)
 CPMAddPackage("gh:onqtam/doctest#2.4.6")
 CPMAddPackage(
@@ -20,12 +22,14 @@ CPMAddPackage(
   VERSION v1.6.2112
   DOWNLOAD_ONLY yes
 )
-CPMAddPackage(
-  NAME d3d12
-  URL https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.700.10-preview
-  VERSION v1.700.10-preview
-  DOWNLOAD_ONLY yes
-)
+if(USE_D3D12_AGILITY_SDK)
+  CPMAddPackage(
+    NAME d3d12
+    URL https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.700.10-preview
+    VERSION v1.700.10-preview
+    DOWNLOAD_ONLY yes
+  )
+endif()
 CPMAddPackage(
   NAME nlohmann_json
   GITHUB_REPOSITORY "nlohmann/json"
@@ -108,7 +112,6 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   PRIVATE
   "include"
   "${dxc_SOURCE_DIR}/inc"
-  "${d3d12_SOURCE_DIR}/build/native/include"
   "${nlohmann_json_SOURCE_DIR}/include"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
   "${tinygltf_SOURCE_DIR}"
@@ -125,7 +128,6 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   <dxgi1_6.h>
   "${dxc_SOURCE_DIR}/inc/d3d12shader.h"
   "${dxc_SOURCE_DIR}/inc/dxcapi.h"
-  "${d3d12_SOURCE_DIR}/build/native/include/d3d12.h"
   "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp"
   "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
@@ -133,6 +135,12 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${imgui_SOURCE_DIR}/imgui.h"
   "${WinPixEventRuntime_SOURCE_DIR}/Include/WinPixEventRuntime/pix3.h"
 )
+if(USE_D3D12_AGILITY_SDK)
+  target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_D3D12_AGILITY_SDK)
+  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "${d3d12_SOURCE_DIR}/build/native/include")
+  target_precompile_headers(${CMAKE_PROJECT_NAME} PRIVATE "${d3d12_SOURCE_DIR}/build/native/include/d3d12.h")
+endif()
+
 add_subdirectory(src)
 
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
@@ -142,18 +150,20 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
   "${WinPixEventRuntime_SOURCE_DIR}/bin/x64/WinPixEventRuntime.dll"
   "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/"
 )
-add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory
-  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
-)
-add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-  "${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll"
-  "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.pdb>"
-  "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll>"
-  "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.pdb>"
-  "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
-)
+if(USE_D3D12_AGILITY_SDK)
+  add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+    "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
+  )
+  add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll"
+    "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/D3D12Core.pdb>"
+    "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll>"
+    "$<$<CONFIG:Debug>:${d3d12_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.pdb>"
+    "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/d3d12"
+  )
+endif()
 
 set_directory_properties(PROPERTIES VS_STARTUP_PROJECT illuminate)
 set_target_properties(illuminate PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource")

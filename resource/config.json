@@ -88,7 +88,7 @@
       "mip_width": 0,
       "mip_height": 0,
       "mip_depth": 0,
-      "initial_state": "common"
+      "initial_state": "generic_read"
     },
     {
       "name": "cbv-b",
@@ -107,7 +107,7 @@
       "mip_width": 0,
       "mip_height": 0,
       "mip_depth": 0,
-      "initial_state": "common"
+      "initial_state": "generic_read"
     },
     {
       "name": "cbv-c",
@@ -126,7 +126,7 @@
       "mip_width": 0,
       "mip_height": 0,
       "mip_depth": 0,
-      "initial_state": "common"
+      "initial_state": "generic_read"
     },
     {
       "name": "dsv",
@@ -188,19 +188,19 @@
       "max_lod": 65535
     }
   ],
-  "gpu_handle_num_view": 16,
+  "gpu_handle_num_view": 32,
   "gpu_handle_num_sampler": 8,
   "material": {
     "compile_default": {
-      "target_ps": "ps_6_6",
-      "target_vs": "vs_6_6",
-      "target_gs": "gs_6_6",
-      "target_hs": "hs_6_6",
-      "target_ds": "ds_6_6",
-      "target_cs": "cs_6_6",
-      "target_lib": "lib_6_6",
-      "target_ms": "ms_6_6",
-      "target_as": "as_6_6"
+      "target_ps": "ps_6_5",
+      "target_vs": "vs_6_5",
+      "target_gs": "gs_6_5",
+      "target_hs": "hs_6_5",
+      "target_ds": "ds_6_5",
+      "target_cs": "cs_6_5",
+      "target_lib": "lib_6_5",
+      "target_ms": "ms_6_5",
+      "target_as": "as_6_5"
     },
     "compile_unit": [
       {

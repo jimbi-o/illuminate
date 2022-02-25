@@ -291,7 +291,7 @@ auto GetSceneData(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list,
 void UpdateViewMatrix(const uint32_t frame_index, matrix& view_matrix) {
   float f = static_cast<float>(frame_index);
   f *= frame_index * 0.01f;
-  const float  * radius = 10.0f;
+  const float radius = 10.0f;
   float x = cosf(f) * radius;
   float y = cosf(f) * radius;
   float3 at{}, eye{x, y, 1.2f,}, up{0.0f, 1.0f, 0.0f,};
@@ -411,15 +411,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
   }
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
-  auto gpu_descriptor_offset_start = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
-  auto gpu_descriptor_offset_end = AllocateArray<uint64_t>(&allocator, render_graph.frame_buffer_num);
   for (uint32_t i = 0; i < render_graph.frame_buffer_num; i++) {
     frame_signals[i] = AllocateArray<uint64_t>(&allocator, render_graph.command_queue_num);
     for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
       frame_signals[i][j] = 0;
     }
-    gpu_descriptor_offset_start[i] = ~0u;
-    gpu_descriptor_offset_end[i] = ~0u;
   }
   auto render_pass_signal = AllocateArray<uint64_t>(&allocator, render_graph.render_pass_num);
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
@@ -435,6 +431,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     if (!window.ProcessMessage()) { break; }
     UpdateViewMatrix(i, dynamic_data.view_matrix);
     auto single_frame_allocator = GetTemporalMemoryAllocator();
+    auto command_queue_frame_signal_sent = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
+    for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
+      command_queue_frame_signal_sent[j] = true;
+    }
     const auto frame_index = i % render_graph.frame_buffer_num;
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
@@ -442,29 +442,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     swapchain.UpdateBackBufferIndex();
     RegisterResource(swapchain_buffer_config_index, swapchain.GetResource(), &buffer_list);
     descriptor_cpu.RegisterExternalHandle(swapchain_buffer_allocation_index, DescriptorType::kRtv, swapchain.GetRtvHandle());
-    gpu_descriptor_offset_start[frame_index] = descriptor_gpu.GetViewHandleCount();
-    if (gpu_descriptor_offset_start[frame_index] == descriptor_gpu.GetViewHandleTotal()) {
-      gpu_descriptor_offset_start[frame_index] = 0;
-    }
-    if (i > 0) {
-      for (uint32_t j = 0; j < render_graph.frame_buffer_num; j++) {
-        if (frame_index == j) { continue; }
-        if (gpu_descriptor_offset_start[j] == ~0u) { continue; }
-        if (gpu_descriptor_offset_start[j] <= gpu_descriptor_offset_end[j]) {
-          if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
-            assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] || gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase RenderGraph::gpu_handle_num_view");
-            continue;
-          }
-          assert(gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && "increase RenderGraph::gpu_handle_num_view");
-          continue;
-        }
-        if (gpu_descriptor_offset_start[frame_index] <= gpu_descriptor_offset_end[frame_index]) {
-          assert(gpu_descriptor_offset_end[j] <= gpu_descriptor_offset_start[frame_index] && gpu_descriptor_offset_end[frame_index] <= gpu_descriptor_offset_start[j] && "increase RenderGraph::gpu_handle_num_view");
-          continue;
-        }
-        assert(false  && "increase RenderGraph::gpu_handle_num_view");
-      }
-    }
     // set up render pass args
     auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
     auto args_per_pass = AllocateArray<RenderPassFuncArgsRenderPerPass>(&single_frame_allocator, render_graph.render_pass_num);
@@ -528,8 +505,14 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         render_pass_signal[k] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
         frame_signals[frame_index][render_pass.command_queue_index] = render_pass_signal[k];
       }
+      command_queue_frame_signal_sent[render_pass.command_queue_index] = render_pass.sends_signal;
     } // render pass
-    gpu_descriptor_offset_end[frame_index] = descriptor_gpu.GetViewHandleCount();
+    for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
+      if (!command_queue_frame_signal_sent[j]) {
+        auto signal_val = command_queue_signals.SucceedSignal(j);
+        frame_signals[frame_index][j] = signal_val;
+      }
+    }
     swapchain.Present();
   }
   command_queue_signals.WaitAll(device.Get());

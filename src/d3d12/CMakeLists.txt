@@ -1,6 +1,5 @@
 target_sources(${CMAKE_PROJECT_NAME}
   PRIVATE
-  d3d12_core_dll_version.cpp
   d3d12_dxgi_core.h
   d3d12_dxgi_core.cpp
   d3d12_device.h
@@ -38,4 +37,7 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_barriers.h
   d3d12_barriers.cpp
 )
+if(USE_D3D12_AGILITY_SDK)
+  target_sources(${CMAKE_PROJECT_NAME} PRIVATE d3d12_core_dll_version.cpp)
+endif()
 add_subdirectory(render_pass)

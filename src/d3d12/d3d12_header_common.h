@@ -8,15 +8,19 @@ namespace illuminate {
 using DxgiFactory = IDXGIFactory7;
 using DxgiAdapter = IDXGIAdapter4;
 using DxgiSwapchain = IDXGISwapChain4;
-#if 0
-using D3d12Device = ID3D12Device10; // creation fails with graphics debugger
+#if USE_D3D12_AGILITY_SDK
+using D3d12Device = ID3D12Device10;
 #else
-using D3d12Device = ID3D12Device9;
+using D3d12Device = ID3D12Device8;
 #endif
 using D3d12CommandQueue = ID3D12CommandQueue;
 using D3d12Fence = ID3D12Fence1;
 using D3d12CommandAllocator = ID3D12CommandAllocator;
+#if USE_D3D12_AGILITY_SDK
 using D3d12CommandList = ID3D12GraphicsCommandList7;
+#else
+using D3d12CommandList = ID3D12GraphicsCommandList5;
+#endif
 static const uint32_t kCommandQueueTypeNum = 3;
 constexpr auto GetCommandQueueTypeIndex(const D3D12_COMMAND_LIST_TYPE type) {
   switch (type) {
@@ -35,7 +39,7 @@ static const DescriptorTypeFlag kDescriptorTypeFlagSrv  = 0x02;
 static const DescriptorTypeFlag kDescriptorTypeFlagUav  = 0x04;
 static const DescriptorTypeFlag kDescriptorTypeFlagRtv  = 0x08;
 static const DescriptorTypeFlag kDescriptorTypeFlagDsv  = 0x10;
-enum class ResourceStateType : uint8_t { kCbv = 0, kSrvPs, kSrvNonPs, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kCommon, kPresent, };
+enum class ResourceStateType : uint8_t { kCbv = 0, kSrvPs, kSrvNonPs, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kCommon, kPresent, kGenericRead, };
 constexpr auto ConvertToD3d12ResourceState(const ResourceStateType type) {
   switch (type) {
     case ResourceStateType::kCbv:      { return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER; }
@@ -46,6 +50,7 @@ constexpr auto ConvertToD3d12ResourceState(const ResourceStateType type) {
     case ResourceStateType::kDsvWrite: { return D3D12_RESOURCE_STATE_DEPTH_WRITE; }
     case ResourceStateType::kCommon:   { return D3D12_RESOURCE_STATE_COMMON; }
     case ResourceStateType::kPresent:  { return D3D12_RESOURCE_STATE_PRESENT; }
+    case ResourceStateType::kGenericRead: { return D3D12_RESOURCE_STATE_GENERIC_READ; }
   }
   return D3D12_RESOURCE_STATE_COMMON;
 }
@@ -77,7 +82,8 @@ constexpr inline bool IsResourceStateReadOnly(const ResourceStateType& type) {
     case ResourceStateType::kSrvPs:
     case ResourceStateType::kSrvNonPs:
     case ResourceStateType::kCommon:
-    case ResourceStateType::kPresent: {
+    case ResourceStateType::kPresent:
+    case ResourceStateType::kGenericRead: {
       return true;
     }
   }

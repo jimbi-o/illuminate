@@ -2,6 +2,10 @@
 #include "d3d12_src_common.h"
 #include "doctest/doctest.h"
 namespace illuminate {
+constexpr auto IsResourceStateInclusive(const ResourceStateType& a, const ResourceStateType& b) {
+  if (a == b) { return true; }
+  return a == ResourceStateType::kGenericRead && b == ResourceStateType::kCbv;
+}
 std::tuple<const ResourceStateType***, const uint32_t**> ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool** pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, MemoryAllocationJanitor* allocator) {
   auto resource_state_list = AllocateArray<ResourceStateType**>(allocator, buffer_num);
   auto last_user_pass = AllocateArray<uint32_t*>(allocator, buffer_num);
@@ -35,14 +39,20 @@ std::tuple<const ResourceStateType***, const uint32_t**> ConfigureRenderPassReso
               auto read_only = IsResourceStateReadOnly(render_pass_list[j].buffer_list[k].state);
               auto write_to_sub = pingpong_buffer_write_to_sub_list[i][j];
               if (read_only && write_to_sub || !read_only && !write_to_sub) {
-                state_main = render_pass_list[j].buffer_list[k].state;
+                if (!IsResourceStateInclusive(state_main, render_pass_list[j].buffer_list[k].state)) {
+                  state_main = render_pass_list[j].buffer_list[k].state;
+                }
                 last_user_pass[i][0] = j;
               } else {
-                state_sub = render_pass_list[j].buffer_list[k].state;
+                if (!IsResourceStateInclusive(state_sub, render_pass_list[j].buffer_list[k].state)) {
+                  state_sub = render_pass_list[j].buffer_list[k].state;
+                }
                 last_user_pass[i][1] = j;
               }
             } else {
-              state_main = render_pass_list[j].buffer_list[k].state;
+              if (!IsResourceStateInclusive(state_main, render_pass_list[j].buffer_list[k].state)) {
+                state_main = render_pass_list[j].buffer_list[k].state;
+              }
               last_user_pass[i][0] = j;
             }
             buffer_count++;
@@ -56,7 +66,7 @@ std::tuple<const ResourceStateType***, const uint32_t**> ConfigureRenderPassReso
       }
     }
     for (uint32_t k = 0; k < buffer_allocation_num; k++) {
-      if (resource_state_list[i][last_user_pass[i][k]][0] != buffer_config_list[i].initial_state) {
+      if (!IsResourceStateInclusive(buffer_config_list[i].initial_state, resource_state_list[i][last_user_pass[i][k]][0])) {
         auto pass_index = last_user_pass[i][k] + 1;
         for (; pass_index < render_pass_num && !render_pass_enable_flag[pass_index]; pass_index++);
         for (; pass_index < render_pass_num; pass_index++) {
@@ -266,25 +276,25 @@ TEST_CASE("buffer state change") {
   pingpong_buffer_write_to_sub_list[3][1] = false;
   pingpong_buffer_write_to_sub_list[3][2] = false;
   const bool render_pass_enable_flag[] = {true,true,true,};
-  auto [resouce_state_list, last_user_pass] = ConfigureRenderPassResourceStates(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, (const bool**)pingpong_buffer_write_to_sub_list, render_pass_enable_flag, &allocator);
-  // resouce_state_list[buffer_index][pass_index][main(0)/sub(1)]
-  CHECK_EQ(resouce_state_list[0][0][0], ResourceStateType::kRtv);
-  CHECK_EQ(resouce_state_list[0][1][0], ResourceStateType::kSrvPs);
-  CHECK_EQ(resouce_state_list[0][2][0], ResourceStateType::kRtv);
-  CHECK_EQ(resouce_state_list[0][0][1], ResourceStateType::kRtv);
-  CHECK_EQ(resouce_state_list[0][1][1], ResourceStateType::kRtv);
-  CHECK_EQ(resouce_state_list[0][2][1], ResourceStateType::kSrvPs);
-  CHECK_EQ(resouce_state_list[1][0][0], ResourceStateType::kRtv);
-  CHECK_EQ(resouce_state_list[1][1][0], ResourceStateType::kRtv);
-  CHECK_EQ(resouce_state_list[1][2][0], ResourceStateType::kSrvPs);
-  CHECK_EQ(resouce_state_list[3][0][0], ResourceStateType::kRtv);
-  CHECK_EQ(resouce_state_list[3][1][0], ResourceStateType::kSrvPs);
-  CHECK_EQ(resouce_state_list[3][2][0], ResourceStateType::kRtv);
+  auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, (const bool**)pingpong_buffer_write_to_sub_list, render_pass_enable_flag, &allocator);
+  // resource_state_list[buffer_index][pass_index][main(0)/sub(1)]
+  CHECK_EQ(resource_state_list[0][0][0], ResourceStateType::kRtv);
+  CHECK_EQ(resource_state_list[0][1][0], ResourceStateType::kSrvPs);
+  CHECK_EQ(resource_state_list[0][2][0], ResourceStateType::kRtv);
+  CHECK_EQ(resource_state_list[0][0][1], ResourceStateType::kRtv);
+  CHECK_EQ(resource_state_list[0][1][1], ResourceStateType::kRtv);
+  CHECK_EQ(resource_state_list[0][2][1], ResourceStateType::kSrvPs);
+  CHECK_EQ(resource_state_list[1][0][0], ResourceStateType::kRtv);
+  CHECK_EQ(resource_state_list[1][1][0], ResourceStateType::kRtv);
+  CHECK_EQ(resource_state_list[1][2][0], ResourceStateType::kSrvPs);
+  CHECK_EQ(resource_state_list[3][0][0], ResourceStateType::kRtv);
+  CHECK_EQ(resource_state_list[3][1][0], ResourceStateType::kSrvPs);
+  CHECK_EQ(resource_state_list[3][2][0], ResourceStateType::kRtv);
   CHECK_EQ(last_user_pass[0][0], 2);
   CHECK_EQ(last_user_pass[0][1], 2);
   CHECK_EQ(last_user_pass[1][0], 2);
   CHECK_EQ(last_user_pass[3][0], 1);
-  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, resouce_state_list, last_user_pass, &allocator);
+  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, resource_state_list, last_user_pass, &allocator);
   // barrier_num[prepass(0)/postpass(1)][pass_index][barrier_index]
   CHECK_EQ(barrier_num[0][0], 0);
   CHECK_EQ(barrier_num[1][0], 0);

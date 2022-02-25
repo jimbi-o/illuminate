@@ -35,7 +35,12 @@ bool Device::Init(DxgiAdapter* const adapter) {
     }
   }
 #endif
-  auto hr = CALL_DLL_FUNCTION(library_, D3D12CreateDevice)(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&device_));
+#ifdef USE_D3D12_AGILITY_SDK
+  const auto feature_level = D3D_FEATURE_LEVEL_12_2;
+#else
+  const auto feature_level = D3D_FEATURE_LEVEL_12_1;
+#endif
+  auto hr = CALL_DLL_FUNCTION(library_, D3D12CreateDevice)(adapter, feature_level, IID_PPV_ARGS(&device_));
   assert(SUCCEEDED(hr) && device_ && "D3D12CreateDevice failed.");
   if (FAILED(hr)) {
     logfatal("D3D12CreateDevice failed. {}", hr);
@@ -75,12 +80,14 @@ bool Device::Init(DxgiAdapter* const adapter) {
       loginfo("mesh shader tier:{} (1:{})", options.MeshShaderTier, D3D12_MESH_SHADER_TIER_1);
     }
   }
+#ifdef USE_D3D12_AGILITY_SDK
   {
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options{};
     if (SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &options, sizeof(options)))) {
       loginfo("enhanced barriers:{}", options.EnhancedBarriersSupported);
     }
   }
+#endif
   device_->SetName(L"device");
   return true;
 };

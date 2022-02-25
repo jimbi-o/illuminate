@@ -92,7 +92,7 @@ void FillResourceData(const tinygltf::Model& model, const uint32_t accessor_inde
   const auto buffer_size = GetUint32(buffer_view.byteLength);
   auto resource_desc  = GetBufferDesc(buffer_size);
   auto& upload_buffer = scene_data->buffer_allocation_upload[*buffer_allocation_index];
-  upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+  upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, resource_desc, nullptr, gpu_buffer_allocator);
   auto& default_buffer = scene_data->buffer_allocation_default[*buffer_allocation_index];
   default_buffer = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
   SetD3d12Name(upload_buffer.resource, buffer_name);
@@ -215,7 +215,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
     const auto transform_buffer_size = scene_data.transform_buffer_stride_size * scene_data.transform_element_num;
     auto resource_desc = GetBufferDesc(transform_buffer_size);
     auto& upload_buffer = scene_data.buffer_allocation_upload[scene_data.transform_buffer_allocation_index];
-    upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD,  D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
+    upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, resource_desc, nullptr, gpu_buffer_allocator);
     auto& default_buffer = scene_data.buffer_allocation_default[scene_data.transform_buffer_allocation_index];
     default_buffer = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
     transform_buffer = MapResource(upload_buffer.resource, transform_buffer_size);

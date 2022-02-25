@@ -38,9 +38,6 @@ void CommandAllocatorPool::Term() {
     }
   }
   for (uint32_t i = 0; i < frame_buffer_num_; i++) {
-    if (used_allocator_num_per_frame_[i] != 0) {
-      logwarn("allocator_in_use_[{}] exists on Term.", i);
-    }
     for (uint32_t j = 0; j < used_allocator_num_per_frame_[i]; j++) {
       auto refval = allocator_in_use_[i][j]->Release();
       if (refval != 0) {
@@ -92,8 +89,7 @@ D3d12CommandAllocator* CommandAllocatorPool::RetainCommandAllocator(D3d12Device*
   auto type_index = GetCommandQueueTypeIndex(type);
   for (uint32_t j = 0; j < allocator_pool_size_[type_index]; j++) {
     if (allocator_pool_[type_index][j] != nullptr) {
-      allocator = allocator_pool_[type_index][j];
-      allocator_pool_[type_index][j] = nullptr;
+      std::swap(allocator, allocator_pool_[type_index][j]);
       break;
     }
   }
@@ -104,6 +100,7 @@ D3d12CommandAllocator* CommandAllocatorPool::RetainCommandAllocator(D3d12Device*
       assert(false && "CreateCommandAllocator failed.");
       return nullptr;
     }
+    SetD3d12Name(allocator, "allocator" + std::to_string(frame_index_) + "_" + std::to_string(used_allocator_num_per_frame_[frame_index_]));
   }
   allocator_in_use_[frame_index_][used_allocator_num_per_frame_[frame_index_]] = allocator;
   allocator_type_in_use_[frame_index_][used_allocator_num_per_frame_[frame_index_]] = type;

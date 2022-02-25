@@ -87,6 +87,9 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   if (str.compare("present") == 0) {
     return ResourceStateType::kPresent;
   }
+  if (str.compare("generic_read") == 0) {
+    return ResourceStateType::kGenericRead;
+  }
   logerror("invalid ResourceStateType {}", str);
   assert(false && "invalid ResourceStateType");
   return ResourceStateType::kCommon;

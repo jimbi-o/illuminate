@@ -505,7 +505,7 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
 }
 )";
   const wchar_t* compiler_args[] = {
-    L"-T", L"cs_6_6",
+    L"-T", L"cs_6_5",
     L"-E", L"main",
     L"-Zi",
     L"-Zpr",
@@ -573,15 +573,15 @@ TEST_CASE("rootsig/pso") {
   auto json = R"(
 {
   "compile_default": {
-    "target_ps": "ps_6_6",
-    "target_vs": "vs_6_6",
-    "target_gs": "gs_6_6",
-    "target_hs": "hs_6_6",
-    "target_ds": "ds_6_6",
-    "target_cs": "cs_6_6",
-    "target_lib": "lib_6_6",
-    "target_ms": "ms_6_6",
-    "target_as": "as_6_6"
+    "target_ps": "ps_6_5",
+    "target_vs": "vs_6_5",
+    "target_gs": "gs_6_5",
+    "target_hs": "hs_6_5",
+    "target_ds": "ds_6_5",
+    "target_cs": "cs_6_5",
+    "target_lib": "lib_6_5",
+    "target_ms": "ms_6_5",
+    "target_as": "as_6_5"
   },
   "compile_unit": [
     {
@@ -638,19 +638,19 @@ TEST_CASE("rootsig/pso") {
   CHECK_EQ(shader_config.compile_unit_num, 3);
   CHECK_EQ(shader_config.compile_args_num[0], 6);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][0], L"-T"), 0);
-  CHECK_EQ(wcscmp(shader_config.compile_args[0][1], L"cs_6_6"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[0][1], L"cs_6_5"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][2], L"-E"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][3], L"main"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][4], L"-Zi"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[0][5], L"-Qstrip_reflect"), 0);
   CHECK_EQ(shader_config.compile_args_num[1], 4);
   CHECK_EQ(wcscmp(shader_config.compile_args[1][0], L"-T"), 0);
-  CHECK_EQ(wcscmp(shader_config.compile_args[1][1], L"vs_6_6"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[1][1], L"vs_6_5"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[1][2], L"-E"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[1][3], L"MainVs"), 0);
   CHECK_EQ(shader_config.compile_args_num[2], 5);
   CHECK_EQ(wcscmp(shader_config.compile_args[2][0], L"-T"), 0);
-  CHECK_EQ(wcscmp(shader_config.compile_args[2][1], L"ps_6_6"), 0);
+  CHECK_EQ(wcscmp(shader_config.compile_args[2][1], L"ps_6_5"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[2][2], L"-E"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[2][3], L"MainPs"), 0);
   CHECK_EQ(wcscmp(shader_config.compile_args[2][4], L"-Qstrip_reflect"), 0);
@@ -790,7 +790,7 @@ float4 MainPs(FullscreenTriangleVSOutput input) : SV_TARGET0 {
 }
 TEST_CASE("compile shader file") { // NOLINT
   const wchar_t* compiler_args[] = {
-    L"-T", L"ps_6_6",
+    L"-T", L"ps_6_5",
     L"-E", L"main",
     L"-Zi",
     L"-Zpr",
