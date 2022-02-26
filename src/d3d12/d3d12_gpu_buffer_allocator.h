@@ -17,20 +17,23 @@ void ReleaseBufferAllocation(BufferAllocation* b);
 void* MapResource(ID3D12Resource* resource, const uint32_t size, const uint32_t read_begin = 0, const uint32_t read_end = 0);
 void UnmapResource(ID3D12Resource* resource);
 struct BufferList {
-  uint32_t* buffer_allocation_index_main{nullptr};
-  uint32_t* buffer_allocation_index_sub{nullptr};
+  uint32_t** buffer_allocation_index{nullptr};
   uint32_t buffer_allocation_num{0};
   D3D12MA::Allocation** buffer_allocation_list{nullptr};
   ID3D12Resource** resource_list{nullptr};
   uint32_t* buffer_config_index{nullptr};
-  bool* is_sub{nullptr};
 };
+constexpr inline auto GetBufferAllocationNum(const BufferConfig& config) {
+  if (config.pingpong) {
+    return 2U;
+  }
+  return 1U;
+}
 template <typename A>
-BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* buffer_allocator, A* allocator) {
+BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* buffer_allocator, A* allocator) {
   BufferList buffer_list{};
-  buffer_list.buffer_allocation_index_main = AllocateArray<uint32_t>(allocator, buffer_num);
-  buffer_list.buffer_allocation_index_sub = AllocateArray<uint32_t>(allocator, buffer_num);
-  buffer_list.buffer_allocation_num = buffer_num;
+  buffer_list.buffer_allocation_index = AllocateArray<uint32_t*>(allocator, buffer_config_num);
+  buffer_list.buffer_allocation_num = buffer_config_num;
   for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
     if (buffer_config_list[i].pingpong) {
       buffer_list.buffer_allocation_num++;
@@ -39,27 +42,20 @@ BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_c
   buffer_list.buffer_allocation_list = AllocateArray<D3D12MA::Allocation*>(allocator, buffer_list.buffer_allocation_num);
   buffer_list.resource_list = AllocateArray<ID3D12Resource*>(allocator, buffer_list.buffer_allocation_num);
   buffer_list.buffer_config_index = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
-  buffer_list.is_sub = AllocateArray<bool>(allocator, buffer_list.buffer_allocation_num);
   uint32_t buffer_allocation_index = 0;
-  for (uint32_t i = 0; i < buffer_num; i++) {
-    buffer_list.buffer_allocation_index_main[i] = buffer_allocation_index;
-    buffer_list.buffer_allocation_index_sub[i] = buffer_allocation_index;
-    buffer_list.buffer_config_index[buffer_allocation_index] = i;
-    buffer_list.is_sub[buffer_allocation_index] = false;
+  for (uint32_t i = 0; i < buffer_config_num; i++) {
     auto& buffer_config = buffer_config_list[i];
-    if (buffer_config.descriptor_only) {
-      buffer_list.buffer_allocation_list[buffer_allocation_index] = nullptr;
-      buffer_list.resource_list[buffer_allocation_index] = nullptr;
-      buffer_allocation_index++;
-      continue;
-    }
-    CreateBuffer(buffer_config, main_buffer_size, buffer_allocator, &buffer_list.buffer_allocation_list[buffer_allocation_index], &buffer_list.resource_list[buffer_allocation_index]);
-    buffer_allocation_index++;
-    if (buffer_config.pingpong) {
-      buffer_list.buffer_allocation_index_sub[i] = buffer_allocation_index;
+    const auto alloc_num = GetBufferAllocationNum(buffer_config);;
+    buffer_list.buffer_allocation_index[i] = AllocateArray<uint32_t>(allocator, alloc_num);
+    for (uint32_t j = 0; j < alloc_num; j++) {
+      buffer_list.buffer_allocation_index[i][j] = buffer_allocation_index;
       buffer_list.buffer_config_index[buffer_allocation_index] = i;
-      buffer_list.is_sub[buffer_allocation_index] = true;
-      CreateBuffer(buffer_config, main_buffer_size, buffer_allocator, &buffer_list.buffer_allocation_list[buffer_allocation_index], &buffer_list.resource_list[buffer_allocation_index]);
+      if (buffer_config.descriptor_only) {
+        buffer_list.buffer_allocation_list[buffer_allocation_index] = nullptr;
+        buffer_list.resource_list[buffer_allocation_index] = nullptr;
+      } else {
+        CreateBuffer(buffer_config, main_buffer_size, buffer_allocator, &buffer_list.buffer_allocation_list[buffer_allocation_index], &buffer_list.resource_list[buffer_allocation_index]);
+      }
       buffer_allocation_index++;
     }
   }
@@ -67,27 +63,28 @@ BufferList CreateBuffers(const uint32_t buffer_num, const BufferConfig* buffer_c
   return buffer_list;
 }
 void ReleaseBuffers(BufferList* buffer_list);
-ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type);
-uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type);
-inline ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index) {
-  return GetResource(buffer_list, buffer_index, PingPongBufferType::kMain);
+constexpr inline uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const uint32_t index) {
+  return buffer_list.buffer_allocation_index[buffer_index][index];
 }
-inline uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index) {
-  return GetBufferAllocationIndex(buffer_list, buffer_index, PingPongBufferType::kMain);
+constexpr inline uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index) {
+  return GetBufferAllocationIndex(buffer_list, buffer_index, 0);
 }
-void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list);
-constexpr inline PingPongBufferType GetPingPongBufferType(const ResourceStateType state, const bool write_to_sub) {
-  if (IsResourceStateReadOnly(state)) {
-    if (write_to_sub) {
-      return PingPongBufferType::kMain;
+constexpr inline uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const BufferConfig& buffer_config, const ResourceStateType state, const bool write_to_sub) {
+  uint32_t local_index = 0;
+  if (buffer_config.pingpong) {
+    const auto read_only = IsResourceStateReadOnly(state);
+    if (read_only && !write_to_sub || !read_only && write_to_sub) {
+      local_index = 1;
     }
-    return PingPongBufferType::kSub;
   }
-  if (write_to_sub) {
-    return PingPongBufferType::kSub;
-  }
-  return PingPongBufferType::kMain;
+  return GetBufferAllocationIndex(buffer_list, buffer_index, local_index);
+}
+constexpr inline void RegisterResource(const uint32_t buffer_allocation_index, ID3D12Resource* resource, BufferList* buffer_list) {
+  buffer_list->resource_list[buffer_allocation_index] = resource;
 }
 void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const RenderPass* render_pass_list, const bool* render_pass_enable_flag, const uint32_t buffer_num, bool** pingpong_buffer_write);
+constexpr inline auto IsPingPongMainBuffer(const BufferList& buffer_list, const uint32_t buffer_config_index, const uint32_t buffer_allocation_index) {
+  return buffer_allocation_index == buffer_list.buffer_allocation_index[buffer_config_index][0];
+}
 }
 #endif

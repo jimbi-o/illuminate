@@ -34,13 +34,12 @@ class RenderPassDebugRenderSelectedBuffer {
       for (uint32_t i = 0; i < buffer_allocation_index_len; i++) {
         const auto& buffer_allocation_index = buffer_allocation_index_list[i];
         const auto& buffer_index = args_common->buffer_list->buffer_config_index[buffer_allocation_index];
-        const auto& is_sub = args_common->buffer_list->is_sub[buffer_allocation_index];
-        const auto& state = args_common->resource_state_list[buffer_index][args_per_pass->render_pass_index][is_sub ? 1 : 0];
+        const auto& state = args_common->resource_state_list[buffer_index][args_per_pass->render_pass_index][IsPingPongMainBuffer(*args_common->buffer_list, buffer_index, buffer_allocation_index) ? 0 : 1];
         if (state != ResourceStateType::kSrvPs) {
           barrier[barrier_num].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
           barrier[barrier_num].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
           barrier[barrier_num].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-          barrier[barrier_num].Transition.pResource   = GetResource(*args_common->buffer_list, buffer_index, is_sub ? PingPongBufferType::kSub : PingPongBufferType::kMain);
+          barrier[barrier_num].Transition.pResource   = args_common->buffer_list->resource_list[buffer_allocation_index];
           barrier[barrier_num].Transition.StateBefore = ConvertToD3d12ResourceState(state);
           barrier[barrier_num].Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
           barrier_num++;

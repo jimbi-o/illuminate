@@ -123,19 +123,6 @@ void ReleaseBuffers(BufferList* buffer_list) {
     }
   }
 }
-ID3D12Resource* GetResource(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type) {
-  return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_index, type)];
-}
-uint32_t GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const PingPongBufferType type) {
-  if (type == PingPongBufferType::kSub) {
-    return buffer_list.buffer_allocation_index_sub[buffer_index];
-  }
-  return buffer_list.buffer_allocation_index_main[buffer_index];
-}
-void RegisterResource(const uint32_t buffer_index, ID3D12Resource* resource, BufferList* buffer_list) {
-  buffer_list->resource_list[buffer_list->buffer_allocation_index_main[buffer_index]] = resource;
-  buffer_list->resource_list[buffer_list->buffer_allocation_index_sub[buffer_index]]  = resource;
-}
 void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const RenderPass* render_pass_list, const bool* render_pass_enable_flag, const uint32_t buffer_num, bool** pingpong_buffer_write_to_sub_list) {
   for (uint32_t buffer_index = 0; buffer_index < buffer_num; buffer_index++) {
     for (uint32_t i = 0; i < render_pass_num; i++) {

@@ -133,7 +133,7 @@ std::tuple<const uint32_t**, const Barrier***> ConfigureBarrierTransitions(const
       if (buffer_config_list[i].initial_state != resource_state_list[i][0][k]) {
         auto& barrier = barrier_config_list[0][0][barrier_index[0][0]];
         barrier.buffer_index = i;
-        barrier.pingpong_buffer_type = (k == 0) ? PingPongBufferType::kMain : PingPongBufferType::kSub;
+        barrier.local_index = k;
         barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
         barrier.state_before = ConvertToD3d12ResourceState(buffer_config_list[i].initial_state);
@@ -144,7 +144,7 @@ std::tuple<const uint32_t**, const Barrier***> ConfigureBarrierTransitions(const
         if (resource_state_list[i][j][k] != resource_state_list[i][j - 1][k]) {
           auto& barrier = barrier_config_list[0][j][barrier_index[0][j]];
           barrier.buffer_index = i;
-          barrier.pingpong_buffer_type = (k == 0) ? PingPongBufferType::kMain : PingPongBufferType::kSub;
+          barrier.local_index = k;
           barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
           barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
           barrier.state_before = ConvertToD3d12ResourceState(resource_state_list[i][j - 1][k]);
@@ -155,7 +155,7 @@ std::tuple<const uint32_t**, const Barrier***> ConfigureBarrierTransitions(const
       if (resource_state_list[i][last_user_pass[i][k]][k] != buffer_config_list[i].initial_state) {
         auto& barrier = barrier_config_list[1][last_user_pass[i][k]][barrier_index[1][last_user_pass[i][k]]];
         barrier.buffer_index = i;
-        barrier.pingpong_buffer_type = (k == 0) ? PingPongBufferType::kMain : PingPongBufferType::kSub;
+        barrier.local_index = k;
         barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
         barrier.state_before = ConvertToD3d12ResourceState(resource_state_list[i][last_user_pass[i][k]][k]);
@@ -230,7 +230,7 @@ TEST_CASE("buffer state change") {
   Barrier prepass_barrier[] = {
     {
       .buffer_index = 2,
-      .pingpong_buffer_type = PingPongBufferType::kMain,
+      .local_index = 0,
       .type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
       .flag = D3D12_RESOURCE_BARRIER_FLAG_NONE,
       .state_before = D3D12_RESOURCE_STATE_PRESENT,
@@ -240,7 +240,7 @@ TEST_CASE("buffer state change") {
   Barrier postpass_barrier[] = {
     {
       .buffer_index = 2,
-      .pingpong_buffer_type = PingPongBufferType::kMain,
+      .local_index = 0,
       .type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
       .flag = D3D12_RESOURCE_BARRIER_FLAG_NONE,
       .state_before = D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -304,61 +304,61 @@ TEST_CASE("buffer state change") {
   CHECK_EQ(barrier_num[1][2], 2);
   // barrier_config_list[prepass(0)/postpass(1)][pass_index][barrier_index]
   CHECK_EQ(barrier_config_list[0][1][0].buffer_index, 2);
-  CHECK_EQ(barrier_config_list[0][1][0].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[0][1][0].local_index, 0);
   CHECK_EQ(barrier_config_list[0][1][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[0][1][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[0][1][0].state_before, D3D12_RESOURCE_STATE_PRESENT);
   CHECK_EQ(barrier_config_list[0][1][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[0][1][1].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[0][1][1].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[0][1][1].local_index, 0);
   CHECK_EQ(barrier_config_list[0][1][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[0][1][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[0][1][1].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[0][1][1].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[0][1][2].buffer_index, 3);
-  CHECK_EQ(barrier_config_list[0][1][2].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[0][1][2].local_index, 0);
   CHECK_EQ(barrier_config_list[0][1][2].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[0][1][2].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[0][1][2].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[0][1][2].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[1][1][0].buffer_index, 2);
-  CHECK_EQ(barrier_config_list[1][1][0].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[1][1][0].local_index, 0);
   CHECK_EQ(barrier_config_list[1][1][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[1][1][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[1][1][0].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[1][1][0].state_after, D3D12_RESOURCE_STATE_PRESENT);
   CHECK_EQ(barrier_config_list[1][1][1].buffer_index, 3);
-  CHECK_EQ(barrier_config_list[1][1][1].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[1][1][1].local_index, 0);
   CHECK_EQ(barrier_config_list[1][1][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[1][1][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[1][1][1].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[1][1][1].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[0][2][0].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[0][2][0].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[0][2][0].local_index, 0);
   CHECK_EQ(barrier_config_list[0][2][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[0][2][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[0][2][0].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[0][2][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[0][2][1].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[0][2][1].pingpong_buffer_type, PingPongBufferType::kSub);
+  CHECK_EQ(barrier_config_list[0][2][1].local_index, 1);
   CHECK_EQ(barrier_config_list[0][2][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[0][2][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[0][2][1].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[0][2][1].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[0][2][2].buffer_index, 1);
-  CHECK_EQ(barrier_config_list[0][2][2].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[0][2][2].local_index, 0);
   CHECK_EQ(barrier_config_list[0][2][2].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[0][2][2].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[0][2][2].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[0][2][2].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[1][2][0].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[1][2][0].pingpong_buffer_type, PingPongBufferType::kSub);
+  CHECK_EQ(barrier_config_list[1][2][0].local_index, 1);
   CHECK_EQ(barrier_config_list[1][2][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[1][2][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[1][2][0].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[1][2][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[1][2][1].buffer_index, 1);
-  CHECK_EQ(barrier_config_list[1][2][1].pingpong_buffer_type, PingPongBufferType::kMain);
+  CHECK_EQ(barrier_config_list[1][2][1].local_index, 0);
   CHECK_EQ(barrier_config_list[1][2][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[1][2][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[1][2][1].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

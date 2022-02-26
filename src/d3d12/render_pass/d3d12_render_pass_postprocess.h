@@ -34,7 +34,7 @@ class RenderPassPostprocess {
     for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
       if (buffer_list[i].state == ResourceStateType::kCbv) {
         const auto buffer_config_index = args->render_pass_list[render_pass_index].buffer_list[i].buffer_index;
-        auto resource = GetResource(*args->buffer_list, buffer_config_index);
+        auto resource = args->buffer_list->resource_list[GetBufferAllocationIndex(*args->buffer_list, buffer_config_index)];
         param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
         param->cbv_ptr = MapResource(resource, param->cbv_size);
         param->use_views = true;

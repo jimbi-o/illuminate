@@ -135,23 +135,24 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
   }
   return funcs;
 }
-auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool** write_to_sub, MemoryAllocationJanitor* allocator) {
+auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, MemoryAllocationJanitor* allocator) {
   auto resource_list = AllocateArray<ID3D12Resource*>(allocator, render_pass.buffer_num);
   auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, render_pass.buffer_num);
   for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
     auto& buffer = render_pass.buffer_list[b];
-    const auto pingpong_type = GetPingPongBufferType(buffer.state, write_to_sub[buffer.buffer_index][render_pass.index]);
-    resource_list[b] = GetResource(buffer_list, buffer.buffer_index, pingpong_type);
+    const auto& buffer_config = buffer_config_list[buffer.buffer_index];
+    const auto buffer_allocation_index = GetBufferAllocationIndex(buffer_list, buffer.buffer_index, buffer_config, buffer.state, write_to_sub[buffer.buffer_index][render_pass.index]);
+    resource_list[b] = buffer_list.resource_list[buffer_allocation_index];
     const auto descriptor_type = ConvertToDescriptorType(buffer.state);
     if (descriptor_type != DescriptorType::kNum) {
-      cpu_handle_list[b].ptr = descriptor_cpu->GetHandle(GetBufferAllocationIndex(buffer_list, buffer.buffer_index, pingpong_type), descriptor_type).ptr;
+      cpu_handle_list[b].ptr = descriptor_cpu->GetHandle(buffer_allocation_index, descriptor_type).ptr;
     } else {
       cpu_handle_list[b].ptr = 0;
     }
   }
   return std::make_tuple(resource_list, cpu_handle_list);
 }
-auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const bool** write_to_sub, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
+auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
   auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, 2); // 0:view 1:sampler
   {
     // view
@@ -160,7 +161,7 @@ auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, co
     auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, render_pass.buffer_num);
     for (uint32_t j = 0; j < render_pass.buffer_num; j++) {
       const auto buffer_index = render_pass.buffer_list[j].buffer_index;
-      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, buffer_index, GetPingPongBufferType(render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index]));
+      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, buffer_index, buffer_config_list[buffer_index], render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index]);
       descriptor_type_list[j] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
     }
     gpu_handle_list[0] = descriptor_gpu->CopyViewDescriptors(device, render_pass.buffer_num, buffer_id_list, descriptor_type_list, descriptor_cpu);
@@ -251,7 +252,8 @@ auto PrepareBarrierResourceList(const uint32_t render_pass_num, const uint32_t**
       barrier_resource_list[i][j] = (barrier_num[i][j] == 0) ? nullptr : AllocateArray<ID3D12Resource*>(allocator, barrier_num[i][j]);
       for (uint32_t k = 0; k < barrier_num[i][j]; k++) {
         auto& barrier_config = barrier_config_list[i][j][k];
-        barrier_resource_list[i][j][k] = GetResource(buffer_list, barrier_config.buffer_index, barrier_config.pingpong_buffer_type);
+        const auto buffer_allocation_index = GetBufferAllocationIndex(buffer_list, barrier_config.buffer_index, barrier_config.local_index);
+        barrier_resource_list[i][j][k] = buffer_list.resource_list[buffer_allocation_index];
       }
     }
   }
@@ -268,11 +270,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
-auto GetSceneData(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list, MemoryAllocationJanitor* allocator, const uint32_t transform_buffer_config_index, DescriptorCpu* descriptor_cpu, D3d12Device* device) {
+auto GetSceneData(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list, MemoryAllocationJanitor* allocator, const uint32_t transform_buffer_allocation_index, DescriptorCpu* descriptor_cpu, D3d12Device* device) {
   auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", buffer_allocator, allocator);
   auto resource = scene_data.buffer_allocation_default[scene_data.transform_buffer_allocation_index].resource;
-  RegisterResource(transform_buffer_config_index, resource, buffer_list);
-  const auto transform_buffer_allocation_index = GetBufferAllocationIndex(*buffer_list, transform_buffer_config_index);
+  RegisterResource(transform_buffer_allocation_index, resource, buffer_list);
   auto cpu_handle = descriptor_cpu->GetHandle(transform_buffer_allocation_index, DescriptorType::kSrv);
   auto desc = D3D12_SHADER_RESOURCE_VIEW_DESC{
     .Format = DXGI_FORMAT_UNKNOWN,
@@ -322,9 +323,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   RenderGraph render_graph;
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
-  uint32_t swapchain_buffer_config_index{};
   uint32_t swapchain_buffer_allocation_index{};
-  uint32_t transform_buffer_config_index{};
+  uint32_t transform_buffer_allocation_index{};
   {
     auto json = GetTestJson();
     ParseRenderGraphJson(json, &allocator, &render_graph);
@@ -368,20 +368,19 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       CHECK_UNARY(CreateCpuHandleWithView(buffer_config, i, buffer_list.resource_list[i], &descriptor_cpu, device.Get()));
       auto str = json_buffer_list[buffer_config_index].at("name").get<std::string>();
       if (buffer_config.pingpong) {
-        if (buffer_list.is_sub[i]) {
-          SetD3d12Name(buffer_list.resource_list[i], str + "_B");
-        } else {
+        if (IsPingPongMainBuffer(buffer_list, buffer_config_index, i)) {
           SetD3d12Name(buffer_list.resource_list[i], str + "_A");
+        } else {
+          SetD3d12Name(buffer_list.resource_list[i], str + "_B");
         }
       } else if (!buffer_config.descriptor_only) {
         SetD3d12Name(buffer_list.resource_list[i], str);
       }
       if (str.compare("swapchain") == 0) {
-        swapchain_buffer_config_index = buffer_config_index;
         swapchain_buffer_allocation_index = i;
       }
       if (str.compare("transforms") == 0) {
-        transform_buffer_config_index = buffer_config_index;
+        transform_buffer_allocation_index = i;
       }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
@@ -421,7 +420,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     render_pass_signal[i] = 0UL;
   }
-  auto scene_data = GetSceneData(buffer_allocator, &buffer_list, &allocator, transform_buffer_config_index, &descriptor_cpu, device.Get());
+  auto scene_data = GetSceneData(buffer_allocator, &buffer_list, &allocator, transform_buffer_allocation_index, &descriptor_cpu, device.Get());
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
@@ -440,7 +439,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
     swapchain.UpdateBackBufferIndex();
-    RegisterResource(swapchain_buffer_config_index, swapchain.GetResource(), &buffer_list);
+    RegisterResource(swapchain_buffer_allocation_index, swapchain.GetResource(), &buffer_list);
     descriptor_cpu.RegisterExternalHandle(swapchain_buffer_allocation_index, DescriptorType::kRtv, swapchain.GetRtvHandle());
     // set up render pass args
     auto render_pass_enable_flag = AllocateArray<bool>(&single_frame_allocator, render_graph.render_pass_num);
@@ -454,8 +453,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (!render_pass_enable_flag[k]) { continue; }
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
       args_per_pass[k].render_pass_index = k;
-      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, &single_frame_allocator);
-      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, &single_frame_allocator);
+      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
     }
     // update
     RenderPassFuncArgsRenderCommon args_common {
@@ -524,8 +523,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   pso_rootsig_manager.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();
-  RegisterResource(swapchain_buffer_config_index, nullptr, &buffer_list);
-  RegisterResource(transform_buffer_config_index, nullptr, &buffer_list);
+  RegisterResource(swapchain_buffer_allocation_index, nullptr, &buffer_list);
+  RegisterResource(transform_buffer_allocation_index, nullptr, &buffer_list);
   ReleaseBuffers(&buffer_list);
   buffer_allocator->Release();
   command_queue_signals.Term();

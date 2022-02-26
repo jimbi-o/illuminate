@@ -33,7 +33,7 @@ struct RenderPassBuffer {
 };
 struct Barrier {
   uint32_t buffer_index{};
-  PingPongBufferType pingpong_buffer_type{PingPongBufferType::kMain};
+  uint32_t local_index{0};
   D3D12_RESOURCE_BARRIER_TYPE type{};
   D3D12_RESOURCE_BARRIER_FLAGS flag{}; // split begin/end/none
   D3D12_RESOURCE_STATES state_before{};
