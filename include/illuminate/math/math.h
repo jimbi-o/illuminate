@@ -1,6 +1,12 @@
 #ifndef ILLUMINATE_MATH_H
 #define ILLUMINATE_MATH_H
+#define _USE_MATH_DEFINES
+#include <math.h>
 namespace illuminate {
+static const auto PI = static_cast<float>(M_PI);
+inline auto ToRadian(const float degrees) {
+  return degrees * PI / 180.0f;
+}
 using float3 = float[3];
 using float4 = float[4];
 using matrix = float4[4];
@@ -73,6 +79,13 @@ constexpr inline void GetIdentityMatrix(matrix& m) {
     }
   }
 }
+constexpr inline void GetZeroMatrix(matrix& m) {
+  for (uint32_t i = 0; i < 4; i++) {
+    for (uint32_t j = 0; j < 4; j++) {
+      m[i][j] = 0.0f;
+    }
+  }
+}
 inline void GetLookAtLH(const float3& eye_position, const float3& look_at, const float3& up_vector, matrix& m) {
   // https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatlh
   float3 xaxis{}, yaxis{}, zaxis{};
@@ -85,6 +98,18 @@ inline void GetLookAtLH(const float3& eye_position, const float3& look_at, const
   SetVector(float4{xaxis[1], yaxis[1], zaxis[1], 0.0f}, m[1]);
   SetVector(float4{xaxis[2], yaxis[2], zaxis[2], 0.0f}, m[2]);
   SetVector(float4{-Dot(xaxis, eye_position), -Dot(yaxis, eye_position), -Dot(zaxis, eye_position), 1.0f}, m[3]);
+}
+inline void GetPerspectiveProjectionMatirxLH(const float fov_vertical, const float aspect_ratio, const float near_z, const float far_z, matrix& m) {
+  // https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
+  const auto y_scale = 1.0f / tanf(fov_vertical * 0.5f);
+  const auto x_scale = y_scale / aspect_ratio;
+  const auto q = far_z / (far_z - near_z);
+  GetZeroMatrix(m);
+  m[0][0] = x_scale;
+  m[1][1] = y_scale;
+  m[2][2] = q;
+  m[3][2] = -q * near_z;
+  m[2][3] = 1.0f;
 }
 }
 #endif

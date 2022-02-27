@@ -50,3 +50,21 @@ TEST_CASE("math/lookat") { // NOLINT
     }
   }
 }
+TEST_CASE("math/perspective projection") { // NOLINT
+  using namespace illuminate; // NOLINT
+  using namespace DirectX;
+  matrix m{};
+  const auto fov_vertical = ToRadian(30.0f);
+  const float aspect_ratio = 0.75f;
+  const float near_z = 0.05f;
+  const float far_z = 2000.0f;
+  GetPerspectiveProjectionMatirxLH(fov_vertical, aspect_ratio, near_z, far_z, m);
+  const auto d3d_m = DirectX::XMMatrixPerspectiveFovLH(fov_vertical, aspect_ratio, near_z, far_z);
+  for (uint32_t i = 0; i < 4; i++) {
+    CAPTURE(i);
+    for (uint32_t j = 0; j < 4; j++) {
+      CAPTURE(j);
+      CHECK_EQ(m[i][j], doctest::Approx(XMVectorGetByIndex(d3d_m.r[i], j)));
+    }
+  }
+}
