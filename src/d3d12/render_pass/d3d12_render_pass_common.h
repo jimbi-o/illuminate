@@ -25,7 +25,6 @@ struct RenderPassConfigDynamicData {
   bool* render_pass_enable_flag{nullptr};
   uint32_t debug_render_selected_buffer_allocation_index{0};
   bool** write_to_sub{nullptr};
-  matrix view_matrix{};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};

@@ -33,16 +33,20 @@ class RenderPassPrez {
     command_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
     auto& width = args_common->main_buffer_size->primarybuffer.width;
     auto& height = args_common->main_buffer_size->primarybuffer.height;
+    {
+      D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
+      command_list->RSSetViewports(1, &viewport);
+    }
+    {
+      D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
+      command_list->RSSetScissorRects(1, &scissor_rect);
+    }
     command_list->SetGraphicsRootSignature(GetRenderPassRootSig(args_common, args_per_pass));
-    D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), D3D12_MIN_DEPTH, D3D12_MAX_DEPTH};
-    command_list->RSSetViewports(1, &viewport);
-    D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
-    command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->SetPipelineState(GetRenderPassPso(args_common, args_per_pass));
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list->OMSetRenderTargets(0, nullptr, true, &dsv_handle);
     command_list->OMSetStencilRef(pass_vars->stencil_val);
-    command_list->SetGraphicsRootDescriptorTable(1, args_per_pass->gpu_handles[0]); // transform list
+    command_list->SetGraphicsRootDescriptorTable(1, args_per_pass->gpu_handles[0]);
     const auto scene_data = args_common->scene_data;
     for (uint32_t i = 0; i < scene_data->model_num; i++) {
       if (scene_data->model_instance_num[i] == 0) { continue; }

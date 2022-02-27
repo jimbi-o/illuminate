@@ -83,12 +83,18 @@ constexpr inline auto GetBufferLocalIndex(const BufferConfig& buffer_config, con
 constexpr inline void RegisterResource(const uint32_t buffer_allocation_index, ID3D12Resource* resource, BufferList* buffer_list) {
   buffer_list->resource_list[buffer_allocation_index] = resource;
 }
+constexpr inline void RegisterBufferAllocation(const uint32_t buffer_allocation_index, const BufferAllocation& buffer_allocation, BufferList* buffer_list) {
+  buffer_list->buffer_allocation_list[buffer_allocation_index] = buffer_allocation.allocation;
+  buffer_list->resource_list[buffer_allocation_index] = buffer_allocation.resource;
+}
 void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const RenderPass* render_pass_list, const bool* render_pass_enable_flag, const uint32_t buffer_num, bool** pingpong_buffer_write);
 constexpr inline auto IsPingPongMainBuffer(const BufferList& buffer_list, const uint32_t buffer_config_index, const uint32_t buffer_allocation_index) {
   return buffer_allocation_index == buffer_list.buffer_allocation_index[buffer_config_index][0];
 }
 constexpr inline auto GetBufferLocalIndex(const BufferList& buffer_list, const uint32_t buffer_config_index, const uint32_t buffer_allocation_index) {
-  for (uint32_t i = 0; buffer_list.buffer_config_index[buffer_allocation_index + i] == buffer_config_index; i++) {
+  auto initial_index = buffer_allocation_index;
+  for (; initial_index > 0 && buffer_list.buffer_config_index[initial_index - 1] == buffer_config_index; initial_index--);
+  for (uint32_t i = 0; buffer_list.buffer_config_index[initial_index + i] == buffer_config_index; i++) {
     if (buffer_list.buffer_allocation_index[buffer_config_index][i] == buffer_allocation_index) { return i; }
   }
   return 0U;

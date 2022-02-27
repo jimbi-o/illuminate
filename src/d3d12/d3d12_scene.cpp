@@ -64,33 +64,14 @@ void FillResourceData(const tinygltf::Buffer& buffer, const tinygltf::Accessor& 
   memcpy(dst, &buffer.data[accessor.byteOffset + buffer_view.byteOffset], size_in_bytes);
   UnmapResource(resource);
 }
-auto GetBufferDesc(const uint32_t buffer_size) {
-  return D3D12_RESOURCE_DESC1{
-    .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-    .Alignment = 0,
-    .Width = buffer_size,
-    .Height = 1,
-    .DepthOrArraySize = 1,
-    .MipLevels = 1,
-    .Format = DXGI_FORMAT_UNKNOWN,
-    .SampleDesc = {
-      .Count = 1,
-      .Quality = 0,
-    },
-    .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-    .Flags = D3D12_RESOURCE_FLAG_NONE,
-    .SamplerFeedbackMipRegion = {
-      .Width = 0,
-      .Height = 0,
-      .Depth = 0,
-    },
-  };
+auto GetBufferSize(const size_t& count, const uint32_t component_type, const uint32_t type) {
+  return GetUint32(count) * tinygltf::GetComponentSizeInBytes(component_type) * tinygltf::GetNumComponentsInType(type);
 }
 void FillResourceData(const tinygltf::Model& model, const uint32_t accessor_index, SceneData* scene_data, uint32_t* buffer_allocation_index, D3D12_GPU_VIRTUAL_ADDRESS* buffer_location, uint32_t* index, uint32_t* size, DXGI_FORMAT* format, uint32_t* stride, D3D12MA::Allocator* gpu_buffer_allocator, const char* buffer_name) {
   const auto& accessor = model.accessors[accessor_index];
   const auto& buffer_view = model.bufferViews[accessor.bufferView];
-  const auto buffer_size = GetUint32(buffer_view.byteLength);
-  auto resource_desc  = GetBufferDesc(buffer_size);
+  const auto buffer_size = GetBufferSize(accessor.count, accessor.componentType, accessor.type);
+  auto resource_desc  = GetD3d12ResourceDescForBuffer(buffer_size);
   auto& upload_buffer = scene_data->buffer_allocation_upload[*buffer_allocation_index];
   upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, resource_desc, nullptr, gpu_buffer_allocator);
   auto& default_buffer = scene_data->buffer_allocation_default[*buffer_allocation_index];
@@ -213,7 +194,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
   {
     scene_data.transform_buffer_stride_size = GetUint32(sizeof(matrix));
     const auto transform_buffer_size = scene_data.transform_buffer_stride_size * scene_data.transform_element_num;
-    auto resource_desc = GetBufferDesc(transform_buffer_size);
+    auto resource_desc = GetD3d12ResourceDescForBuffer(transform_buffer_size);
     auto& upload_buffer = scene_data.buffer_allocation_upload[scene_data.transform_buffer_allocation_index];
     upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, resource_desc, nullptr, gpu_buffer_allocator);
     auto& default_buffer = scene_data.buffer_allocation_default[scene_data.transform_buffer_allocation_index];

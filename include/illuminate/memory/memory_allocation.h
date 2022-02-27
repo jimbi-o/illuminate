@@ -9,6 +9,10 @@ constexpr inline auto AlignAddress(const std::uintptr_t addr, const size_t align
   const auto mask = align - 1;
   return (addr + mask) & ~mask;
 }
+constexpr inline auto AlignAddress(const uint32_t addr, const uint32_t align/*power of 2*/) {
+  const auto mask = align - 1;
+  return (addr + mask) & ~mask;
+}
 class LinearAllocator {
  public:
   explicit LinearAllocator(const std::byte* buffer, const uint32_t size_in_byte) : head_(reinterpret_cast<uintptr_t>(buffer)), size_in_byte_(size_in_byte), offset_in_byte_(0) {}

@@ -11,13 +11,15 @@ constexpr inline void SetVector(const float4& src, float4& dst) {
   dst[3] = src[3];
 }
 constexpr inline void SubtractVector(const float3& a, const float3& b, float3& dst) {
-  dst[0] = b[0] - a[0];
-  dst[1] = b[1] - a[1];
-  dst[2] = b[2] - a[2];
+  dst[0] = a[0] - b[0];
+  dst[1] = a[1] - b[1];
+  dst[2] = a[2] - b[2];
+}
+inline auto Magnitude(const float3& v) {
+  return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 inline void Normalize(float3& v) {
-  auto base = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-  base = sqrtf(base);
+  auto base = Magnitude(v);
   base = 1.0f / base;
   v[0] *= base;
   v[1] *= base;
@@ -55,10 +57,12 @@ constexpr inline void MultiplyMatrix(const matrix& a, const matrix& b, matrix& d
     }
   }
 }
-constexpr inline void TransposeMatrix(const matrix& src, matrix& dst) {
+constexpr inline void TransposeMatrix(matrix& m) {
   for (uint32_t i = 0; i < 4; i++) {
     for (uint32_t j = 0; j < 4; j++) {
-      dst[i][j] = src[j][i];
+      if (i > j) {
+        std::swap(m[i][j], m[j][i]);
+      }
     }
   }
 }
@@ -69,18 +73,18 @@ constexpr inline void GetIdentityMatrix(matrix& m) {
     }
   }
 }
-inline void GetLookAtLH(const float3& at, const float3& eye, const float3& up, matrix& m) {
+inline void GetLookAtLH(const float3& eye_position, const float3& look_at, const float3& up_vector, matrix& m) {
+  // https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatlh
   float3 xaxis{}, yaxis{}, zaxis{};
-  SubtractVector(at, eye, zaxis);
+  SubtractVector(look_at, eye_position, zaxis);
   Normalize(zaxis);
-  CrossVecotor(up, zaxis, xaxis);
+  CrossVecotor(up_vector, zaxis, xaxis);
   Normalize(xaxis);
   CrossVecotor(zaxis, xaxis, yaxis);
   SetVector(float4{xaxis[0], yaxis[0], zaxis[0], 0.0f}, m[0]);
   SetVector(float4{xaxis[1], yaxis[1], zaxis[1], 0.0f}, m[1]);
   SetVector(float4{xaxis[2], yaxis[2], zaxis[2], 0.0f}, m[2]);
-  SetVector(float4{-Dot(xaxis, eye), -Dot(yaxis, eye), -Dot(zaxis, eye), 1.0f}, m[3]);
+  SetVector(float4{-Dot(xaxis, eye_position), -Dot(yaxis, eye_position), -Dot(zaxis, eye_position), 1.0f}, m[3]);
 }
 }
 #endif
-

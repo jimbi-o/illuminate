@@ -21,6 +21,7 @@
 #include "render_pass/d3d12_render_pass_imgui.h"
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_prez.h"
+#include "shader_defines.h"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
@@ -289,16 +290,42 @@ auto GetSceneData(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list,
     },
   };
   device->CreateShaderResourceView(resource, &desc, cpu_handle);
+  SetD3d12Name(resource, "transforms");
   return scene_data;
 }
+auto PrepareSceneCbvBuffer(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list, const uint32_t frame_buffer_num, const uint32_t scene_cbv_buffer_config_index, DescriptorCpu* descriptor_cpu, MemoryAllocationJanitor* allocator, D3d12Device* device) {
+  const auto buffer_size = GetUint32(sizeof(shader::SceneCbvData));
+  const auto cbv_buffer_size = AlignAddress(buffer_size, 256); // cbv size must be multiple of 256
+  auto resource_desc = GetD3d12ResourceDescForBuffer(cbv_buffer_size);
+  auto ptr_list = AllocateArray<void*>(allocator, frame_buffer_num);
+  for (uint32_t i = 0; i < frame_buffer_num; i++) {
+    auto upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, resource_desc, nullptr, buffer_allocator);
+    const auto scene_cbv_buffer_allocation_index = GetBufferAllocationIndex(*buffer_list, scene_cbv_buffer_config_index, i);
+    RegisterBufferAllocation(scene_cbv_buffer_allocation_index, upload_buffer, buffer_list);
+    auto cpu_handle = descriptor_cpu->GetHandle(scene_cbv_buffer_allocation_index, DescriptorType::kCbv);
+    D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc{
+      .BufferLocation = upload_buffer.resource->GetGPUVirtualAddress(),
+      .SizeInBytes = cbv_buffer_size,
+    };
+    device->CreateConstantBufferView(&view_desc, cpu_handle);
+    SetD3d12Name(upload_buffer.resource, "scenecbv" + std::to_string(i));
+    ptr_list[i] = MapResource(upload_buffer.resource, buffer_size);
+  }
+  return ptr_list;
+}
 void UpdateViewMatrix(const uint32_t frame_index, matrix& view_matrix) {
-  float f = static_cast<float>(frame_index);
-  f *= frame_index * 0.01f;
-  const float radius = 10.0f;
-  float x = cosf(f) * radius;
-  float y = cosf(f) * radius;
-  float3 at{}, eye{x, y, 1.2f,}, up{0.0f, 1.0f, 0.0f,};
-  GetLookAtLH(at, eye, up, view_matrix);
+  auto f = static_cast<float>(frame_index);
+  f *= 0.01f;
+  const float radius = 3.0f;
+  float x = sinf(f) * radius;
+  float z = cosf(f) * radius;
+  float3 eye{x, 1.2f, z,}, at{}, up{0.0f, 1.0f, 0.0f,};
+  GetLookAtLH(eye, at, up, view_matrix);
+}
+void UpdateSceneCbv(const uint32_t frame_index, shader::SceneCbvData* scene_cbv, void *scene_cbv_ptr) {
+  UpdateViewMatrix(frame_index, scene_cbv->view_matrix);
+  TransposeMatrix(scene_cbv->view_matrix);
+  memcpy(scene_cbv_ptr, scene_cbv, sizeof(*scene_cbv));
 }
 } // namespace anonymous
 } // namespace illuminate
@@ -327,6 +354,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   RenderPassFunctionList render_pass_function_list{};
   uint32_t swapchain_buffer_allocation_index{};
   uint32_t transform_buffer_allocation_index{};
+  uint32_t scene_cbv_buffer_config_index{~0U};
   {
     auto json = GetTestJson();
     ParseRenderGraphJson(json, &allocator, &render_graph);
@@ -386,6 +414,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (str.compare("transforms") == 0) {
         transform_buffer_allocation_index = i;
       }
+      if (scene_cbv_buffer_config_index == ~0U && str.compare("scene_data") == 0) {
+        scene_cbv_buffer_config_index = buffer_config_index;
+      }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
       auto cpu_handler = descriptor_cpu.CreateHandle(i, DescriptorType::kSampler);
@@ -430,15 +461,17 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     prev_command_list[i] = nullptr;
   }
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
+  shader::SceneCbvData scene_cbv{};
+  auto scene_cbv_ptr = PrepareSceneCbvBuffer(buffer_allocator, &buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_config_index, &descriptor_cpu, &allocator, device.Get());
   for (uint32_t i = 0; i < kFrameLoopNum; i++) {
     if (!window.ProcessMessage()) { break; }
-    UpdateViewMatrix(i, dynamic_data.view_matrix);
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     auto command_queue_frame_signal_sent = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
     for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
       command_queue_frame_signal_sent[j] = true;
     }
     const auto frame_index = i % render_graph.frame_buffer_num;
+    UpdateSceneCbv(i, &scene_cbv, scene_cbv_ptr[frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();

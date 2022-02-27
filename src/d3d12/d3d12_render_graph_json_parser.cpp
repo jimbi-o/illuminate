@@ -77,6 +77,14 @@ auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) 
 }
 }
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
+  config->pingpong = GetBool(j, "pingpong", false);
+  config->frame_buffered = GetBool(j, "frame_buffered", false);
+  if (config->pingpong) {
+    assert(!config->frame_buffered);
+  }
+  if (config->frame_buffered) {
+    assert(!config->pingpong);
+  }
   if (j.contains("descriptor_only") && j.at("descriptor_only") == true) {
     config->descriptor_only = true;
     return;
@@ -102,14 +110,6 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->mip_depth = GetNum(j, "mip_depth", 0);
   config->initial_state = GetResourceStateType(j, "initial_state");
   config->clear_value.Format = config->format;
-  config->pingpong = GetBool(j, "pingpong", false);
-  config->frame_buffered = GetBool(j, "frame_buffered", false);
-  if (config->pingpong) {
-    assert(!config->frame_buffered);
-  }
-  if (config->frame_buffered) {
-    assert(!config->pingpong);
-  }
 }
 D3D12_FILTER_TYPE GetFilterType(const nlohmann::json& j, const char* const name) {
   if (!j.contains(name)) { return D3D12_FILTER_TYPE_POINT; }

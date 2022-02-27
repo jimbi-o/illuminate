@@ -157,6 +157,11 @@
       "descriptor_only": true
     },
     {
+      "name": "scene_data",
+      "descriptor_only": true,
+      "frame_buffered": true
+    },
+    {
       "name": "transforms",
       "descriptor_only": true
     }
@@ -372,6 +377,10 @@
       "wait_pass": ["copy resource"],
       "execute": true,
       "buffer_list": [
+        {
+          "name": "scene_data",
+          "state": "cbv"
+        },
         {
           "name": "transforms",
           "state": "srv_non_ps"

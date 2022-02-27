@@ -117,6 +117,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${tinygltf_SOURCE_DIR}"
   "${imgui_SOURCE_DIR}"
   "${WinPixEventRuntime_SOURCE_DIR}/Include/"
+  "resource/shader/include"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -126,6 +127,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   <string>
   <string_view>
   <dxgi1_6.h>
+  <directxmath.h>
   "${dxc_SOURCE_DIR}/inc/d3d12shader.h"
   "${dxc_SOURCE_DIR}/inc/dxcapi.h"
   "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp"
