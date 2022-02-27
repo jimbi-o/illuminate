@@ -73,6 +73,7 @@
     },
     {
       "name": "cbv-a",
+      "frame_buffered": true,
       "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
@@ -91,6 +92,7 @@
     },
     {
       "name": "cbv-b",
+      "frame_buffered": true,
       "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
@@ -109,6 +111,7 @@
     },
     {
       "name": "cbv-c",
+      "frame_buffered": true,
       "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",

@@ -135,13 +135,14 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
   }
   return funcs;
 }
-auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, MemoryAllocationJanitor* allocator) {
+auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, const uint32_t frame_index, MemoryAllocationJanitor* allocator) {
   auto resource_list = AllocateArray<ID3D12Resource*>(allocator, render_pass.buffer_num);
   auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, render_pass.buffer_num);
   for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
     auto& buffer = render_pass.buffer_list[b];
     const auto& buffer_config = buffer_config_list[buffer.buffer_index];
-    const auto buffer_allocation_index = GetBufferAllocationIndex(buffer_list, buffer.buffer_index, buffer_config, buffer.state, write_to_sub[buffer.buffer_index][render_pass.index]);
+    const auto local_index = GetBufferLocalIndex(buffer_config, buffer.state, write_to_sub[buffer.buffer_index][render_pass.index], frame_index);
+    const auto buffer_allocation_index = GetBufferAllocationIndex(buffer_list, buffer.buffer_index, local_index);
     resource_list[b] = buffer_list.resource_list[buffer_allocation_index];
     const auto descriptor_type = ConvertToDescriptorType(buffer.state);
     if (descriptor_type != DescriptorType::kNum) {
@@ -152,7 +153,7 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
   }
   return std::make_tuple(resource_list, cpu_handle_list);
 }
-auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
+auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, const uint32_t frame_index, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
   auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, 2); // 0:view 1:sampler
   {
     // view
@@ -161,7 +162,8 @@ auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, co
     auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, render_pass.buffer_num);
     for (uint32_t j = 0; j < render_pass.buffer_num; j++) {
       const auto buffer_index = render_pass.buffer_list[j].buffer_index;
-      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, buffer_index, buffer_config_list[buffer_index], render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index]);
+      const auto local_index = GetBufferLocalIndex(buffer_config_list[buffer_index], render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index], frame_index);
+      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, buffer_index, local_index);
       descriptor_type_list[j] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
     }
     gpu_handle_list[0] = descriptor_gpu->CopyViewDescriptors(device, render_pass.buffer_num, buffer_id_list, descriptor_type_list, descriptor_cpu);
@@ -358,7 +360,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .swapchain = render_graph.swapchain_format,
       .primarybuffer = render_graph.primarybuffer_format,
     };
-    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, buffer_allocator, &allocator);
+    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
     CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num, render_graph.sampler_num, render_graph.descriptor_handle_num_per_type, &allocator));
     command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
     auto& json_buffer_list = json.at("buffer");
@@ -373,6 +375,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         } else {
           SetD3d12Name(buffer_list.resource_list[i], str + "_B");
         }
+      } else if (buffer_config.frame_buffered) {
+        SetD3d12Name(buffer_list.resource_list[i], str + std::to_string(GetBufferLocalIndex(buffer_list, buffer_config_index, i)));
       } else if (!buffer_config.descriptor_only) {
         SetD3d12Name(buffer_list.resource_list[i], str);
       }
@@ -453,8 +457,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (!render_pass_enable_flag[k]) { continue; }
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
       args_per_pass[k].render_pass_index = k;
-      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, &single_frame_allocator);
-      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+      std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, frame_index, &single_frame_allocator);
+      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, frame_index, descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
     }
     // update
     RenderPassFuncArgsRenderCommon args_common {

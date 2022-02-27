@@ -9,7 +9,7 @@ class RenderPassPostprocess {
     uint32_t rtv_index{0};
     bool use_views{true};
     bool use_sampler{true};
-    void* cbv_ptr{nullptr};
+    void** cbv_ptr{nullptr};
     uint32_t cbv_size{0};
   };
   static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
@@ -34,9 +34,12 @@ class RenderPassPostprocess {
     for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
       if (buffer_list[i].state == ResourceStateType::kCbv) {
         const auto buffer_config_index = args->render_pass_list[render_pass_index].buffer_list[i].buffer_index;
-        auto resource = args->buffer_list->resource_list[GetBufferAllocationIndex(*args->buffer_list, buffer_config_index)];
         param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
-        param->cbv_ptr = MapResource(resource, param->cbv_size);
+        param->cbv_ptr = AllocateArray<void*>(args->allocator, args->frame_buffer_num);
+        for (uint32_t j = 0; j < args->frame_buffer_num; j++) {
+          auto resource = args->buffer_list->resource_list[GetBufferAllocationIndex(*args->buffer_list, buffer_config_index, j)];
+          param->cbv_ptr[j] = MapResource(resource, param->cbv_size);
+        }
         param->use_views = true;
         break;
       }
@@ -50,7 +53,7 @@ class RenderPassPostprocess {
     if (!args_per_pass->ptr) { return; }
     auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
     if (!pass_vars->cbv_ptr) { return; }
-    memcpy(pass_vars->cbv_ptr, args_per_pass->ptr, args_per_pass->ptr_size);
+    memcpy(pass_vars->cbv_ptr[args_common->frame_index], args_per_pass->ptr, args_per_pass->ptr_size);
   }
   static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {

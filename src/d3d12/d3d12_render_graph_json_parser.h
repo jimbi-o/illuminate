@@ -1,6 +1,7 @@
 #ifndef ILLUMINATE_D3D12_RENDER_GRAPH_JSON_PARSER_H
 #define ILLUMINATE_D3D12_RENDER_GRAPH_JSON_PARSER_H
 #include "d3d12_json_parser.h"
+#include "d3d12_gpu_buffer_allocator.h"
 #include "d3d12_render_graph.h"
 #include "d3d12_src_common.h"
 #include "illuminate/util/hash_map.h"
@@ -232,21 +233,22 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
     const auto dsv_index = static_cast<uint32_t>(DescriptorType::kDsv);
     for (uint32_t i = 0; i < r.buffer_num; i++) {
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagCbv) {
-        r.descriptor_handle_num_per_type[cbv_index]++;
+        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
+        r.descriptor_handle_num_per_type[cbv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagSrv) {
-        const uint32_t add_val = r.buffer_list[i].pingpong ? 2 : 1;
+        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
         r.descriptor_handle_num_per_type[srv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagUav) {
         r.descriptor_handle_num_per_type[uav_index]++;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagRtv) {
-        const uint32_t add_val = r.buffer_list[i].pingpong ? 2 : 1;
+        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
         r.descriptor_handle_num_per_type[rtv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagDsv) {
-        const uint32_t add_val = r.buffer_list[i].pingpong ? 2 : 1;
+        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
         r.descriptor_handle_num_per_type[dsv_index] += add_val;
       }
     }

@@ -26,6 +26,7 @@ struct BufferConfig {
   DescriptorTypeFlag descriptor_type_flags{kDescriptorTypeFlagNone};
   bool descriptor_only{false};
   bool pingpong{false};
+  bool frame_buffered{false};
 };
 struct RenderPassBuffer {
   uint32_t buffer_index{~0U};
