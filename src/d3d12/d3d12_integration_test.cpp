@@ -25,7 +25,7 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
-static const uint32_t kFrameLoopNum = 1000;
+static const uint32_t kFrameLoopNum = 100000;
 auto GetTestJson() {
   std::ifstream file("config.json");
   nlohmann::json json;
@@ -313,19 +313,15 @@ auto PrepareSceneCbvBuffer(D3D12MA::Allocator* buffer_allocator, BufferList* buf
   }
   return ptr_list;
 }
-void UpdateViewMatrix(const uint32_t frame_index, matrix& view_matrix) {
-  auto f = static_cast<float>(frame_index);
-  f *= 0.01f;
-  const float radius = 3.0f;
-  float x = sinf(f) * radius;
-  float z = cosf(f) * radius;
-  float3 eye{x, 1.2f, z,}, at{}, up{0.0f, 1.0f, 0.0f,};
-  GetLookAtLH(eye, at, up, view_matrix);
-}
-void UpdateSceneCbv(const uint32_t frame_index, shader::SceneCbvData* scene_cbv, void *scene_cbv_ptr) {
-  UpdateViewMatrix(frame_index, scene_cbv->view_matrix);
-  TransposeMatrix(scene_cbv->view_matrix);
-  memcpy(scene_cbv_ptr, scene_cbv, sizeof(*scene_cbv));
+void UpdateSceneCbv(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_cbv_ptr) {
+  matrix view_matrix{}, projection_matrix{};
+  GetLookAtLH(dynamic_data.camera_pos, dynamic_data.camera_focus, {0.0f, 1.0f, 0.0f,}, view_matrix);
+  const auto aspect_ratio = static_cast<float>(buffer_size.width) / buffer_size.height;
+  GetPerspectiveProjectionMatirxLH(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z, projection_matrix);
+  shader::SceneCbvData scene_cbv{};
+  MultiplyMatrix(view_matrix, projection_matrix, scene_cbv.view_projection_matrix);
+  TransposeMatrix(scene_cbv.view_projection_matrix);
+  memcpy(scene_cbv_ptr, &scene_cbv, sizeof(scene_cbv));
 }
 } // namespace anonymous
 } // namespace illuminate
@@ -461,7 +457,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     prev_command_list[i] = nullptr;
   }
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
-  shader::SceneCbvData scene_cbv{};
   auto scene_cbv_ptr = PrepareSceneCbvBuffer(buffer_allocator, &buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_config_index, &descriptor_cpu, &allocator, device.Get());
   for (uint32_t i = 0; i < kFrameLoopNum; i++) {
     if (!window.ProcessMessage()) { break; }
@@ -471,7 +466,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       command_queue_frame_signal_sent[j] = true;
     }
     const auto frame_index = i % render_graph.frame_buffer_num;
-    UpdateSceneCbv(i, &scene_cbv, scene_cbv_ptr[frame_index]);
+    UpdateSceneCbv(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();

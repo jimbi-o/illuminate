@@ -4,7 +4,7 @@
 namespace illuminate::shader {
 #endif
 struct SceneCbvData {
-  matrix view_matrix;
+  matrix view_projection_matrix;
 };
 #ifdef __cplusplus
 }

@@ -49,6 +49,14 @@ TEST_CASE("math/lookat") { // NOLINT
       CHECK_EQ(m[i][j], doctest::Approx(XMVectorGetByIndex(lookat.r[i], j)));
     }
   }
+  TransposeMatrix(m);
+  for (uint32_t i = 0; i < 4; i++) {
+    CAPTURE(i);
+    for (uint32_t j = 0; j < 4; j++) {
+      CAPTURE(j);
+      CHECK_EQ(m[i][j], doctest::Approx(XMVectorGetByIndex(lookat.r[j], i)));
+    }
+  }
 }
 TEST_CASE("math/perspective projection") { // NOLINT
   using namespace illuminate; // NOLINT

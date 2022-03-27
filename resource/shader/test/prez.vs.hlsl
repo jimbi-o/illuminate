@@ -23,6 +23,6 @@ StructuredBuffer<matrix> transforms : register(t0);
 [RootSignature(PrezRootsig)]
 float4 main(const VsInput input, const uint instance_id : SV_InstanceID) : SV_Position {
   float4 output = mul(float4(input.position, 1.0f), transforms[transform_offset + instance_id]);
-  output = mul(output, scene_data.view_matrix);
+  output = mul(output, scene_data.view_projection_matrix);
   return output;
 }

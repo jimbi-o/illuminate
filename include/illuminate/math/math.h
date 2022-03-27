@@ -64,11 +64,9 @@ constexpr inline void MultiplyMatrix(const matrix& a, const matrix& b, matrix& d
   }
 }
 constexpr inline void TransposeMatrix(matrix& m) {
-  for (uint32_t i = 0; i < 4; i++) {
-    for (uint32_t j = 0; j < 4; j++) {
-      if (i > j) {
-        std::swap(m[i][j], m[j][i]);
-      }
+  for (uint32_t i = 0; i < 3; i++) {
+    for (uint32_t j = i + 1; j < 4; j++) {
+      std::swap(m[i][j], m[j][i]);
     }
   }
 }

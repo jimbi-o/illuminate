@@ -26,6 +26,14 @@ void* RenderPassImgui::PrepareParam(const uint32_t render_pass_num, RenderPass* 
 void RenderPassImgui::RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) {
   ImGui::SetNextWindowSize(ImVec2{});
   if (!ImGui::Begin("render pass config", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) { return; }
+  {
+    // camera settings
+    ImGui::SliderFloat3("camera pos", args_common->dynamic_data->camera_pos, -10.0f, 10.0f, "%.1f");
+    ImGui::SliderFloat3("camera focus", args_common->dynamic_data->camera_focus, -10.0f, 10.0f, "%.1f");
+    ImGui::SliderFloat("camera fov(vertical)", &args_common->dynamic_data->fov_vertical, 1.0f, 360.0f, "%.0f");
+    ImGui::SliderFloat("near_z", &args_common->dynamic_data->near_z, 0.001f, 1.0f, "%.2f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
+    ImGui::SliderFloat("far_z", &args_common->dynamic_data->far_z, 1.0f, 10000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+  }
   auto param = static_cast<Param*>(args_per_pass->pass_vars_ptr);
   bool debug_render_selected_buffer = args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_debug_show_selected_buffer];
   ImGui::Checkbox("render selected buffer mode", &debug_render_selected_buffer);
