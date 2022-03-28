@@ -15,7 +15,7 @@ class Window {
  private:
   char* title_{nullptr};
   HWND hwnd_{nullptr};
-  bool windows_closed_{false};
+  bool window_closed_{false};
 };
 }
 #endif

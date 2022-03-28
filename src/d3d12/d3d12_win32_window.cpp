@@ -104,11 +104,11 @@ bool Window::Init(const char* const title, const uint32_t width, const uint32_t 
   title_ = AllocateArray<char>(gSystemMemoryAllocator, str_len);
   strcpy_s(title_, str_len, title);
   hwnd_ = illuminate::InitWindow(title_, width, height, callback_func == nullptr ? DefWindowProc : callback_func);
-  windows_closed_ = (hwnd_ == nullptr);
-  return !windows_closed_;
+  window_closed_ = (hwnd_ == nullptr);
+  return !window_closed_;
 }
 void Window::Term() {
-  if (!windows_closed_) {
+  if (!window_closed_) {
     if (!DestroyWindow(hwnd_)) {
       auto err = GetLastError();
       logwarn("DestroyWindow failed. {} {}", title_, err);
@@ -125,10 +125,10 @@ bool Window::ProcessMessage() {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
     if (msg.message == WM_QUIT) {
-      windows_closed_ = true;
+      window_closed_ = true;
     }
   }
-  return !windows_closed_;
+  return !window_closed_;
 }
 }
 #include "doctest/doctest.h"
