@@ -26,8 +26,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 namespace illuminate {
 namespace {
 static const uint32_t kFrameLoopNum = 100000;
-auto GetTestJson() {
-  std::ifstream file("config.json");
+auto GetTestJson(const char* const filename) {
+  std::ifstream file(filename);
   nlohmann::json json;
   file >> json;
   return json;
@@ -352,7 +352,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t transform_buffer_allocation_index{};
   uint32_t scene_cbv_buffer_config_index{~0U};
   {
-    auto json = GetTestJson();
+    auto json = GetTestJson("config.json");
     ParseRenderGraphJson(json, &allocator, &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
     CHECK_UNARY(command_list_set.Init(device.Get(),
