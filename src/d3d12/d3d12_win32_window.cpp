@@ -42,11 +42,13 @@ static HWND InitWindow(const char* const title, const uint32_t width, const uint
 }
 bool CloseWindow(HWND hwnd, const char* const title) {
   if (!DestroyWindow(hwnd)) {
-    logwarn("DestroyWindow failed. {}", GetLastError());
+    auto err = GetLastError();
+    logwarn("DestroyWindow failed. {}", err);
     return false;
   }
   if (!UnregisterClass(title, GetModuleHandle(nullptr))) {
-    logwarn("UnregisterClass failed. {}", GetLastError());
+    auto err = GetLastError();
+    logwarn("UnregisterClass failed. {}", err);
     return false;
   }
   return true;
@@ -55,7 +57,7 @@ bool SetWindowStyle(HWND hwnd, const UINT windowStyle) {
   SetLastError(0);
   if (SetWindowLongPtrW(hwnd, GWL_STYLE, windowStyle) != 0) return true;
   auto err = GetLastError();
-  if (err == 0) return true;
+  if (err == 0) { return true; }
   logwarn("SetWindowLongPtrW failed. {}", err);
   return false;
 }
@@ -76,7 +78,8 @@ static RECT GetCurrentWindowRectInfo(HWND hwnd) {
 }
 bool SetWindowPos(HWND hwnd, HWND hWndInsertAfter, const RECT& rect) {
   if (::SetWindowPos(hwnd, hWndInsertAfter, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_FRAMECHANGED | SWP_NOACTIVATE)) return true;
-  logwarn("SetWindowPos failed. {}", GetLastError());
+  auto err = GetLastError();
+  logwarn("SetWindowPos failed. {}", err);
   return false;
 }
 bool SetFullscreenMode(HWND hwnd) {
@@ -96,20 +99,24 @@ bool SetBackToWindowMode(HWND hwnd, const RECT& rect) {
 }
 } // anonymous namespace
 bool Window::Init(const char* const title, const uint32_t width, const uint32_t height, WindowCallback callback_func) {
+  ProcessMessage();
   const auto str_len = GetUint32(strlen(title)) + 1;
   title_ = AllocateArray<char>(gSystemMemoryAllocator, str_len);
   strcpy_s(title_, str_len, title);
   hwnd_ = illuminate::InitWindow(title_, width, height, callback_func == nullptr ? DefWindowProc : callback_func);
-  return hwnd_ != nullptr;
+  windows_closed_ = (hwnd_ == nullptr);
+  return !windows_closed_;
 }
 void Window::Term() {
   if (!windows_closed_) {
     if (!DestroyWindow(hwnd_)) {
-      logwarn("DestroyWindow failed. {} {}", title_, GetLastError());
+      auto err = GetLastError();
+      logwarn("DestroyWindow failed. {} {}", title_, err);
     }
   }
   if (!UnregisterClass(title_, GetModuleHandle(nullptr))) {
-    logwarn("UnregisterClass failed. {} {}", title_, GetLastError());
+    auto err = GetLastError();
+    logwarn("UnregisterClass failed. {} {}", title_, err);
   }
 }
 bool Window::ProcessMessage() {

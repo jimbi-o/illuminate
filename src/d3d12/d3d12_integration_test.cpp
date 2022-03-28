@@ -351,8 +351,17 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t swapchain_buffer_allocation_index{};
   uint32_t transform_buffer_allocation_index{};
   uint32_t scene_cbv_buffer_config_index{~0U};
+  auto frame_loop_num = kFrameLoopNum;
   {
-    auto json = GetTestJson("config.json");
+    nlohmann::json json;
+    SUBCASE("config.json") {
+      json = GetTestJson("config.json");
+      frame_loop_num = 5;
+    }
+    SUBCASE("forward.json") {
+      json = GetTestJson("forward.json");
+      frame_loop_num = 5;
+    }
     ParseRenderGraphJson(json, &allocator, &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
     CHECK_UNARY(command_list_set.Init(device.Get(),
@@ -458,7 +467,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
   auto scene_cbv_ptr = PrepareSceneCbvBuffer(buffer_allocator, &buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_config_index, &descriptor_cpu, &allocator, device.Get());
-  for (uint32_t i = 0; i < kFrameLoopNum; i++) {
+  for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     auto command_queue_frame_signal_sent = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
