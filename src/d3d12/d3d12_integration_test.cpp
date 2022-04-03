@@ -26,6 +26,13 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 namespace illuminate {
 namespace {
 static const uint32_t kFrameLoopNum = 100000;
+static const uint32_t kInvalidIndex = ~0U;
+void RenderPassClearUav(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  // TODO
+}
+void RenderPassCopyResource(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  // TODO
+}
 auto GetTestJson(const char* const filename) {
   std::ifstream file(filename);
   nlohmann::json json;
@@ -125,6 +132,22 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         funcs.update[i] = RenderPassDebugRenderSelectedBuffer::Update;
         funcs.is_render_needed[i] = RenderPassDebugRenderSelectedBuffer::IsRenderNeeded;
         funcs.render[i] = RenderPassDebugRenderSelectedBuffer::Render;
+        break;
+      }
+      case SID("clear uav"): {
+        funcs.init[i] = nullptr;
+        funcs.term[i] = nullptr;
+        funcs.update[i] = nullptr;
+        funcs.is_render_needed[i] = nullptr;
+        funcs.render[i] = RenderPassClearUav;
+        break;
+      }
+      case SID("copy to swapchain"): {
+        funcs.init[i] = nullptr;
+        funcs.term[i] = nullptr;
+        funcs.update[i] = nullptr;
+        funcs.is_render_needed[i] = nullptr;
+        funcs.render[i] = RenderPassCopyResource;
         break;
       }
       default: {
@@ -348,9 +371,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   RenderGraph render_graph;
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
-  uint32_t swapchain_buffer_allocation_index{};
-  uint32_t transform_buffer_allocation_index{};
-  uint32_t scene_cbv_buffer_config_index{~0U};
+  uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
+  uint32_t transform_buffer_allocation_index{kInvalidIndex};
+  uint32_t scene_cbv_buffer_config_index{kInvalidIndex};
   auto frame_loop_num = kFrameLoopNum;
   {
     nlohmann::json json;
@@ -419,7 +442,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (str.compare("transforms") == 0) {
         transform_buffer_allocation_index = i;
       }
-      if (scene_cbv_buffer_config_index == ~0U && str.compare("scene_data") == 0) {
+      if (scene_cbv_buffer_config_index == kInvalidIndex && str.compare("scene_data") == 0) {
         scene_cbv_buffer_config_index = buffer_config_index;
       }
     }
