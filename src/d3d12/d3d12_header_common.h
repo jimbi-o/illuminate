@@ -39,6 +39,16 @@ static const DescriptorTypeFlag kDescriptorTypeFlagSrv  = 0x02;
 static const DescriptorTypeFlag kDescriptorTypeFlagUav  = 0x04;
 static const DescriptorTypeFlag kDescriptorTypeFlagRtv  = 0x08;
 static const DescriptorTypeFlag kDescriptorTypeFlagDsv  = 0x10;
+constexpr auto ConvertToDescriptorTypeFlag(const DescriptorType& type) {
+  switch (type) {
+    case DescriptorType::kCbv: { return kDescriptorTypeFlagCbv; };
+    case DescriptorType::kSrv: { return kDescriptorTypeFlagSrv; };
+    case DescriptorType::kUav: { return kDescriptorTypeFlagUav; };
+    case DescriptorType::kRtv: { return kDescriptorTypeFlagRtv; };
+    case DescriptorType::kDsv: { return kDescriptorTypeFlagDsv; };
+  }
+  return kDescriptorTypeFlagNone;
+}
 enum class ResourceStateType : uint8_t { kCbv = 0, kSrvPs, kSrvNonPs, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kCommon, kPresent, kGenericRead, };
 constexpr auto ConvertToD3d12ResourceState(const ResourceStateType type) {
   switch (type) {

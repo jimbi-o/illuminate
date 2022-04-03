@@ -85,6 +85,12 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   if (config->frame_buffered) {
     assert(!config->pingpong);
   }
+  config->descriptor_type_flags = kDescriptorTypeFlagNone;
+  if (j.contains("descriptor_types")) {
+    for (auto& d : j.at("descriptor_types")) {
+      config->descriptor_type_flags |= ConvertToDescriptorTypeFlag(GetDescriptorType(d));
+    }
+  }
   if (j.contains("descriptor_only") && j.at("descriptor_only") == true) {
     config->descriptor_only = true;
     return;

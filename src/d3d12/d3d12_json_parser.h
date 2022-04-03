@@ -35,7 +35,8 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
 ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* const name);
-DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name);
+DescriptorType GetDescriptorType(const nlohmann::json& j);
+DescriptorType GetDescriptorType(const nlohmann::json& j, const char* const name);
 D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);
 void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D12_CLEAR_VALUE* clear_value);
 }

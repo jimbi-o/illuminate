@@ -53,11 +53,13 @@ auto AddSystemBuffers(nlohmann::json* json) {
     {
       "name": "scene_data",
       "descriptor_only": true,
-      "frame_buffered": true
+      "frame_buffered": true,
+      "descriptor_types": ["cbv"]
     },
     {
       "name": "transforms",
-      "descriptor_only": true
+      "descriptor_only": true,
+      "descriptor_types": ["srv"]
     }
   ]
   )"_json;

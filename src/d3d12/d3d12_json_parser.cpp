@@ -98,9 +98,7 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* cons
   assert(j.contains(name));
   return GetResourceStateType(j.at(name));
 }
-DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name) {
-  assert(j.contains(name));
-  auto str = GetStringView(j, name);
+DescriptorType GetDescriptorType(const std::string_view& str) {
   if (str.compare("cbv") == 0) {
     return DescriptorType::kCbv;
   }
@@ -119,9 +117,16 @@ DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const nam
   if (str.compare("dsv") == 0) {
     return DescriptorType::kDsv;
   }
-  logerror("invalid DescriptorType {}", name);
+  logerror("invalid DescriptorType {}", str);
   assert(false && "invalid DescriptorType");
   return DescriptorType::kNum;
+}
+DescriptorType GetDescriptorType(const nlohmann::json& j) {
+  return GetDescriptorType(GetStringView(j));
+}
+DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const name) {
+  assert(j.contains(name));
+  return GetDescriptorType(GetStringView(j, name));
 }
 D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags) {
   D3D12_RESOURCE_FLAGS flag{D3D12_RESOURCE_FLAG_NONE};

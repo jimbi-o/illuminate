@@ -485,10 +485,18 @@ void PsoRootsigManager::Term() {
   for (uint32_t i = 0; i < rootsig_num_; i++) {
     rootsig_list_[i]->Release();
   }
-  include_handler_->Release();
-  utils_->Release();
-  compiler_->Release();
-  FreeLibrary(library_);
+  if (include_handler_) {
+    include_handler_->Release();
+  }
+  if (utils_) {
+    utils_->Release();
+  }
+  if (compiler_) {
+    compiler_->Release();
+  }
+  if (library_) {
+    FreeLibrary(library_);
+  }
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
