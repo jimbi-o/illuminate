@@ -113,19 +113,16 @@ std::tuple<const uint32_t**, const Barrier***> ConfigureBarrierTransitions(const
   auto barrier_index = AllocateArray<uint32_t*>(&tmp_allocator, kBarrierExecutionTimingNum);
   for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
     barrier_index[i] = AllocateArray<uint32_t>(&tmp_allocator, render_pass_num);
-    for (uint32_t j = 0; j < render_pass_num; j++) {
-      barrier_index[i][j] = 0;
-    }
   }
   for (uint32_t i = 0; i < render_pass_num; i++) {
     for (uint32_t j = 0; j < render_pass_list[i].prepass_barrier_num; j++) {
       memcpy(&barrier_config_list[0][i][j], &render_pass_list[i].prepass_barrier[j], sizeof(barrier_config_list[0][i][j]));
-      barrier_index[0][i]++;
     }
+    barrier_index[0][i] = render_pass_list[i].prepass_barrier_num;
     for (uint32_t j = 0; j < render_pass_list[i].postpass_barrier_num; j++) {
       memcpy(&barrier_config_list[1][i][j], &render_pass_list[i].postpass_barrier[j], sizeof(barrier_config_list[1][i][j]));
-      barrier_index[1][i]++;
     }
+    barrier_index[1][i] = render_pass_list[i].postpass_barrier_num;
   }
   for (uint32_t i = 0; i < buffer_num; i++) {
     const auto check_buffer_num = buffer_config_list[i].pingpong ? 2U : 1U;

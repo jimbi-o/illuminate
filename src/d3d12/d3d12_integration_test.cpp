@@ -27,11 +27,14 @@ namespace illuminate {
 namespace {
 static const uint32_t kFrameLoopNum = 100000;
 static const uint32_t kInvalidIndex = ~0U;
-void RenderPassClearUav(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  // TODO
+void RenderPassClearUav([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+    auto command_list = args_per_pass->command_list;
+    FLOAT clear_color[] = {0.0f, 1.0f, 1.0f, 1.0f};
+    command_list->ClearUnorderedAccessViewFloat(args_per_pass->gpu_handles[0], args_per_pass->cpu_handles[0], args_per_pass->resources[0], clear_color, 0, nullptr);
 }
-void RenderPassCopyResource(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  // TODO
+void RenderPassCopyResource([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+    auto command_list = args_per_pass->command_list;
+    command_list->CopyResource(args_per_pass->resources[1], args_per_pass->resources[0]);
 }
 auto GetTestJson(const char* const filename) {
   std::ifstream file(filename);

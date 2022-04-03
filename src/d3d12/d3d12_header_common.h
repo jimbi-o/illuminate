@@ -58,6 +58,8 @@ constexpr auto ConvertToD3d12ResourceState(const ResourceStateType type) {
     case ResourceStateType::kUav:      { return D3D12_RESOURCE_STATE_UNORDERED_ACCESS; }
     case ResourceStateType::kRtv:      { return D3D12_RESOURCE_STATE_RENDER_TARGET; }
     case ResourceStateType::kDsvWrite: { return D3D12_RESOURCE_STATE_DEPTH_WRITE; }
+    case ResourceStateType::kCopySrc:  { return D3D12_RESOURCE_STATE_COPY_SOURCE; }
+    case ResourceStateType::kCopyDst:  { return D3D12_RESOURCE_STATE_COPY_DEST; }
     case ResourceStateType::kCommon:   { return D3D12_RESOURCE_STATE_COMMON; }
     case ResourceStateType::kPresent:  { return D3D12_RESOURCE_STATE_PRESENT; }
     case ResourceStateType::kGenericRead: { return D3D12_RESOURCE_STATE_GENERIC_READ; }
