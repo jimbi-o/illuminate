@@ -83,6 +83,15 @@
           "name": "swapchain",
           "state": "copy_dest"
         }
+      ],
+      "postpass_barrier": [
+        {
+          "buffer_name": "swapchain",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": ["copy_dest"],
+          "state_after": ["present"]
+        }
       ]
     }
   ]
