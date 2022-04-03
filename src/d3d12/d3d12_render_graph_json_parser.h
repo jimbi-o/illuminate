@@ -58,23 +58,25 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
     auto& swapchain = j.at("swapchain");
     r.swapchain_command_queue_index = FindIndex(swapchain, "command_queue", r.command_queue_num, r.command_queue_name);
     r.swapchain_format = GetDxgiFormat(swapchain, "format");
-    auto usage_list = swapchain.at("usage");
-    for (auto& usage : usage_list) {
-      auto usage_str = GetStringView(usage);
-      if (usage_str.compare("READ_ONLY") == 0) {
-        r.swapchain_usage = DXGI_USAGE_READ_ONLY;
-      }
-      if (usage_str.compare("RENDER_TARGET_OUTPUT") == 0) {
-        r.swapchain_usage |= DXGI_USAGE_RENDER_TARGET_OUTPUT;
-      }
-      if (usage_str.compare("SHADER_INPUT") == 0) {
-        r.swapchain_usage |= DXGI_USAGE_SHADER_INPUT;
-      }
-      if (usage_str.compare("SHARED") == 0) {
-        r.swapchain_usage |= DXGI_USAGE_SHARED;
-      }
-      if (usage_str.compare("UNORDERED_ACCESS") == 0) {
-        r.swapchain_usage |= DXGI_USAGE_UNORDERED_ACCESS;
+    if (swapchain.contains("usage")) {
+      auto usage_list = swapchain.at("usage");
+      for (auto& usage : usage_list) {
+        auto usage_str = GetStringView(usage);
+        if (usage_str.compare("READ_ONLY") == 0) {
+          r.swapchain_usage = DXGI_USAGE_READ_ONLY;
+        }
+        if (usage_str.compare("RENDER_TARGET_OUTPUT") == 0) {
+          r.swapchain_usage |= DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        }
+        if (usage_str.compare("SHADER_INPUT") == 0) {
+          r.swapchain_usage |= DXGI_USAGE_SHADER_INPUT;
+        }
+        if (usage_str.compare("SHARED") == 0) {
+          r.swapchain_usage |= DXGI_USAGE_SHARED;
+        }
+        if (usage_str.compare("UNORDERED_ACCESS") == 0) {
+          r.swapchain_usage |= DXGI_USAGE_UNORDERED_ACCESS;
+        }
       }
     }
   }
