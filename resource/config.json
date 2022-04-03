@@ -147,23 +147,6 @@
       "initial_state": "dsv_write",
       "clear_depth": 1,
       "clear_stencil": 0
-    },
-    {
-      "name": "swapchain",
-      "descriptor_only": true
-    },
-    {
-      "name": "imgui_font",
-      "descriptor_only": true
-    },
-    {
-      "name": "scene_data",
-      "descriptor_only": true,
-      "frame_buffered": true
-    },
-    {
-      "name": "transforms",
-      "descriptor_only": true
     }
   ],
   "sampler": [

@@ -39,6 +39,33 @@ auto GetTestJson(const char* const filename) {
   file >> json;
   return json;
 }
+auto AddSystemBuffers(nlohmann::json* json) {
+  auto system_buffers = R"(
+  [
+    {
+      "name": "swapchain",
+      "descriptor_only": true
+    },
+    {
+      "name": "imgui_font",
+      "descriptor_only": true
+    },
+    {
+      "name": "scene_data",
+      "descriptor_only": true,
+      "frame_buffered": true
+    },
+    {
+      "name": "transforms",
+      "descriptor_only": true
+    }
+  ]
+  )"_json;
+  auto& buffer_list = json->at("buffer");
+  for (const auto& s : system_buffers) {
+    buffer_list.push_back(s);
+  }
+}
 void UpdatePingpongA(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   float c[4]{0.0f,1.0f,1.0f,1.0f};
   args_per_pass->ptr = c;
@@ -385,6 +412,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       json = GetTestJson("forward.json");
       frame_loop_num = 5;
     }
+    AddSystemBuffers(&json);
     ParseRenderGraphJson(json, &allocator, &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
     CHECK_UNARY(command_list_set.Init(device.Get(),
