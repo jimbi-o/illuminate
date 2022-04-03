@@ -15,7 +15,6 @@ class RenderPassCopyResource {
     param->state = State::kUpload;
     return param;
   }
-  static void Term() {}
   static void Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     auto param = static_cast<Param*>(args_per_pass->pass_vars_ptr);
     if (param->state != State::kUploading) { return; }

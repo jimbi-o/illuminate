@@ -12,11 +12,6 @@ class RenderPassDebugRenderSelectedBuffer {
     *param = {};
     return param;
   }
-  static void Term() {
-  }
-  static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  }
-  static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     D3D12_GPU_DESCRIPTOR_HANDLE srv_list{};
     D3D12_RESOURCE_BARRIER* barrier{};

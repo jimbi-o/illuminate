@@ -47,15 +47,12 @@ class RenderPassPostprocess {
     param->use_sampler = args->render_pass_list[render_pass_index].sampler_num > 0;
     return param;
   }
-  static void Term() {
-  }
   static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     if (!args_per_pass->ptr) { return; }
     auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
     if (!pass_vars->cbv_ptr) { return; }
     memcpy(pass_vars->cbv_ptr[args_common->frame_index], args_per_pass->ptr, args_per_pass->ptr_size);
   }
-  static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
     auto& buffer_size = (pass_vars->size_type == BufferSizeRelativeness::kPrimaryBufferRelative) ? args_common->main_buffer_size->primarybuffer : args_common->main_buffer_size->swapchain;

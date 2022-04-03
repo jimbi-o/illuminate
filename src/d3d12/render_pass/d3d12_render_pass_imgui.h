@@ -35,7 +35,6 @@ class RenderPassImgui {
     ImGui::NewFrame();
     RegisterGUI(args_common, args_per_pass);
   }
-  static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     ImGui::Render();
     args_per_pass->command_list->OMSetRenderTargets(1, &args_per_pass->cpu_handles[1], true, nullptr);

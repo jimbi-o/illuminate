@@ -20,11 +20,6 @@ class RenderPassPrez {
     }
     return param;
   }
-  static void Term() {
-  }
-  static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  }
-  static auto IsRenderNeeded([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) { return true; }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     PIXScopedEvent(args_per_pass->command_list, 0, "prez"); // https://devblogs.microsoft.com/pix/winpixeventruntime/
     auto command_list = args_per_pass->command_list;
