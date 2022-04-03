@@ -452,7 +452,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       device.Get()->CreateSampler(&render_graph.sampler_list[i], cpu_handler);
     }
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
-    CHECK_UNARY(pso_rootsig_manager.Init(json.at("material"), device.Get(), &allocator));
+    if (json.contains("material")) {
+      CHECK_UNARY(pso_rootsig_manager.Init(json.at("material"), device.Get(), &allocator));
+    } else {
+      loginfo("no material node in render graph config");
+    }
     render_pass_vars = AllocateArray<void*>(&allocator, render_graph.render_pass_num);
     for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
       const auto& render_pass_list_json = json.at("render_pass");
