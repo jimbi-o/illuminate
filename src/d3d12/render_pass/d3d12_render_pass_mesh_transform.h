@@ -1,11 +1,12 @@
-#ifndef ILLUMINATE_D3D12_RENDER_PASS_PREZ_H
-#define ILLUMINATE_D3D12_RENDER_PASS_PREZ_H
+#ifndef ILLUMINATE_D3D12_RENDER_PASS_MESH_TRANSFORM_H
+#define ILLUMINATE_D3D12_RENDER_PASS_MESH_TRANSFORM_H
 #include "d3d12_render_pass_common.h"
 namespace illuminate {
-class RenderPassPrez {
+class RenderPassMeshTransform {
  public:
   struct Param {
     uint32_t stencil_val{};
+    bool clear_depth{false};
     uint32_t dsv_index{};
   };
   static void* Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
@@ -18,14 +19,16 @@ class RenderPassPrez {
         break;
       }
     }
+    param->clear_depth = GetBool(*args->json, "clear_depth", false);
     return param;
   }
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-    PIXScopedEvent(args_per_pass->command_list, 0, "prez"); // https://devblogs.microsoft.com/pix/winpixeventruntime/
     auto command_list = args_per_pass->command_list;
     auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
     const auto& dsv_handle = args_per_pass->cpu_handles[pass_vars->dsv_index];
-    command_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+    if (pass_vars->clear_depth) {
+      command_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+    }
     auto& width = args_common->main_buffer_size->primarybuffer.width;
     auto& height = args_common->main_buffer_size->primarybuffer.height;
     {
@@ -58,7 +61,7 @@ class RenderPassPrez {
     }
   }
  private:
-  RenderPassPrez() = delete;
+  RenderPassMeshTransform() = delete;
 };
 }
 #endif

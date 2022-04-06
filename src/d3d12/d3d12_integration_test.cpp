@@ -19,23 +19,14 @@
 #include "render_pass/d3d12_render_pass_cs_dispatch.h"
 #include "render_pass/d3d12_render_pass_debug_render_selected_buffer.h"
 #include "render_pass/d3d12_render_pass_imgui.h"
+#include "render_pass/d3d12_render_pass_mesh_transform.h"
 #include "render_pass/d3d12_render_pass_postprocess.h"
-#include "render_pass/d3d12_render_pass_prez.h"
 #include "shader_defines.h"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
 static const uint32_t kFrameLoopNum = 100000;
 static const uint32_t kInvalidIndex = ~0U;
-void RenderPassClearUav([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-    auto command_list = args_per_pass->command_list;
-    FLOAT clear_color[] = {0.0f, 1.0f, 1.0f, 1.0f};
-    command_list->ClearUnorderedAccessViewFloat(args_per_pass->gpu_handles[0], args_per_pass->cpu_handles[0], args_per_pass->resources[0], clear_color, 0, nullptr);
-}
-void RenderPassCopyResource([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-    auto command_list = args_per_pass->command_list;
-    command_list->CopyResource(args_per_pass->resources[1], args_per_pass->resources[0]);
-}
 auto GetTestJson(const char* const filename) {
   std::ifstream file(filename);
   nlohmann::json json;
@@ -135,9 +126,9 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
     funcs.is_render_needed[i] = nullptr;
     funcs.render[i] = nullptr;
     switch (render_pass_list[i].type) {
-      case SID("prez"): {
-        funcs.init[i] = RenderPassPrez::Init;
-        funcs.render[i] = RenderPassPrez::Render;
+      case SID("mesh transform"): {
+        funcs.init[i] = RenderPassMeshTransform::Init;
+        funcs.render[i] = RenderPassMeshTransform::Render;
         break;
       }
       case SID("dispatch cs"): {
@@ -150,9 +141,6 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         funcs.update[i] = RenderPassCopyResource::Update;
         funcs.is_render_needed[i] = RenderPassCopyResource::IsRenderNeeded;
         funcs.render[i] = RenderPassCopyResource::Render;
-        break;
-      }
-      case SID("brdf forward"): {
         break;
       }
       case SID("postprocess"): {
@@ -397,6 +385,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
   uint32_t transform_buffer_allocation_index{kInvalidIndex};
   uint32_t scene_cbv_buffer_config_index{kInvalidIndex};
+#ifdef USE_GRAPHICS_DEBUG_SCOPE
+  char** render_pass_name{nullptr};
+#endif
   auto frame_loop_num = kFrameLoopNum;
   {
     nlohmann::json json;
@@ -483,6 +474,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       loginfo("no material node in render graph config");
     }
     render_pass_vars = AllocateArray<void*>(&allocator, render_graph.render_pass_num);
+    render_pass_name = AllocateArray<char*>(&allocator, render_graph.render_pass_num);
     for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
       const auto& render_pass_list_json = json.at("render_pass");
       RenderPassFuncArgsInit render_pass_func_args_init{
@@ -499,6 +491,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         .render_pass_list = render_graph.render_pass_list,
       };
       render_pass_vars[i] = RenderPassInit(&render_pass_function_list, &render_pass_func_args_init, i);
+#ifdef USE_GRAPHICS_DEBUG_SCOPE
+      auto pass_name = GetStringView(render_pass_list_json[i], ("name"));
+      const auto str_len = GetUint32(pass_name.size())  + 1;
+      render_pass_name[i] = AllocateArray<char>(&allocator, str_len);
+      strcpy_s(render_pass_name[i], str_len, GetStringView(pass_name).data());
+#endif
     }
   }
   auto frame_signals = AllocateArray<uint64_t*>(&allocator, render_graph.frame_buffer_num);
@@ -582,12 +580,18 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         prev_command_list[render_pass.command_queue_index] = command_list;
       }
       args_per_pass[k].command_list = command_list;
+#ifdef USE_GRAPHICS_DEBUG_SCOPE
+      PIXBeginEvent(command_list, 0, render_pass_name[k]); // https://devblogs.microsoft.com/pix/winpixeventruntime/
+#endif
       if (command_list && render_graph.command_queue_type[render_pass.command_queue_index] != D3D12_COMMAND_LIST_TYPE_COPY) {
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
       ExecuteBarrier(command_list, barrier_num[0][k], barrier_config_list[0][k], barrier_resource_list[0][k]);
       RenderPassRender(&render_pass_function_list, &args_common, &args_per_pass[k]);
       ExecuteBarrier(command_list, barrier_num[1][k], barrier_config_list[1][k], barrier_resource_list[1][k]);
+#ifdef USE_GRAPHICS_DEBUG_SCOPE
+      PIXEndEvent(command_list);
+#endif
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass.command_queue_index);
         prev_command_list[render_pass.command_queue_index] = nullptr;

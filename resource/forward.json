@@ -208,7 +208,7 @@
     },
     {
       "name": "forward",
-      "type": "brdf forward",
+      "type": "mesh transform",
       "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["copy resource"],
@@ -231,7 +231,11 @@
           "state": "dsv_write"
         }
       ],
-      "material": ["pso forward"]
+      "material": ["pso forward"],
+      "pass_vars": {
+        "clear_depth": true,
+        "stencil_val": 255
+      }
     },
     {
       "name": "oetf",

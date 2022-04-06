@@ -357,7 +357,7 @@
     },
     {
       "name": "prez",
-      "type": "prez",
+      "type": "mesh transform",
       "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["copy resource"],
@@ -378,6 +378,7 @@
       ],
       "material": ["pso prez"],
       "pass_vars": {
+        "clear_depth": true,
         "stencil_val": 255
       }
     },
