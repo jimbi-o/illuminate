@@ -471,15 +471,6 @@
         }
       ],
       "sampler": ["bilinear"],
-      "prepass_barrier": [
-        {
-          "buffer_name": "swapchain",
-          "type": "transition",
-          "split_type": "none",
-          "state_before": ["present"],
-          "state_after": ["rtv"]
-        }
-      ],
       "material": ["pso output to swapchain"],
       "pass_vars": {
         "size_type": "swapchain_relative"
@@ -526,16 +517,7 @@
           "state": "rtv"
         }
       ],
-      "flip_pingpong": ["pingpong"],
-      "postpass_barrier": [
-        {
-          "buffer_name": "swapchain",
-          "type": "transition",
-          "split_type": "none",
-          "state_before": ["rtv"],
-          "state_after": ["present"]
-        }
-      ]
+      "flip_pingpong": ["pingpong"]
     }
   ]
 }

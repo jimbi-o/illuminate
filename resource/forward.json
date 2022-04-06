@@ -249,24 +249,6 @@
           "state": "rtv"
         }
       ],
-      "prepass_barrier": [
-        {
-          "buffer_name": "swapchain",
-          "type": "transition",
-          "split_type": "none",
-          "state_before": ["present"],
-          "state_after": ["rtv"]
-        }
-      ],
-      "postpass_barrier": [
-        {
-          "buffer_name": "swapchain",
-          "type": "transition",
-          "split_type": "none",
-          "state_before": ["rtv"],
-          "state_after": ["present"]
-        }
-      ],
       "material": ["pso oetf"],
       "sampler": ["bilinear"]
     }

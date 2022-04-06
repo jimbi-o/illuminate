@@ -71,6 +71,56 @@ auto AddSystemBuffers(nlohmann::json* json) {
     buffer_list.push_back(s);
   }
 }
+auto GetRenderPassSwapchainState(const nlohmann::json& render_pass) {
+  if (!render_pass.contains("buffer_list")) { return std::make_pair(false, std::string_view()); }
+  auto& buffer_list = render_pass.at("buffer_list");
+  for (auto& buffer : buffer_list) {
+    if (buffer.at("name") == "swapchain") {
+      return std::make_pair(true, GetStringView(buffer, "state"));
+    }
+  }
+  return std::make_pair(false, std::string_view());
+}
+auto AddSystemBarrierJson(nlohmann::json* render_pass, const uint32_t barrier_timing, const std::string_view& buffer_state) {
+  const std::string barrier_timing_string = barrier_timing == 0 ? "prepass_barrier" : "postpass_barrier";
+  if (!render_pass->contains(barrier_timing_string)) {
+    (*render_pass)[barrier_timing_string] = R"([])"_json;
+  }
+  auto& barriers = render_pass->at(barrier_timing_string);
+  barriers.push_back(R"(
+        {
+          "buffer_name": "swapchain",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": [],
+          "state_after": []
+        }
+      )"_json);
+  if (barrier_timing == 0) {
+    barriers.back().at("state_before").push_back("present");
+    barriers.back().at("state_after").push_back(buffer_state);
+  } else {
+    barriers.back().at("state_before").push_back(buffer_state);
+    barriers.back().at("state_after").push_back("present");
+  }
+}
+auto AddSystemBarriers(nlohmann::json* json) {
+  auto& render_pass_list = json->at("render_pass");
+  for (auto& render_pass : render_pass_list) {
+    auto [swapchain_found, buffer_state] = GetRenderPassSwapchainState(render_pass);
+    if (swapchain_found) {
+      AddSystemBarrierJson(&render_pass, 0, buffer_state);
+      break;
+    }
+  }
+  for (auto rit = render_pass_list.rbegin(); rit != render_pass_list.rend(); rit++) {
+    auto [swapchain_found, buffer_state] = GetRenderPassSwapchainState(*rit);
+    if (swapchain_found) {
+      AddSystemBarrierJson(&(*rit), 1, buffer_state);
+      break;
+    }
+  }
+}
 auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
   RenderPassFunctionList funcs{};
   funcs.init = AllocateArray<RenderPassFuncInit>(allocator, render_pass_num);
@@ -359,6 +409,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       frame_loop_num = 5;
     }
     AddSystemBuffers(&json);
+    AddSystemBarriers(&json);
     ParseRenderGraphJson(json, &allocator, &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
     CHECK_UNARY(command_list_set.Init(device.Get(),
