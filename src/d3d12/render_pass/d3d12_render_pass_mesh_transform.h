@@ -6,17 +6,27 @@ class RenderPassMeshTransform {
  public:
   struct Param {
     uint32_t stencil_val{};
-    bool clear_depth{false};
+    uint32_t rtv_index{};
+    uint32_t rtv_num{};
     uint32_t dsv_index{};
+    bool clear_depth{false};
   };
   static void* Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
     auto param = Allocate<Param>(args->allocator);
     *param = {};
     param->stencil_val = GetNum(*args->json, "stencil_val", 0);
+    param->rtv_index = ~0U;
+    param->rtv_num = 0;
+    param->dsv_index = ~0U;
     for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
-      if (args->render_pass_list[render_pass_index].buffer_list[i].state == ResourceStateType::kDsvWrite) {
+      if (args->render_pass_list[render_pass_index].buffer_list[i].state == ResourceStateType::kRtv) {
+        if (param->rtv_index == ~0U) {
+          param->rtv_index = i;
+        }
+        param->rtv_num++;
+      }
+      if (param->dsv_index == ~0U && args->render_pass_list[render_pass_index].buffer_list[i].state == ResourceStateType::kDsvWrite) {
         param->dsv_index = i;
-        break;
       }
     }
     param->clear_depth = GetBool(*args->json, "clear_depth", false);
@@ -25,9 +35,10 @@ class RenderPassMeshTransform {
   static auto Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
     auto command_list = args_per_pass->command_list;
     auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
-    const auto& dsv_handle = args_per_pass->cpu_handles[pass_vars->dsv_index];
+    const auto rtv_handle = pass_vars->rtv_num == 0 ? nullptr : &args_per_pass->cpu_handles[pass_vars->rtv_index];
+    const auto dsv_handle = &args_per_pass->cpu_handles[pass_vars->dsv_index];
     if (pass_vars->clear_depth) {
-      command_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+      command_list->ClearDepthStencilView(*dsv_handle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
     }
     auto& width = args_common->main_buffer_size->primarybuffer.width;
     auto& height = args_common->main_buffer_size->primarybuffer.height;
@@ -42,7 +53,7 @@ class RenderPassMeshTransform {
     command_list->SetGraphicsRootSignature(GetRenderPassRootSig(args_common, args_per_pass));
     command_list->SetPipelineState(GetRenderPassPso(args_common, args_per_pass));
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list->OMSetRenderTargets(0, nullptr, true, &dsv_handle);
+    command_list->OMSetRenderTargets(pass_vars->rtv_num, rtv_handle, true, dsv_handle);
     command_list->OMSetStencilRef(pass_vars->stencil_val);
     command_list->SetGraphicsRootDescriptorTable(1, args_per_pass->gpu_handles[0]);
     const auto scene_data = args_common->scene_data;
