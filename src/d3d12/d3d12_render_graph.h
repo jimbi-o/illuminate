@@ -42,6 +42,7 @@ struct Barrier {
 };
 struct RenderPass {
   StrHash name{};
+  StrHash type{};
   bool enabled{false};
   uint32_t index{~0U};
   uint32_t command_queue_index{0};

@@ -41,6 +41,9 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j) {
   if (format_str.compare("R32G32B32_FLOAT") == 0) {
     return DXGI_FORMAT_R32G32B32_FLOAT;
   }
+  if (format_str.compare("R32G32B32A32_FLOAT") == 0) {
+    return DXGI_FORMAT_R32G32B32A32_FLOAT;
+  }
   if (format_str.compare("R32_UINT") == 0) {
     return DXGI_FORMAT_R32_UINT;
   }

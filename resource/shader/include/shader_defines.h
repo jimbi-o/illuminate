@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_SHADER_DEFINES_H
-#define ILLUMINATE_SHADER_DEFINES_H
+#ifndef ILLUMINATE_RESOURCE_SHADER_SHADER_DEFINE_H
+#define ILLUMINATE_RESOURCE_SHADER_SHADER_DEFINE_H
 #ifdef __cplusplus
 namespace illuminate::shader {
 #endif

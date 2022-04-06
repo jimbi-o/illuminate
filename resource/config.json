@@ -331,12 +331,14 @@
   "render_pass": [
     {
       "name": "copy resource",
+      "type": "copy resource",
       "enabled": true,
       "command_queue": "queue_copy",
       "execute": true
     },
     {
       "name": "dispatch cs",
+      "type": "dispatch cs",
       "enabled": true,
       "command_queue": "queue_compute",
       "wait_pass": ["output to swapchain", "debug buffer"],
@@ -355,6 +357,7 @@
     },
     {
       "name": "prez",
+      "type": "prez",
       "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["copy resource"],
@@ -380,6 +383,7 @@
     },
     {
       "name": "pingpong-a",
+      "type": "postprocess",
       "enabled": true,
       "command_queue": "queue_graphics",
       "buffer_list": [
@@ -397,6 +401,7 @@
     },
     {
       "name": "pingpong-b",
+      "type": "postprocess",
       "enabled": true,
       "command_queue": "queue_graphics",
       "buffer_list": [
@@ -419,6 +424,7 @@
     },
     {
       "name": "pingpong-c",
+      "type": "postprocess",
       "enabled": true,
       "command_queue": "queue_graphics",
       "buffer_list": [
@@ -441,6 +447,7 @@
     },
     {
       "name": "output to swapchain",
+      "type": "postprocess",
       "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
@@ -480,6 +487,7 @@
     },
     {
       "name": "debug buffer",
+      "type": "debug buffer",
       "enabled": false,
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
@@ -504,6 +512,7 @@
     },
     {
       "name": "imgui",
+      "type": "imgui",
       "enabled": true,
       "command_queue": "queue_graphics",
       "execute": true,

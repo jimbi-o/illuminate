@@ -1,4 +1,4 @@
-#include "shader/include/postprocess.hlsli"
+#include "shader/postprocess/postprocess.hlsli"
 uint src_index : register(b0);
 Texture2D src[] : register(t0);
 SamplerState tex_sampler : register(s0);

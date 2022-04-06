@@ -71,24 +71,6 @@ auto AddSystemBuffers(nlohmann::json* json) {
     buffer_list.push_back(s);
   }
 }
-void UpdatePingpongA(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  float c[4]{0.0f,1.0f,1.0f,1.0f};
-  args_per_pass->ptr = c;
-  args_per_pass->ptr_size = GetUint32(sizeof(float)) * 4;
-  RenderPassPostprocess::Update(args_common, args_per_pass);
-}
-void UpdatePingpongB(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  float c[4]{1.0f,0.0f,1.0f,1.0f};
-  args_per_pass->ptr = c;
-  args_per_pass->ptr_size = GetUint32(sizeof(float)) * 4;
-  RenderPassPostprocess::Update(args_common, args_per_pass);
-}
-void UpdatePingpongC(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  float c[4]{1.0f,1.0f,1.0f,1.0f};
-  args_per_pass->ptr = c;
-  args_per_pass->ptr_size = GetUint32(sizeof(float)) * 4;
-  RenderPassPostprocess::Update(args_common, args_per_pass);
-}
 auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
   RenderPassFunctionList funcs{};
   funcs.init = AllocateArray<RenderPassFuncInit>(allocator, render_pass_num);
@@ -102,40 +84,30 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
     funcs.update[i] = nullptr;
     funcs.is_render_needed[i] = nullptr;
     funcs.render[i] = nullptr;
-    switch (render_pass_list[i].name) {
-      case SID("dispatch cs"): {
-        funcs.init[i] = RenderPassCsDispatch::Init;
-        funcs.render[i] = RenderPassCsDispatch::Render;
-        break;
-      }
+    switch (render_pass_list[i].type) {
       case SID("prez"): {
         funcs.init[i] = RenderPassPrez::Init;
         funcs.render[i] = RenderPassPrez::Render;
         break;
       }
-      case SID("pingpong-a"):
-      case SID("pingpong-b"):
-      case SID("pingpong-c"):
-      case SID("output to swapchain"): {
+      case SID("dispatch cs"): {
+        funcs.init[i] = RenderPassCsDispatch::Init;
+        funcs.render[i] = RenderPassCsDispatch::Render;
+        break;
+      }
+      case SID("copy resource"): {
+        funcs.init[i] = RenderPassCopyResource::Init;
+        funcs.update[i] = RenderPassCopyResource::Update;
+        funcs.is_render_needed[i] = RenderPassCopyResource::IsRenderNeeded;
+        funcs.render[i] = RenderPassCopyResource::Render;
+        break;
+      }
+      case SID("brdf forward"): {
+        break;
+      }
+      case SID("postprocess"): {
         funcs.init[i] = RenderPassPostprocess::Init;
-        switch (render_pass_list[i].name) {
-          case SID("pingpong-a"): {
-            funcs.update[i] = UpdatePingpongA;
-            break;
-          }
-          case SID("pingpong-b"): {
-            funcs.update[i] = UpdatePingpongB;
-            break;
-          }
-          case SID("pingpong-c"): {
-            funcs.update[i] = UpdatePingpongC;
-            break;
-          }
-          case SID("output to swapchain"): {
-            funcs.update[i] = RenderPassPostprocess::Update;
-            break;
-          }
-        }
+        funcs.update[i] = RenderPassPostprocess::Update;
         funcs.render[i] = RenderPassPostprocess::Render;
         break;
       }
@@ -146,29 +118,14 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         funcs.render[i] = RenderPassImgui::Render;
         break;
       }
-      case SID("copy resource"): {
-        funcs.init[i] = RenderPassCopyResource::Init;
-        funcs.update[i] = RenderPassCopyResource::Update;
-        funcs.is_render_needed[i] = RenderPassCopyResource::IsRenderNeeded;
-        funcs.render[i] = RenderPassCopyResource::Render;
-        break;
-      }
       case SID("debug buffer"): {
         funcs.init[i] = RenderPassDebugRenderSelectedBuffer::Init;
         funcs.render[i] = RenderPassDebugRenderSelectedBuffer::Render;
         break;
       }
-      case SID("clear uav"): {
-        funcs.render[i] = RenderPassClearUav;
-        break;
-      }
-      case SID("copy to swapchain"): {
-        funcs.render[i] = RenderPassCopyResource;
-        break;
-      }
       default: {
-        logerror("render pass function not registered. {}", render_pass_list[i].name);
-        assert(false && "render pass function not registered.");
+        logerror("render pass function type not registered. {}", render_pass_list[i].type);
+        assert(false && "render pass function type not registered.");
         break;
       }
     }

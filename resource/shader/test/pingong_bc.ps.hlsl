@@ -1,4 +1,4 @@
-#include "shader/include/postprocess.hlsli"
+#include "shader/postprocess/postprocess.hlsli"
 float4 cbv_color : register(b0);
 Texture2D src : register(t0);
 SamplerState tex_sampler : register(s0);

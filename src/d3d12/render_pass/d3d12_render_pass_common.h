@@ -50,8 +50,6 @@ struct RenderPassFuncArgsRenderPerPass {
   const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles{nullptr};
   ID3D12Resource** resources{nullptr};
   uint32_t render_pass_index{};
-  void* ptr{nullptr};
-  uint32_t ptr_size{0};
 };
 using RenderPassFuncInit = void* (*)(RenderPassFuncArgsInit* args, const uint32_t render_pass_index);
 using RenderPassFuncTerm = void (*)(void);

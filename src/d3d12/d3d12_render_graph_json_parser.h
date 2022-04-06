@@ -105,6 +105,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       auto& dst_pass = r.render_pass_list[i];
       auto& src_pass = render_pass_list[i];
       dst_pass.name = CalcEntityStrHash(src_pass, "name");
+      dst_pass.type = CalcEntityStrHash(src_pass, "type");
       dst_pass.enabled = GetBool(src_pass, "enabled", true);
       dst_pass.index = i;
       dst_pass.command_queue_index = FindIndex(src_pass, "command_queue", r.command_queue_num, r.command_queue_name);
