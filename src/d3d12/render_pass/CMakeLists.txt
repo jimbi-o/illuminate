@@ -3,11 +3,15 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_render_pass_common.h
   d3d12_render_pass_common.cpp
   d3d12_render_pass_cs_dispatch.h
+  d3d12_render_pass_cs_dispatch.cpp
   d3d12_render_pass_imgui.h
   d3d12_render_pass_imgui.cpp
   d3d12_render_pass_postprocess.h
   d3d12_render_pass_postprocess.cpp
   d3d12_render_pass_copy_resource.h
+  d3d12_render_pass_copy_resource.cpp
   d3d12_render_pass_debug_render_selected_buffer.h
+  d3d12_render_pass_debug_render_selected_buffer.cpp
   d3d12_render_pass_mesh_transform.h
+  d3d12_render_pass_mesh_transform.cpp
 )

@@ -1,5 +1,30 @@
 #include "d3d12_render_pass_postprocess.h"
 namespace illuminate {
+namespace {
+struct Param {
+  BufferSizeRelativeness size_type{BufferSizeRelativeness::kPrimaryBufferRelative};
+  uint32_t rtv_index{0};
+  bool use_views{true};
+  bool use_sampler{true};
+  void** cbv_ptr{nullptr};
+  uint32_t cbv_size{0};
+};
+auto UpdatePingpongA(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
+  float c[4]{0.0f,1.0f,1.0f,1.0f};
+  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
+}
+auto UpdatePingpongB(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
+  float c[4]{1.0f,0.0f,1.0f,1.0f};
+  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
+}
+auto UpdatePingpongC(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
+  float c[4]{1.0f,1.0f,1.0f,1.0f};
+  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
+}
+} // namespace anonymous
 void* RenderPassPostprocess::Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
   auto param = Allocate<Param>(args->allocator);
   *param = {};
@@ -35,23 +60,6 @@ void* RenderPassPostprocess::Init(RenderPassFuncArgsInit* args, const uint32_t r
   param->use_sampler = args->render_pass_list[render_pass_index].sampler_num > 0;
   return param;
 }
-namespace {
-auto UpdatePingpongA(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  auto pass_vars = static_cast<const RenderPassPostprocess::Param*>(args_per_pass->pass_vars_ptr);
-  float c[4]{0.0f,1.0f,1.0f,1.0f};
-  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
-}
-auto UpdatePingpongB(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  auto pass_vars = static_cast<const RenderPassPostprocess::Param*>(args_per_pass->pass_vars_ptr);
-  float c[4]{1.0f,0.0f,1.0f,1.0f};
-  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
-}
-auto UpdatePingpongC(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  auto pass_vars = static_cast<const RenderPassPostprocess::Param*>(args_per_pass->pass_vars_ptr);
-  float c[4]{1.0f,1.0f,1.0f,1.0f};
-  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
-}
-} // namespace anonymous
 void RenderPassPostprocess::Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   switch (GetRenderPass(args_common, args_per_pass).name) {
     case SID("pingpong-a"): {
