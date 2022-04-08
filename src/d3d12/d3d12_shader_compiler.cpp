@@ -498,6 +498,16 @@ void PsoRootsigManager::Term() {
     FreeLibrary(library_);
   }
 }
+uint32_t CreateMaterialStrHashList(const nlohmann::json& material_json, StrHash** hash_list_ptr, MemoryAllocationJanitor* allocator) {
+  const auto& json_pso_list = material_json.at("pso");
+  const auto pso_num = GetUint32(json_pso_list.size());
+  auto hash_list = AllocateArray<StrHash>(allocator, pso_num);
+  for (uint32_t i = 0; i < pso_num; i++) {
+    hash_list[i] = CalcEntityStrHash(json_pso_list[i], "name");
+  }
+  *hash_list_ptr = hash_list;
+  return pso_num;
+}
 } // namespace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_device.h"

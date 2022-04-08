@@ -11,6 +11,9 @@ inline auto GetStringView(const nlohmann::json& j) {
 inline auto GetStringView(const nlohmann::json& j, const char* const name) {
   return j.at(name).get<std::string_view>();
 }
+inline auto CalcEntityStrHash(const nlohmann::json& j) {
+  return CalcStrHash(GetStringView(j).data());
+}
 inline auto CalcEntityStrHash(const nlohmann::json& j, const char* const name) {
   if (!j.contains(name)) { return StrHash{}; }
   return CalcStrHash(GetStringView(j, name).data());

@@ -25,5 +25,6 @@ class PsoRootsigManager {
   ID3D12PipelineState** pso_list_{nullptr};
   uint32_t* rootsig_pso_map_{nullptr};
 };
+uint32_t CreateMaterialStrHashList(const nlohmann::json& material_json, StrHash** hash_list_ptr, MemoryAllocationJanitor* allocator);
 }
 #endif

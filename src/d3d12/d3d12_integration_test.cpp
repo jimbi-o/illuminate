@@ -385,11 +385,16 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
   uint32_t transform_buffer_allocation_index{kInvalidIndex};
   uint32_t scene_cbv_buffer_config_index{kInvalidIndex};
+  uint32_t material_num{0};
+  StrHash* material_str_hash_list{nullptr};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
   char** render_pass_name{nullptr};
 #endif
   auto frame_loop_num = kFrameLoopNum;
   {
+    auto material_json = GetTestJson("material.json");
+    CHECK_UNARY(pso_rootsig_manager.Init(material_json, device.Get(), &allocator));
+    material_num = CreateMaterialStrHashList(material_json, &material_str_hash_list, &allocator);
     nlohmann::json json;
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
@@ -401,7 +406,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     AddSystemBuffers(&json);
     AddSystemBarriers(&json);
-    ParseRenderGraphJson(json, &allocator, &render_graph);
+    ParseRenderGraphJson(json, material_num, material_str_hash_list, &allocator, &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
     CHECK_UNARY(command_list_set.Init(device.Get(),
                                       render_graph.command_queue_num,
@@ -468,11 +473,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       device.Get()->CreateSampler(&render_graph.sampler_list[i], cpu_handler);
     }
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view, render_graph.gpu_handle_num_sampler));
-    if (json.contains("material")) {
-      CHECK_UNARY(pso_rootsig_manager.Init(json.at("material"), device.Get(), &allocator));
-    } else {
-      loginfo("no material node in render graph config");
-    }
     render_pass_vars = AllocateArray<void*>(&allocator, render_graph.render_pass_num);
     render_pass_name = AllocateArray<char*>(&allocator, render_graph.render_pass_num);
     for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {

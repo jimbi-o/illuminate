@@ -11,7 +11,7 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* buffer_config);
 void GetSamplerConfig(const nlohmann::json& j, D3D12_SAMPLER_DESC* sampler_desc);
 void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, const uint32_t barrier_num, Barrier* barrier_list);
 template <typename A>
-void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* graph) {
+void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, A* allocator, RenderGraph* graph) {
   auto& r = *graph;
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
   r.primarybuffer_width = GetNum(j, "primarybuffer_width", 1);
@@ -145,16 +145,18 @@ void ParseRenderGraphJson(const nlohmann::json& j, A* allocator, RenderGraph* gr
       } // sampler
       if (src_pass.contains("material")) {
         auto& material = src_pass.at("material");
-        auto& material_config = j.at("material").at("pso");
         const auto num = GetUint32(material.size());
         dst_pass.material_list = AllocateArray<uint32_t>(allocator, num);
         for (uint32_t m = 0; m < num; m++) {
-          for (uint32_t n = 0; n < material_config.size(); n++) {
-            if (material[m] == material_config[n].at("name")) {
+          dst_pass.material_list[m] = ~0U;
+          const auto hash = CalcEntityStrHash(material[m]);
+          for (uint32_t n = 0; n < material_num; n++) {
+            if (hash == material_hash_list[n]) {
               dst_pass.material_list[m] = n;
               break;
             }
           }
+          assert(dst_pass.material_list[m] != ~0U);
         }
       } // material
       if (src_pass.contains("prepass_barrier")) {

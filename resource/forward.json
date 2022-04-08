@@ -101,104 +101,6 @@
       "max_lod": 65535
     }
   ],
-  "material": {
-    "compile_default": {
-      "target_ps": "ps_6_5",
-      "target_vs": "vs_6_5",
-      "target_gs": "gs_6_5",
-      "target_hs": "hs_6_5",
-      "target_ds": "ds_6_5",
-      "target_cs": "cs_6_5",
-      "target_lib": "lib_6_5",
-      "target_ms": "ms_6_5",
-      "target_as": "as_6_5"
-    },
-    "compile_unit": [
-      {
-        "name": "compile unit transform",
-        "filename": "shader/mesh_transform/mesh_transform.vs.hlsl",
-        "target": "vs",
-        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-      },
-      {
-        "name": "compile unit brdf forward",
-        "filename": "shader/brdf/brdf_forward.ps.hlsl",
-        "target": "ps",
-        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-      },
-      {
-        "name": "compile unit fullscreen triangle",
-        "filename": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-        "target": "vs",
-        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-      },
-      {
-        "name": "compile unit oetf",
-        "filename": "shader/postprocess/oetf.ps.hlsl",
-        "target": "ps",
-        "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-      }
-    ],
-    "rootsig": [
-      {
-        "name": "rootsig forward",
-        "unit_name": "compile unit brdf forward"
-      },
-      {
-        "name": "rootsig oetf",
-        "unit_name": "compile unit oetf"
-      }
-    ],
-    "pso": [
-      {
-        "name": "pso forward",
-        "rootsig": "rootsig forward",
-        "unit_list": ["compile unit transform", "compile unit brdf forward"],
-        "input_element": [
-          {
-            "name": "POSITION",
-            "index": 0,
-            "format": "R32G32B32_FLOAT",
-            "slot": 0,
-            "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
-            "slot_class": "PER_VERTEX_DATA",
-            "instance_data_step_rate": 0
-          },
-          {
-            "name": "NORMAL",
-            "index": 0,
-            "format": "R32G32B32_FLOAT",
-            "slot": 0,
-            "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
-            "slot_class": "PER_VERTEX_DATA",
-            "instance_data_step_rate": 0
-          },
-          {
-            "name": "TANGENT",
-            "index": 0,
-            "format": "R32G32B32A32_FLOAT",
-            "slot": 0,
-            "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
-            "slot_class": "PER_VERTEX_DATA",
-            "instance_data_step_rate": 0
-          }
-        ],
-        "render_target_formats": ["R8G8B8A8_UNORM"],
-        "depth_stencil": {
-          "format": "D24_UNORM_S8_UINT"
-        }
-      },
-      {
-        "name": "pso oetf",
-        "rootsig": "rootsig oetf",
-        "unit_list": ["compile unit fullscreen triangle", "compile unit oetf"],
-        "render_target_formats": ["R8G8B8A8_UNORM"],
-        "depth_stencil": {
-          "depth_enable": false
-        }
-      }
-    ]
-  },
   "render_pass": [
     {
       "name": "copy resource",
@@ -232,7 +134,7 @@
           "state": "dsv_write"
         }
       ],
-      "material": ["pso forward"],
+      "material": ["pso brdf forward"],
       "pass_vars": {
         "clear_depth": true,
         "stencil_val": 255
