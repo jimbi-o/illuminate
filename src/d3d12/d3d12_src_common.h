@@ -18,10 +18,6 @@ inline auto CopyStrToWstrContainer(const std::string_view src, MemoryAllocationJ
   CopyStrToWstrContainer(&dst, src, allocator);
   return dst;
 }
-template <typename N>
-uint32_t GetUint32(const N& n) {
-  return static_cast<uint32_t>(n);
-}
 // https://stackoverflow.com/questions/49454005/how-to-get-an-array-size-at-compile-time
 template<uint32_t N, class T>
 constexpr auto countof(T(&)[N]) { return N; }
