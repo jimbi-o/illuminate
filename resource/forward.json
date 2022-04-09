@@ -131,6 +131,23 @@
       ],
       "material": ["oetf"],
       "sampler": ["bilinear"]
+    },
+    {
+      "name": "imgui",
+      "type": "imgui",
+      "enabled": true,
+      "command_queue": "queue_graphics",
+      "execute": true,
+      "buffer_list": [
+        {
+          "name": "imgui_font",
+          "state": "srv_ps"
+        },
+        {
+          "name": "swapchain",
+          "state": "rtv"
+        }
+      ]
     }
   ]
 }
