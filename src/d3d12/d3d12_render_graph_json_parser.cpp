@@ -61,6 +61,9 @@ D3D12_TEXTURE_LAYOUT GetTextureLayout(const nlohmann::json& j, const char* entit
   return D3D12_TEXTURE_LAYOUT_UNKNOWN;
 }
 auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) {
+  if (!j.contains(name)) {
+    return BufferSizeRelativeness::kPrimaryBufferRelative;
+  }
   auto str = GetStringView(j, name);
   if (str.compare("swapchain_relative") == 0) {
     return BufferSizeRelativeness::kSwapchainRelative;
@@ -91,19 +94,16 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
       config->descriptor_type_flags |= ConvertToDescriptorTypeFlag(GetDescriptorType(d));
     }
   }
-  if (j.contains("descriptor_only") && j.at("descriptor_only") == true) {
-    config->descriptor_only = true;
-    return;
-  }
-  config->descriptor_only = false;
+  config->descriptor_only = GetBool(j, "descriptor_only", false);
+  if (config->descriptor_only) { return; }
   config->heap_type = GetHeapType(j, "heap_type");
   config->dimension = GetDimension(j, "dimension");
   config->size_type = GetBufferSizeRelativeness(j, "size_type");
-  config->width = j.at("width");
+  config->width = GetFloat(j, "width", 1.0f);
   config->height = GetFloat(j, "height", 1.0f);
   config->depth_or_array_size = GetVal<uint16_t>(j, "depth_or_array_size", 1);
   config->miplevels = GetVal<uint16_t>(j, "miplevels", 1);
-  config->format = GetDxgiFormat(j, "format");
+  config->format = j.contains("format") ? GetDxgiFormat(j, "format") : DXGI_FORMAT_R8G8B8A8_UNORM;
   config->sample_count = GetNum(j, "sample_count", 1);
   config->sample_quality = GetNum(j, "sample_quality", 0);
   config->layout = GetTextureLayout(j, "layout");
@@ -116,6 +116,7 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->mip_depth = GetNum(j, "mip_depth", 0);
   config->initial_state = GetResourceStateType(j, "initial_state");
   config->clear_value.Format = config->format;
+  // clear color/depth/stencil are set later.
 }
 D3D12_FILTER_TYPE GetFilterType(const nlohmann::json& j, const char* const name) {
   if (!j.contains(name)) { return D3D12_FILTER_TYPE_POINT; }
