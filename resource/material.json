@@ -1,152 +1,86 @@
 {
-  "compile_default": {
-    "target_ps": "ps_6_5",
-    "target_vs": "vs_6_5",
-    "target_gs": "gs_6_5",
-    "target_hs": "hs_6_5",
-    "target_ds": "ds_6_5",
-    "target_cs": "cs_6_5",
-    "target_lib": "lib_6_5",
-    "target_ms": "ms_6_5",
-    "target_as": "as_6_5"
+  "common_settings": {
+    "ps": "ps_6_5",
+    "vs": "vs_6_5",
+    "gs": "gs_6_5",
+    "hs": "hs_6_5",
+    "ds": "ds_6_5",
+    "cs": "cs_6_5",
+    "lib": "lib_6_5",
+    "ms": "ms_6_5",
+    "as": "as_6_5",
+    "entry": "main",
+    "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
   },
-  "compile_unit": [
+  "materials": [
     {
-      "name": "compile unit dispatch cs",
-      "filename": "shader/test/dispatch.cs.hlsl",
-      "target": "cs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+      "name": "dispatch cs",
+      "shaders": [
+        {
+          "file": "shader/test/dispatch.cs.hlsl",
+          "target": "cs"
+        }
+      ]
     },
     {
-      "name": "compile unit prez",
-      "filename": "shader/test/prez.vs.hlsl",
-      "target": "vs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit output to swapchain ps",
-      "filename": "shader/test/output_to_swapchain.vs.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit pingpong-a ps",
-      "filename": "shader/test/pingong_a.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit pingpong-bc ps",
-      "filename": "shader/test/pingong_bc.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit render selected buffer",
-      "filename": "shader/test/render_selected_buffer.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit mesh transform",
-      "filename": "shader/mesh_transform/mesh_transform.vs.hlsl",
-      "target": "vs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit brdf forward",
-      "filename": "shader/brdf/brdf_forward.ps.hlsl",
-      "target": "ps",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit fullscreen triangle",
-      "filename": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-      "target": "vs",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    },
-    {
-      "name": "compile unit oetf",
-      "filename": "shader/postprocess/oetf.ps.hlsl",
-      "target": "ps",
-      "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
-    }
-  ],
-  "rootsig": [
-    {
-      "name": "rootsig dispatch cs",
-      "unit_name": "compile unit dispatch cs"
-    },
-    {
-      "name": "rootsig output to swapchain",
-      "unit_name": "compile unit output to swapchain ps"
-    },
-    {
-      "name": "rootsig pingpong-a",
-      "unit_name": "compile unit pingpong-a ps"
-    },
-    {
-      "name": "rootsig pingpong-bc",
-      "unit_name": "compile unit pingpong-bc ps"
-    },
-    {
-      "name": "rootsig prez",
-      "unit_name": "compile unit prez"
-    },
-    {
-      "name": "rootsig render selected buffer",
-      "unit_name": "compile unit render selected buffer"
-    },
-    {
-      "name": "rootsig brdf forward",
-      "unit_name": "compile unit brdf forward"
-    },
-    {
-      "name": "rootsig oetf",
-      "unit_name": "compile unit oetf"
-    }
-  ],
-  "pso": [
-    {
-      "name": "pso dispatch cs",
-      "rootsig": "rootsig dispatch cs",
-      "unit_list": ["compile unit dispatch cs"]
-    },
-    {
-      "name": "pso output to swapchain",
-      "rootsig": "rootsig output to swapchain",
-      "unit_list": ["compile unit fullscreen triangle", "compile unit output to swapchain ps"],
+      "name": "output to swapchain",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
-      }
+      },
+      "shaders": [
+        {
+          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+          "target": "vs"
+        },
+        {
+          "file": "shader/test/output_to_swapchain.vs.ps.hlsl",
+          "target": "ps",
+          "entry": "MainPs",
+          "has_rootsignature": true
+        }
+      ]
     },
     {
-      "name": "pso pingpong-a",
-      "rootsig": "rootsig pingpong-a",
-      "unit_list": ["compile unit fullscreen triangle", "compile unit pingpong-a ps"],
+      "name": "pingpong-a",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
-      }
+      },
+      "shaders": [
+        {
+          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+          "target": "vs"
+        },
+        {
+          "file": "shader/test/pingong_a.ps.hlsl",
+          "target": "ps",
+          "entry": "MainPs",
+          "has_rootsignature": true
+        }
+      ]
     },
     {
-      "name": "pso pingpong-bc",
-      "rootsig": "rootsig pingpong-bc",
-      "unit_list": ["compile unit fullscreen triangle", "compile unit pingpong-bc ps"],
+      "name": "pingpong-bc",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
-      }
+      },
+      "shaders": [
+        {
+          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+          "target": "vs"
+        },
+        {
+          "file": "shader/test/pingong_bc.ps.hlsl",
+          "target": "ps",
+          "entry": "MainPs",
+          "has_rootsignature": true
+        }
+      ]
     },
     {
-      "name": "pso prez",
-      "rootsig": "rootsig prez",
-      "unit_list": ["compile unit prez"],
+      "name": "prez",
       "input_element": [
         {
           "name": "POSITION",
@@ -160,21 +94,35 @@
       ],
       "depth_stencil": {
         "format": "D24_UNORM_S8_UINT"
-      }
+      },
+      "shaders": [
+        {
+          "file": "shader/test/prez.vs.hlsl",
+          "target": "vs"
+        }
+      ]
     },
     {
-      "name": "pso render selected buffer",
-      "rootsig": "rootsig render selected buffer",
-      "unit_list": ["compile unit fullscreen triangle", "compile unit render selected buffer"],
+      "name": "render selected buffer",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
-      }
+      },
+      "shaders": [
+        {
+          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+          "target": "vs"
+        },
+        {
+          "file": "shader/test/render_selected_buffer.ps.hlsl",
+          "target": "ps",
+          "entry": "MainPs",
+          "has_rootsignature": true
+        }
+      ]
     },
     {
-      "name": "pso brdf forward",
-      "rootsig": "rootsig brdf forward",
-      "unit_list": ["compile unit mesh transform", "compile unit brdf forward"],
+      "name": "brdf forward",
       "input_element": [
         {
           "name": "POSITION",
@@ -207,16 +155,37 @@
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "format": "D24_UNORM_S8_UINT"
-      }
+      },
+      "shaders": [
+        {
+          "file": "shader/mesh_transform/mesh_transform.vs.hlsl",
+          "target": "vs"
+        },
+        {
+          "file": "shader/brdf/brdf_forward.ps.hlsl",
+          "target": "ps",
+          "has_rootsignature": true
+        }
+      ]
     },
     {
-      "name": "pso oetf",
-      "rootsig": "rootsig oetf",
+      "name": "oetf",
       "unit_list": ["compile unit fullscreen triangle", "compile unit oetf"],
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
-      }
+      },
+      "shaders": [
+        {
+          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+          "target": "vs"
+        },
+        {
+          "file": "shader/postprocess/oetf.ps.hlsl",
+          "target": "ps",
+          "has_rootsignature": true
+        }
+      ]
     }
   ]
 }

@@ -107,7 +107,7 @@
           "state": "dsv_write"
         }
       ],
-      "material": ["pso brdf forward"],
+      "material": ["brdf forward"],
       "pass_vars": {
         "clear_depth": true,
         "stencil_val": 255
@@ -129,7 +129,7 @@
           "state": "rtv"
         }
       ],
-      "material": ["pso oetf"],
+      "material": ["oetf"],
       "sampler": ["bilinear"]
     }
   ]

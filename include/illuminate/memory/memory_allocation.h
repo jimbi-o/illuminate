@@ -4,6 +4,10 @@
 #include <cstddef>
 #include <memory>
 namespace illuminate {
+template <typename T>
+constexpr auto SucceedPtrWithStructSize(void* src) {
+  return reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(src) + sizeof(T));
+}
 static const size_t kDefaultAlignmentSize = 8;
 constexpr inline auto AlignAddress(const std::uintptr_t addr, const size_t align/*power of 2*/) {
   const auto mask = align - 1;
