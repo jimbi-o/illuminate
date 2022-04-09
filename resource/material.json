@@ -12,9 +12,56 @@
     "entry": "main",
     "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
   },
+  "rootsignatures": [
+    {
+      "name": "dispatch cs",
+      "file": "shader/test/dispatch.cs.hlsl",
+      "target": "cs"
+    },
+    {
+      "name": "output to swapchain",
+      "file": "shader/test/output_to_swapchain.vs.ps.hlsl",
+      "target": "ps",
+      "entry": "MainPs"
+    },
+    {
+      "name": "pingpong-a",
+      "file": "shader/test/pingong_a.ps.hlsl",
+      "target": "ps",
+      "entry": "MainPs"
+    },
+    {
+      "name": "pingpong-bc",
+      "file": "shader/test/pingong_bc.ps.hlsl",
+      "target": "ps",
+      "entry": "MainPs"
+    },
+    {
+      "name": "prez",
+      "file": "shader/test/prez.vs.hlsl",
+      "target": "vs"
+    },
+    {
+      "name": "render selected buffer",
+      "file": "shader/test/render_selected_buffer.ps.hlsl",
+      "target": "ps",
+      "entry": "MainPs"
+    },
+    {
+      "name": "brdf forward",
+      "file": "shader/brdf/brdf_forward.ps.hlsl",
+      "target": "ps"
+    },
+    {
+      "name": "postprocess",
+      "file": "shader/postprocess/oetf.ps.hlsl",
+      "target": "ps"
+    }
+  ],
   "materials": [
     {
       "name": "dispatch cs",
+      "rootsig": "dispatch cs",
       "shaders": [
         {
           "file": "shader/test/dispatch.cs.hlsl",
@@ -24,6 +71,7 @@
     },
     {
       "name": "output to swapchain",
+      "rootsig": "output to swapchain",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
@@ -36,13 +84,13 @@
         {
           "file": "shader/test/output_to_swapchain.vs.ps.hlsl",
           "target": "ps",
-          "entry": "MainPs",
-          "has_rootsignature": true
+          "entry": "MainPs"
         }
       ]
     },
     {
       "name": "pingpong-a",
+      "rootsig": "pingpong-a",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
@@ -55,13 +103,13 @@
         {
           "file": "shader/test/pingong_a.ps.hlsl",
           "target": "ps",
-          "entry": "MainPs",
-          "has_rootsignature": true
+          "entry": "MainPs"
         }
       ]
     },
     {
       "name": "pingpong-bc",
+      "rootsig": "pingpong-bc",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
@@ -74,13 +122,13 @@
         {
           "file": "shader/test/pingong_bc.ps.hlsl",
           "target": "ps",
-          "entry": "MainPs",
-          "has_rootsignature": true
+          "entry": "MainPs"
         }
       ]
     },
     {
       "name": "prez",
+      "rootsig": "prez",
       "input_element": [
         {
           "name": "POSITION",
@@ -104,6 +152,7 @@
     },
     {
       "name": "render selected buffer",
+      "rootsig": "render selected buffer",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
@@ -116,13 +165,13 @@
         {
           "file": "shader/test/render_selected_buffer.ps.hlsl",
           "target": "ps",
-          "entry": "MainPs",
-          "has_rootsignature": true
+          "entry": "MainPs"
         }
       ]
     },
     {
       "name": "brdf forward",
+      "rootsig": "brdf forward",
       "input_element": [
         {
           "name": "POSITION",
@@ -163,14 +212,13 @@
         },
         {
           "file": "shader/brdf/brdf_forward.ps.hlsl",
-          "target": "ps",
-          "has_rootsignature": true
+          "target": "ps"
         }
       ]
     },
     {
       "name": "oetf",
-      "unit_list": ["compile unit fullscreen triangle", "compile unit oetf"],
+      "rootsig": "postprocess",
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "depth_enable": false
@@ -182,8 +230,7 @@
         },
         {
           "file": "shader/postprocess/oetf.ps.hlsl",
-          "target": "ps",
-          "has_rootsignature": true
+          "target": "ps"
         }
       ]
     }

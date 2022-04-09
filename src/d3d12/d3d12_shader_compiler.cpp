@@ -129,7 +129,7 @@ IDxcResult* CompileShaderFile(IDxcUtils* utils, IDxcCompiler3* compiler, IDxcInc
   auto result = CompileShader(compiler, static_cast<uint32_t>(blob->GetBufferSize()), blob->GetBufferPointer(), compile_args_num, compile_args, include_handler);
   blob->Release();
   if (IsCompileSuccessful(result)) { return result; }
-  result->Release();
+  if (result) { result->Release(); }
   return nullptr;
 }
 auto ParseCompileArgs(const nlohmann::json& common_settings, const nlohmann::json& shader_setting, MemoryAllocationJanitor* allocator) {
@@ -331,47 +331,62 @@ auto CreatePsoDesc(const nlohmann::json& material_json, ID3D12RootSignature* roo
   assert(reinterpret_cast<std::uintptr_t>(ptr) == reinterpret_cast<std::uintptr_t>(head_ptr) + size);
   return std::make_pair(size, head_ptr);
 }
-void ParseRootsigAndPsoFromJson(const nlohmann::json& material_json, const nlohmann::json& common_settings,
-                                IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
-                                ID3D12RootSignature** rootsignature, ID3D12PipelineState** pso) {
+auto CreateRootsigFromJsonSetting(const nlohmann::json& common_settings, const nlohmann::json& rootsig_json,
+                                  IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device) {
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  const auto [args_num, args] = ParseCompileArgs(common_settings, rootsig_json, &tmp_allocator);
+  auto filename = CopyStrToWstrContainer(GetStringView(rootsig_json, "file"), &tmp_allocator);
+  auto compile_unit = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)args);
+  auto rootsig = CreateRootSignatureLocal(device, compile_unit);
+  SetD3d12Name(rootsig, GetStringView(rootsig_json, "name"));
+  compile_unit->Release();
+  return rootsig;
+}
+auto CreatePsoFromJsonSetting(const nlohmann::json& common_settings, const nlohmann::json& material_json, ID3D12RootSignature* rootsig,
+                              IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device) {
   const auto& shader_list = material_json.at("shaders");
   const auto shader_num = GetUint32(shader_list.size());
   auto allocator = GetTemporalMemoryAllocator();
   auto compile_unit_list = AllocateArray<IDxcResult*>(&allocator, shader_num);
   auto shader_object_list = AllocateArray<IDxcBlob*>(&allocator, shader_num);
-  uint32_t rootsig_index = shader_num - 1;
   for (uint32_t i = 0; i < shader_num; i++) {
     const auto& shader_setting = shader_list[i];
-    if (GetBool(shader_setting, "has_rootsignature", false)) {
-      rootsig_index = i;
-    }
     auto tmp_allocator = GetTemporalMemoryAllocator();
     const auto [args_num, args] = ParseCompileArgs(common_settings, shader_setting, &tmp_allocator);
     auto filename = CopyStrToWstrContainer(GetStringView(shader_setting, "file"), &tmp_allocator);
     compile_unit_list[i] = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)args);
     shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
   }
-  *rootsignature = CreateRootSignatureLocal(device, compile_unit_list[rootsig_index]);
-  const auto [desc_size, desc] = CreatePsoDesc(material_json, *rootsignature, shader_num, shader_object_list, &allocator);
-  *pso = CreatePipelineState(device, desc_size, desc);
-  // set instance name
-  const auto name = GetStringView(material_json, "name");
-  SetD3d12Name(*rootsignature, name);
-  SetD3d12Name(*pso, name);
+  const auto [desc_size, desc] = CreatePsoDesc(material_json, rootsig, shader_num, shader_object_list, &allocator);
+  auto pso = CreatePipelineState(device, desc_size, desc);
+  SetD3d12Name(pso, GetStringView(material_json, "name"));
   for (uint32_t i = 0; i < shader_num; i++) {
     shader_object_list[i]->Release();
     compile_unit_list[i]->Release();
   }
+  return pso;
 }
 void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
-               uint32_t* pso_num, ID3D12RootSignature*** rootsig_list, ID3D12PipelineState*** pso_list, MemoryAllocationJanitor* allocator) {
+               uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
+               uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** pso_index_to_rootsig_index_map,
+               MemoryAllocationJanitor* allocator) {
   const auto& common_settings = json.at("common_settings");
+  const auto& rootsig_json_list = json.at("rootsignatures");
+  *rootsig_num = GetUint32(rootsig_json_list.size());
+  *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, *rootsig_num);
+  for (uint32_t i = 0; i < *rootsig_num; i++) {
+    (*rootsig_list)[i] = CreateRootsigFromJsonSetting(common_settings, rootsig_json_list[i], compiler, include_handler, utils, device);
+  }
   const auto& material_json_list = json.at("materials");
   *pso_num = GetUint32(material_json_list.size());
-  *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, *pso_num);
+  *pso_index_to_rootsig_index_map = AllocateArray<uint32_t>(allocator, *pso_num);
   *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, *pso_num);
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  StrHash* rootsig_name_list{nullptr};
+  CreateJsonStrHashList(rootsig_json_list, "name", &rootsig_name_list, &tmp_allocator);
   for (uint32_t i = 0; i < *pso_num; i++) {
-    ParseRootsigAndPsoFromJson(material_json_list[i], common_settings, compiler, include_handler, utils, device, &(*rootsig_list)[i], &(*pso_list)[i]);
+    (*pso_index_to_rootsig_index_map)[i] = FindHashIndex(*rootsig_num, rootsig_name_list, CalcEntityStrHash(material_json_list[i], "rootsig"));
+    (*pso_list)[i] = CreatePsoFromJsonSetting(common_settings, material_json_list[i], (*rootsig_list)[(*pso_index_to_rootsig_index_map)[i]], compiler, include_handler, utils, device);
   }
 }
 } // anonymous namespace
@@ -384,14 +399,14 @@ bool PsoRootsigManager::Init(const nlohmann::json& material_json, D3d12Device* d
   if (compiler_ == nullptr) { return false; }
   include_handler_ = CreateDxcIncludeHandler(utils_);
   if (include_handler_ == nullptr) { return false; }
-  ParseJson(material_json, compiler_, include_handler_, utils_, device, &pso_num_, &rootsig_list_, &pso_list_, allocator);
+  ParseJson(material_json, compiler_, include_handler_, utils_, device, &rootsig_num_, &rootsig_list_, &pso_num_, &pso_list_, &pso_index_to_rootsig_index_map_, allocator);
   return true;
 }
 void PsoRootsigManager::Term() {
   for (uint32_t i = 0; i < pso_num_; i++) {
     pso_list_[i]->Release();
   }
-  for (uint32_t i = 0; i < pso_num_; i++) {
+  for (uint32_t i = 0; i < rootsig_num_; i++) {
     rootsig_list_[i]->Release();
   }
   if (include_handler_) {
@@ -408,14 +423,7 @@ void PsoRootsigManager::Term() {
   }
 }
 uint32_t CreateMaterialStrHashList(const nlohmann::json& material_json, StrHash** hash_list_ptr, MemoryAllocationJanitor* allocator) {
-  const auto& json_material_list = material_json.at("materials");
-  const auto material_num = GetUint32(json_material_list.size());
-  auto hash_list = AllocateArray<StrHash>(allocator, material_num);
-  for (uint32_t i = 0; i < material_num; i++) {
-    hash_list[i] = CalcEntityStrHash(json_material_list[i], "name");
-  }
-  *hash_list_ptr = hash_list;
-  return material_num;
+  return CreateJsonStrHashList(material_json.at("materials"), "name", hash_list_ptr, allocator);
 }
 } // namespace illuminate
 #include "doctest/doctest.h"

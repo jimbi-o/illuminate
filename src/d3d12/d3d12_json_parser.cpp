@@ -166,4 +166,13 @@ void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D
     clear_value->Color[i] = 0.0f;
   }
 }
+uint32_t CreateJsonStrHashList(const nlohmann::json& json, const char* const name, StrHash** hash_list_ptr, MemoryAllocationJanitor* allocator) {
+  const auto num = GetUint32(json.size());
+  auto hash_list = AllocateArray<StrHash>(allocator, num);
+  for (uint32_t i = 0; i < num; i++) {
+    hash_list[i] = CalcEntityStrHash(json[i], name);
+  }
+  *hash_list_ptr = hash_list;
+  return num;
+}
 }
