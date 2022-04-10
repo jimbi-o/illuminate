@@ -8,7 +8,7 @@ class DescriptorGpu;
 class PsoRootsigManager;
 struct BufferConfig;
 struct BufferList;
-struct ModelMaterialInfoList;
+struct MaterialCategoryList;
 struct RenderPass;
 struct SceneData;
 struct RenderPassFuncArgsInit {
@@ -45,6 +45,7 @@ struct RenderPassFuncArgsRenderCommon {
   DescriptorGpu* descriptor_gpu{nullptr};
   DescriptorCpu* descriptor_cpu{nullptr};
   const ResourceStateType*** resource_state_list{nullptr};
+  const MaterialCategoryList* material_category_list{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};

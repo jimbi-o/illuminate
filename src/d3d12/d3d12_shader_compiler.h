@@ -2,19 +2,19 @@
 #define ILLUMINATE_D3D12_SHADER_COMPILER_H
 #include "d3d12_header_common.h"
 #include "d3d12_memory_allocators.h"
-#include "illuminate/util/hash_map.h"
+#include "illuminate/core/strid.h"
 namespace illuminate {
 class PsoRootsigManager {
  public:
   bool Init(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator);
   void Term();
-  constexpr auto GetRootsigIndex(const uint32_t pso_index) {
+  constexpr auto GetRootsigIndex(const uint32_t pso_index) const {
     return pso_index_to_rootsig_index_map_[pso_index];
   }
-  constexpr auto GetRootsig(const uint32_t pso_index) {
+  constexpr auto GetRootsig(const uint32_t pso_index) const {
     return rootsig_list_[GetRootsigIndex(pso_index)];
   }
-  constexpr auto GetPso(const uint32_t pso_index) {
+  constexpr auto GetPso(const uint32_t pso_index) const {
     return pso_list_[pso_index];
   }
  private:

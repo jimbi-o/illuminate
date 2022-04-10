@@ -8,6 +8,7 @@
 #include "d3d12_device.h"
 #include "d3d12_dxgi_core.h"
 #include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_material_category.h"
 #include "d3d12_render_graph_json_parser.h"
 #include "d3d12_scene.h"
 #include "d3d12_shader_compiler.h"
@@ -388,6 +389,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t scene_cbv_buffer_config_index{kInvalidIndex};
   uint32_t material_num{0};
   StrHash* material_str_hash_list{nullptr};
+  MaterialCategoryList* material_category_list{nullptr};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
   char** render_pass_name{nullptr};
 #endif
@@ -396,6 +398,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     auto material_json = GetTestJson("material.json");
     CHECK_UNARY(pso_rootsig_manager.Init(material_json, device.Get(), &allocator));
     material_num = CreateMaterialStrHashList(material_json, &material_str_hash_list, &allocator);
+    CreateMaterialCategoryList(material_json, GetTestJson("material_category.json"), &allocator, material_category_list);
     nlohmann::json json;
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
@@ -562,6 +565,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .descriptor_gpu = &descriptor_gpu,
       .descriptor_cpu = &descriptor_cpu,
       .resource_state_list = resource_state_list,
+      .material_category_list = material_category_list,
     };
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       if (!render_pass_enable_flag[k]) { continue; }
