@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_VIEW_UTIL_H
-#define ILLUMINATE_VIEW_UTIL_H
+#ifndef ILLUMINATE_D3D12_VIEW_UTIL_H
+#define ILLUMINATE_D3D12_VIEW_UTIL_H
 #include "d3d12_header_common.h"
 namespace illuminate {
 struct BufferConfig;

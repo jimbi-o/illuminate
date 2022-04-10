@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_WIN32_H
-#define ILLUMINATE_WIN32_H
+#ifndef ILLUMINATE_D3D12_WIN32_H
+#define ILLUMINATE_D3D12_WIN32_H
 #include <cstdint>
 #include <string>
 #include <functional>
