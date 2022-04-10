@@ -10,7 +10,7 @@ class RenderPassImgui {
   static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index);
   static void Term();
   static void Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
-  static void Render([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
+  static void Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
  private:
   RenderPassImgui() = delete;
 };

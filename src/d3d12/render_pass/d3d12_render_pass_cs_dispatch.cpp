@@ -1,4 +1,5 @@
 #include "d3d12_render_pass_cs_dispatch.h"
+#include "d3d12_render_pass_common_util.h"
 namespace illuminate {
 namespace {
 struct Param {

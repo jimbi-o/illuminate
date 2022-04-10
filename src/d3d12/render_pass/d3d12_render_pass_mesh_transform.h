@@ -4,7 +4,7 @@
 namespace illuminate {
 class RenderPassMeshTransform {
  public:
-  static void* Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index);
+  static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index);
   static void Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
  private:
   RenderPassMeshTransform() = delete;

@@ -1,8 +1,7 @@
 #include "d3d12_render_pass_debug_render_selected_buffer.h"
+#include "d3d12_render_pass_common_util.h"
+#include "../d3d12_descriptors.h"
 namespace illuminate {
-void* RenderPassDebugRenderSelectedBuffer::Init([[maybe_unused]]RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
-  return nullptr;
-}
 void RenderPassDebugRenderSelectedBuffer::Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   D3D12_GPU_DESCRIPTOR_HANDLE srv_list{};
   D3D12_RESOURCE_BARRIER* barrier{};

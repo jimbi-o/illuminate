@@ -5,7 +5,7 @@ namespace illuminate {
 class RenderPassPostprocess {
  public:
   static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index);
-  static void Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
+  static void Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
   static void Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
  private:
   RenderPassPostprocess() = delete;

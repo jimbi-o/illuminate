@@ -15,6 +15,8 @@
 #include "d3d12_view_util.h"
 #include "d3d12_win32_window.h"
 #include "illuminate/math/math.h"
+#include "render_pass/d3d12_render_pass_common.h"
+#include "render_pass/d3d12_render_pass_common_util.h"
 #include "render_pass/d3d12_render_pass_copy_resource.h"
 #include "render_pass/d3d12_render_pass_cs_dispatch.h"
 #include "render_pass/d3d12_render_pass_debug_render_selected_buffer.h"
@@ -157,7 +159,6 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         break;
       }
       case SID("debug buffer"): {
-        funcs.init[i] = RenderPassDebugRenderSelectedBuffer::Init;
         funcs.render[i] = RenderPassDebugRenderSelectedBuffer::Render;
         break;
       }

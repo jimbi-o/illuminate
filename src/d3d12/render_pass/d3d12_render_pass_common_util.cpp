@@ -1,4 +1,4 @@
-#include "d3d12_render_pass_common.h"
+#include "d3d12_render_pass_common_util.h"
 namespace illuminate {
 RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator) {
   RenderPassConfigDynamicData dynamic_data{};
