@@ -132,7 +132,7 @@
           "state": "uav"
         }
       ],
-      "material": ["dispatch cs"],
+      "material": "dispatch cs",
       "pass_vars": {
         "thread_group_count_x": 32,
         "thread_group_count_y": 32
@@ -159,7 +159,7 @@
           "state": "dsv_write"
         }
       ],
-      "material": ["prez"],
+      "material": "prez",
       "pass_vars": {
         "clear_depth": true,
         "stencil_val": 255
@@ -181,7 +181,7 @@
         }
       ],
       "flip_pingpong": ["pingpong"],
-      "material": ["pingpong-a"]
+      "material": "pingpong-a"
     },
     {
       "name": "pingpong-b",
@@ -204,7 +204,7 @@
       ],
       "sampler": ["bilinear"],
       "flip_pingpong": ["pingpong"],
-      "material": ["pingpong-bc"]
+      "material": "pingpong-bc"
     },
     {
       "name": "pingpong-c",
@@ -227,7 +227,7 @@
       ],
       "sampler": ["bilinear"],
       "flip_pingpong": ["pingpong"],
-      "material": ["pingpong-bc"]
+      "material": "pingpong-bc"
     },
     {
       "name": "output to swapchain",
@@ -255,7 +255,7 @@
         }
       ],
       "sampler": ["bilinear"],
-      "material": ["output to swapchain"],
+      "material": "output to swapchain",
       "pass_vars": {
         "size_type": "swapchain_relative"
       }
@@ -283,7 +283,7 @@
           "state_after": ["rtv"]
         }
       ],
-      "material": ["render selected buffer"]
+      "material": "render selected buffer"
     },
     {
       "name": "imgui",

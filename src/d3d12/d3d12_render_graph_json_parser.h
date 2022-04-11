@@ -144,14 +144,9 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
         }
       } // sampler
       if (src_pass.contains("material")) {
-        auto& material = src_pass.at("material");
-        const auto num = GetUint32(material.size());
-        dst_pass.material_list = AllocateArray<uint32_t>(allocator, num);
-        for (uint32_t m = 0; m < num; m++) {
-          const auto hash = CalcEntityStrHash(material[m]);
-          dst_pass.material_list[m] = FindHashIndex(material_num, material_hash_list, hash);
-          assert(dst_pass.material_list[m] < material_num);
-        }
+        const auto hash = CalcEntityStrHash(src_pass, "material");
+        dst_pass.material = FindHashIndex(material_num, material_hash_list, hash);
+        assert(dst_pass.material < material_num);
       } // material
       if (src_pass.contains("prepass_barrier")) {
         auto& prepass_barrier = src_pass.at("prepass_barrier");

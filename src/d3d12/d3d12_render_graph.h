@@ -48,7 +48,7 @@ struct RenderPass {
   uint32_t command_queue_index{0};
   uint32_t buffer_num{0};
   RenderPassBuffer* buffer_list{nullptr};
-  uint32_t* material_list{nullptr};
+  uint32_t material{};
   uint32_t prepass_barrier_num{0};
   Barrier* prepass_barrier{nullptr};
   uint32_t postpass_barrier_num{0};
