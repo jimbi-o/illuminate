@@ -41,7 +41,5 @@ constexpr inline auto GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_comm
   return args_common->pso_rootsig_manager->GetPso(GetRenderPass(args_common, args_per_pass).material);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator);
-uint32_t GetRenderPassModelRootsigIndex(const MaterialCategoryList* material_category_list, const uint32_t render_pass_material_category);
-uint32_t GetMeshPsoIndex(const MaterialCategoryList* material_category_list, const uint32_t render_pass_material_category, const uint32_t material);
 }
 #endif
