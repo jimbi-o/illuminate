@@ -10,7 +10,42 @@
     "ms": "ms_6_5",
     "as": "as_6_5",
     "entry": "main",
-    "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"]
+    "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+    "input_elements": [
+      {
+        "name": "POSITION",
+        "index": 0,
+        "format": "R32G32B32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      },
+      {
+        "name": "NORMAL",
+        "index": 0,
+        "format": "R32G32B32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      },
+      {
+        "name": "TANGENT",
+        "index": 0,
+        "format": "R32G32B32A32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      },
+      {
+        "name": "TEXCOORD0",
+        "plain_name": "TEXCOORD",
+        "index": 0,
+        "format": "R32G32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      }
+    ]
   },
   "rootsignatures": [
     {
@@ -129,24 +164,55 @@
     {
       "name": "prez",
       "rootsig": "prez",
-      "input_element": [
-        {
-          "name": "POSITION",
-          "index": 0,
-          "format": "R32G32B32_FLOAT",
-          "slot": 0,
-          "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
-          "slot_class": "PER_VERTEX_DATA",
-          "instance_data_step_rate": 0
-        }
-      ],
       "depth_stencil": {
         "format": "D24_UNORM_S8_UINT"
       },
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/test/prez.vs.hlsl",
-          "target": "vs"
+          "input_element": ["POSITION"],
+          "defines": [
+            {
+              "name": "MESH_DEFORM_TYPE",
+              "val":  ["MESH_DEFORM_TYPE_STATIC"],
+              "target": ["vs"]
+            },
+            {
+              "name": "OPACITY_TYPE",
+              "val":  ["OPACITY_TYPE_OPAQUE"],
+              "target": ["vs"]
+            }
+          ],
+          "shaders": [
+            {
+              "file": "shader/test/prez.vs.hlsl",
+              "target": "vs"
+            }
+          ]
+        },
+        {
+          "input_element": ["POSITION", "TEXCOORD0"],
+          "defines": [
+            {
+              "name": "MESH_DEFORM_TYPE",
+              "val":  ["MESH_DEFORM_TYPE_STATIC"],
+              "target": ["vs"]
+            },
+            {
+              "name": "OPACITY_TYPE",
+              "val":  ["OPACITY_TYPE_ALPHA_MASK"],
+              "target": ["vs", "ps"]
+            }
+          ],
+          "shaders": [
+            {
+              "file": "shader/test/prez.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/test/prez.ps.hlsl",
+              "target": "ps"
+            }
+          ]
         }
       ]
     },
@@ -172,47 +238,35 @@
     {
       "name": "brdf forward",
       "rootsig": "brdf forward",
-      "input_element": [
-        {
-          "name": "POSITION",
-          "index": 0,
-          "format": "R32G32B32_FLOAT",
-          "slot": 0,
-          "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
-          "slot_class": "PER_VERTEX_DATA",
-          "instance_data_step_rate": 0
-        },
-        {
-          "name": "NORMAL",
-          "index": 0,
-          "format": "R32G32B32_FLOAT",
-          "slot": 0,
-          "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
-          "slot_class": "PER_VERTEX_DATA",
-          "instance_data_step_rate": 0
-        },
-        {
-          "name": "TANGENT",
-          "index": 0,
-          "format": "R32G32B32A32_FLOAT",
-          "slot": 0,
-          "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
-          "slot_class": "PER_VERTEX_DATA",
-          "instance_data_step_rate": 0
-        }
-      ],
       "render_target_formats": ["R8G8B8A8_UNORM"],
       "depth_stencil": {
         "format": "D24_UNORM_S8_UINT"
       },
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/mesh_transform/mesh_transform.vs.hlsl",
-          "target": "vs"
-        },
-        {
-          "file": "shader/brdf/brdf_forward.ps.hlsl",
-          "target": "ps"
+          "input_element": ["POSITION", "NORMAL", "TANGENT"],
+          "defines": [
+            {
+              "name": "MESH_DEFORM_TYPE",
+              "val":  ["MESH_DEFORM_TYPE_STATIC"],
+              "target": ["vs"]
+            },
+            {
+              "name": "OPACITY_TYPE",
+              "val":  ["OPACITY_TYPE_OPAQUE", "OPACITY_TYPE_ALPHA_MASK"],
+              "target": ["ps"]
+            }
+          ],
+          "shaders": [
+            {
+              "file": "shader/mesh_transform/mesh_transform.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/brdf/brdf_forward.ps.hlsl",
+              "target": "ps"
+            }
+          ]
         }
       ]
     },

@@ -1,10 +1,8 @@
-#ifndef ILLUMINATE_RESOURCE_SHADER_MESH_TRANSFORM_HLSLI
-#define ILLUMINATE_RESOURCE_SHADER_MESH_TRANSFORM_HLSLI
-#include "shader/include/shader_defines.h"
-#define MESH_DEFORM_TYPE_STATIC  0
-#define MESH_DEFORM_TYPE_SKELTON 1
-#define MESH_DEFORM_TYPE_VAT     2
-#define MeshTransformRootsig                            \
+#ifndef ILLUMINATE_RESOURCE_SHADER_TEST_PREZ_HLSLI
+#define ILLUMINATE_RESOURCE_SHADER_TEST_PREZ_HLSLI
+#include "shader/include/material_defines.hlsli"
+#include "shader/mesh_transform/mesh_transform.hlsli"
+#define PrezRootsig                                     \
   "RootFlags(                                           \
   ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |                  \
   DENY_HULL_SHADER_ROOT_ACCESS |                        \
@@ -19,7 +17,10 @@
   DescriptorTable(CBV(b1, numDescriptors=1),                            \
                   SRV(t0, numDescriptors=1),                            \
                   visibility=SHADER_VISIBILITY_VERTEX),"
-struct MeshTransformVsOutput {
+struct PrezVsOutput {
   float4 position : SV_POSITION;
+#if OPACITY_TYPE == OPACITY_TYPE_ALPHA_MASK
+  float2 uv : TEXCOORD0;
+#endif
 };
 #endif

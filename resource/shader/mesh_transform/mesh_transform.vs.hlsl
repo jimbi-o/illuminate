@@ -1,5 +1,4 @@
 #include "shader/mesh_transform/mesh_transform.hlsli"
-#include "shader/include/shader_defines.h"
 struct VsInput {
   float3 position : POSITION;
 };

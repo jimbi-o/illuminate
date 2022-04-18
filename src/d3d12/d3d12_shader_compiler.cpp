@@ -165,8 +165,8 @@ auto ParseCompileArgs(const nlohmann::json& common_settings, const nlohmann::jso
   assert(args_index == args_num);
   return std::make_pair(args_num, args);
 }
-auto CreatePsoDesc(const nlohmann::json& material_json, ID3D12RootSignature* rootsignature, const uint32_t shader_object_num, IDxcBlob** shader_object_list, MemoryAllocationJanitor* allocator) {
-  if (shader_object_num == 1 && material_json.at("shaders")[0].at("target") == "cs") {
+auto CreatePsoDesc(const nlohmann::json& common_settings, const nlohmann::json& material_json, const nlohmann::json& variation_json, ID3D12RootSignature* rootsignature, const uint32_t shader_object_num, IDxcBlob** shader_object_list, MemoryAllocationJanitor* allocator) {
+  if (shader_object_num == 1 && variation_json.at("shaders")[0].at("target") == "cs") {
     struct Desc {
       D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{};
       ID3D12RootSignature* root_signature{};
@@ -253,7 +253,7 @@ auto CreatePsoDesc(const nlohmann::json& material_json, ID3D12RootSignature* roo
     for (uint32_t i = 0; i < shader_object_num; i++) {
       auto desc = static_cast<PsoDescShaderBytecode*>(ptr);
       ptr = SucceedPtrWithStructSize<PsoDescShaderBytecode>(ptr);
-      const auto target = GetStringView(material_json.at("shaders")[i], "target");
+      const auto target = GetStringView(variation_json.at("shaders")[i], "target");
       if (target == "ps") {
         desc->type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
       } else if (target == "vs") {
@@ -268,6 +268,10 @@ auto CreatePsoDesc(const nlohmann::json& material_json, ID3D12RootSignature* roo
         desc->type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
       } else if (target == "as") {
         desc->type_shader_bytecode = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
+      } else {
+        logerror("invalid shader target {} {}", i, target);
+        assert(false && "invalid shader target");
+        continue;
       }
       desc->shader_bytecode = {
         .pShaderBytecode = shader_object_list[i]->GetBufferPointer(),
@@ -294,17 +298,28 @@ auto CreatePsoDesc(const nlohmann::json& material_json, ID3D12RootSignature* roo
         desc->depth_stencil_format = GetDxgiFormat(depth_stencil, "format");
       }
     }
-    if (material_json.contains("input_element")) {
-      const auto& input_element_json = material_json.at("input_element");
-      desc->input_layout.NumElements = GetUint32(input_element_json.size());
+    if (variation_json.contains("input_element")) {
+      const auto& shader_input_element_json = variation_json.at("input_element");
+      desc->input_layout.NumElements = GetUint32(shader_input_element_json.size());
       auto input_element = AllocateArray<D3D12_INPUT_ELEMENT_DESC>(allocator, desc->input_layout.NumElements);
+      const auto& common_input_element_list = common_settings.at("input_elements");
       for (uint32_t i = 0; i < desc->input_layout.NumElements; i++) {
-        input_element[i].SemanticName = GetStringView(input_element_json[i], "name").data();
-        input_element[i].SemanticIndex = GetNum(input_element_json[i], "index", 0);
-        input_element[i].Format = GetDxgiFormat(input_element_json[i], "format");
-        input_element[i].InputSlot = GetNum(input_element_json[i], "slot", 0);
-        if (input_element_json[i].contains("aligned_byte_offset")) {
-          auto& aligned_byte_offset = input_element_json[i].at("aligned_byte_offset");
+        const auto shader_input_element_name = GetStringView(shader_input_element_json[i]);
+        uint32_t index = ~0U;
+        for (uint32_t j = 0; j < common_input_element_list.size(); j++) {
+          if (shader_input_element_name.compare(common_input_element_list[j].at("name")) == 0) {
+            index = j;
+            break;
+          }
+        }
+        assert(index < common_input_element_list.size());
+        const auto& input_element_json = common_input_element_list[index];
+        input_element[i].SemanticName = input_element_json.contains("plain_name") ? GetStringView(input_element_json, "plain_name").data() : shader_input_element_name.data();
+        input_element[i].SemanticIndex = GetNum(input_element_json, "index", 0);
+        input_element[i].Format = GetDxgiFormat(input_element_json, "format");
+        input_element[i].InputSlot = GetNum(input_element_json, "slot", 0);
+        if (input_element_json.contains("aligned_byte_offset")) {
+          auto& aligned_byte_offset = input_element_json.at("aligned_byte_offset");
           if (aligned_byte_offset.is_string()) {
             assert(aligned_byte_offset == "APPEND_ALIGNED_ELEMENT" && "only D3D12_APPEND_ALIGNED_ELEMENT is implemented");
             input_element[i].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
@@ -314,15 +329,15 @@ auto CreatePsoDesc(const nlohmann::json& material_json, ID3D12RootSignature* roo
         } else {
           input_element[i].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
         }
-        if (input_element_json[i].contains("slot_class")) {
-          input_element[i].InputSlotClass = (input_element_json[i].at("slot_class") == "PER_INSTANCE_DATA") ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+        if (input_element_json.contains("slot_class")) {
+          input_element[i].InputSlotClass = (input_element_json.at("slot_class") == "PER_INSTANCE_DATA") ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
         } else {
           input_element[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
         }
         if (input_element[i].InputSlotClass == D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA) {
           input_element[i].InstanceDataStepRate = 0;
         } else {
-          input_element[i].InstanceDataStepRate = GetNum(input_element_json[i], "instance_data_step_rate", 0);
+          input_element[i].InstanceDataStepRate = GetNum(input_element_json, "instance_data_step_rate", 0);
         }
       }
       desc->input_layout.pInputElementDescs = input_element;
@@ -344,7 +359,8 @@ auto CreateRootsigFromJsonSetting(const nlohmann::json& common_settings, const n
 }
 auto CreatePsoFromJsonSetting(const nlohmann::json& common_settings, const nlohmann::json& material_json, ID3D12RootSignature* rootsig,
                               IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device) {
-  const auto& shader_list = material_json.at("shaders");
+  const auto& variation_json = material_json.contains("variations") ? material_json.at("variations")[0/*TODO*/] : material_json;
+  const auto& shader_list = variation_json.at("shaders");
   const auto shader_num = GetUint32(shader_list.size());
   auto allocator = GetTemporalMemoryAllocator();
   auto compile_unit_list = AllocateArray<IDxcResult*>(&allocator, shader_num);
@@ -357,7 +373,7 @@ auto CreatePsoFromJsonSetting(const nlohmann::json& common_settings, const nlohm
     compile_unit_list[i] = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)args);
     shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
   }
-  const auto [desc_size, desc] = CreatePsoDesc(material_json, rootsig, shader_num, shader_object_list, &allocator);
+  const auto [desc_size, desc] = CreatePsoDesc(common_settings, material_json, variation_json, rootsig, shader_num, shader_object_list, &allocator);
   auto pso = CreatePipelineState(device, desc_size, desc);
   SetD3d12Name(pso, GetStringView(material_json, "name"));
   for (uint32_t i = 0; i < shader_num; i++) {
