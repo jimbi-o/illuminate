@@ -173,13 +173,11 @@
           "params": [
             {
               "name": "MESH_DEFORM_TYPE",
-              "val":  ["MESH_DEFORM_TYPE_STATIC"],
-              "target": ["vs"]
+              "val":  ["MESH_DEFORM_TYPE_STATIC"]
             },
             {
               "name": "OPACITY_TYPE",
-              "val":  ["OPACITY_TYPE_OPAQUE"],
-              "target": ["vs"]
+              "val":  ["OPACITY_TYPE_OPAQUE"]
             }
           ],
           "shaders": [
@@ -194,13 +192,11 @@
           "params": [
             {
               "name": "MESH_DEFORM_TYPE",
-              "val":  ["MESH_DEFORM_TYPE_STATIC"],
-              "target": ["vs"]
+              "val":  ["MESH_DEFORM_TYPE_STATIC"]
             },
             {
               "name": "OPACITY_TYPE",
-              "val":  ["OPACITY_TYPE_ALPHA_MASK"],
-              "target": ["vs", "ps"]
+              "val":  ["OPACITY_TYPE_ALPHA_MASK"]
             }
           ],
           "shaders": [
@@ -248,13 +244,11 @@
           "params": [
             {
               "name": "MESH_DEFORM_TYPE",
-              "val":  ["MESH_DEFORM_TYPE_STATIC"],
-              "target": ["vs"]
+              "val":  ["MESH_DEFORM_TYPE_STATIC"]
             },
             {
               "name": "OPACITY_TYPE",
-              "val":  ["OPACITY_TYPE_OPAQUE", "OPACITY_TYPE_ALPHA_MASK"],
-              "target": ["ps"]
+              "val":  ["OPACITY_TYPE_OPAQUE", "OPACITY_TYPE_ALPHA_MASK"]
             }
           ],
           "shaders": [

@@ -541,7 +541,6 @@ auto WriteVariationParamsToCompileArgs(const nlohmann::json& common_settings, co
   args[target_index] = CopyStrToWstrContainer(common_settings.at(target.data()), allocator);
   const auto params_num = GetUint32(params_json.size());
   for (uint32_t i = 0; i < params_num; i++) {
-    // TODO skip non target params
     auto name = GetStringView(params_json[i], "name");
     auto val = GetStringView(params_json[i].at("val")[param_index_list[i]]);
     auto str = std::string("-D") + name.data() + std::string("=") + val.data();
