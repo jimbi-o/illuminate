@@ -170,7 +170,7 @@
       "variations": [
         {
           "input_element": ["POSITION"],
-          "defines": [
+          "params": [
             {
               "name": "MESH_DEFORM_TYPE",
               "val":  ["MESH_DEFORM_TYPE_STATIC"],
@@ -191,7 +191,7 @@
         },
         {
           "input_element": ["POSITION", "TEXCOORD0"],
-          "defines": [
+          "params": [
             {
               "name": "MESH_DEFORM_TYPE",
               "val":  ["MESH_DEFORM_TYPE_STATIC"],
@@ -245,7 +245,7 @@
       "variations": [
         {
           "input_element": ["POSITION", "NORMAL", "TANGENT"],
-          "defines": [
+          "params": [
             {
               "name": "MESH_DEFORM_TYPE",
               "val":  ["MESH_DEFORM_TYPE_STATIC"],

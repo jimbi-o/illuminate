@@ -1,7 +1,7 @@
 #include "d3d12_shader_compiler.h"
 #include "d3d12_json_parser.h"
 #include "d3d12_src_common.h"
-#include "illuminate/util/hash_map.h"
+#include "illuminate/util/util_functions.h"
 #include "../win32_dll_util_macro.h"
 namespace illuminate {
 namespace {
@@ -359,8 +359,7 @@ auto CreateRootsigFromJsonSetting(const nlohmann::json& common_settings, const n
 }
 auto CreatePsoFromJsonSetting(const nlohmann::json& common_settings, const nlohmann::json& material_json, ID3D12RootSignature* rootsig,
                               IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device) {
-  const auto& variation_json = material_json.contains("variations") ? material_json.at("variations")[0/*TODO*/] : material_json;
-  const auto& shader_list = variation_json.at("shaders");
+  const auto& shader_list = material_json.at("shaders");
   const auto shader_num = GetUint32(shader_list.size());
   auto allocator = GetTemporalMemoryAllocator();
   auto compile_unit_list = AllocateArray<IDxcResult*>(&allocator, shader_num);
@@ -373,7 +372,7 @@ auto CreatePsoFromJsonSetting(const nlohmann::json& common_settings, const nlohm
     compile_unit_list[i] = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)args);
     shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
   }
-  const auto [desc_size, desc] = CreatePsoDesc(common_settings, material_json, variation_json, rootsig, shader_num, shader_object_list, &allocator);
+  const auto [desc_size, desc] = CreatePsoDesc(common_settings, material_json, material_json, rootsig, shader_num, shader_object_list, &allocator);
   auto pso = CreatePipelineState(device, desc_size, desc);
   SetD3d12Name(pso, GetStringView(material_json, "name"));
   for (uint32_t i = 0; i < shader_num; i++) {
@@ -381,6 +380,234 @@ auto CreatePsoFromJsonSetting(const nlohmann::json& common_settings, const nlohm
     compile_unit_list[i]->Release();
   }
   return pso;
+}
+auto CountPsoNum(const nlohmann::json& json) {
+  uint32_t count = 0;
+  for (const auto& material : json) {
+    if (!material.contains("variations")) {
+      count++;
+      continue;
+    }
+    for (const auto& variation : material.at("variations")) {
+      uint32_t v = 1;
+      for (const auto& param : variation.at("params")) {
+        v *= GetUint32(param.at("val").size());
+      }
+      count += v;
+    }
+  }
+  return count;
+}
+struct PsoDescGraphics {
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_rasterizer{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER};
+  D3D12_RASTERIZER_DESC rasterizer{
+    .FillMode = D3D12_FILL_MODE_SOLID,
+    .CullMode = D3D12_CULL_MODE_BACK,
+    .FrontCounterClockwise = true,
+    .DepthBias = 0,
+    .DepthBiasClamp = 0.0f,
+    .SlopeScaledDepthBias = 1.0f,
+    .DepthClipEnable = true,
+    .MultisampleEnable = false,
+    .AntialiasedLineEnable = false,
+    .ForcedSampleCount = 0,
+    .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+  };
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_input_layout{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT};
+  D3D12_INPUT_LAYOUT_DESC input_layout{};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_primitive_topology{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY};
+  D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology{D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_render_target_formats{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS};
+  D3D12_RT_FORMAT_ARRAY render_target_formats{};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil_format{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT};
+  DXGI_FORMAT depth_stencil_format{};
+  D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_depth_stencil{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1};
+  D3D12_DEPTH_STENCIL_DESC1 depth_stencil{
+    .DepthEnable = true,
+    .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+    .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+    .StencilEnable = false,
+    .StencilReadMask = 255U,
+    .StencilWriteMask = 255U,
+    .FrontFace = {
+      .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilPassOp = D3D12_STENCIL_OP_REPLACE,
+      .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+    },
+    .BackFace = {
+      .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+      .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+      .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+    },
+    .DepthBoundsTestEnable = false,
+  };
+};
+auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json& variation, const nlohmann::json& common_input_element_list, MemoryAllocationJanitor* allocator) {
+  if (variation.at("shaders").size() == 1 && variation.at("shaders")[0].at("target") == "cs") {
+    return (PsoDescGraphics*)nullptr;
+  }
+  auto desc = Allocate<PsoDescGraphics>(allocator);
+  *desc = {};
+  if (material.contains("render_target_formats")) {
+    auto& render_target_formats = material.at("render_target_formats");
+    desc->render_target_formats.NumRenderTargets = GetUint32(render_target_formats.size());
+    for (uint32_t i = 0; i < desc->render_target_formats.NumRenderTargets; i++) {
+      desc->render_target_formats.RTFormats[i] = GetDxgiFormat(GetStringView(render_target_formats[i]).data());
+    }
+  }
+  if (material.contains("depth_stencil")) {
+    auto& depth_stencil = material.at("depth_stencil");
+    desc->depth_stencil.DepthEnable = GetBool(depth_stencil,  "depth_enable", true);
+    if (desc->depth_stencil.DepthEnable) {
+      desc->depth_stencil_format = GetDxgiFormat(depth_stencil, "format");
+    }
+  }
+  if (variation.contains("input_element")) {
+    const auto& shader_input_element_json = variation.at("input_element");
+    desc->input_layout.NumElements = GetUint32(shader_input_element_json.size());
+    auto input_element = AllocateArray<D3D12_INPUT_ELEMENT_DESC>(allocator, desc->input_layout.NumElements);
+    for (uint32_t i = 0; i < desc->input_layout.NumElements; i++) {
+      const auto shader_input_element_name = GetStringView(shader_input_element_json[i]);
+      uint32_t index = ~0U;
+      for (uint32_t j = 0; j < common_input_element_list.size(); j++) {
+        if (shader_input_element_name.compare(common_input_element_list[j].at("name")) == 0) {
+          index = j;
+          break;
+        }
+      }
+      assert(index < common_input_element_list.size());
+      const auto& input_element_json = common_input_element_list[index];
+      input_element[i].SemanticName = input_element_json.contains("plain_name") ? GetStringView(input_element_json, "plain_name").data() : shader_input_element_name.data();
+      input_element[i].SemanticIndex = GetNum(input_element_json, "index", 0);
+      input_element[i].Format = GetDxgiFormat(input_element_json, "format");
+      input_element[i].InputSlot = GetNum(input_element_json, "slot", 0);
+      if (input_element_json.contains("aligned_byte_offset")) {
+        auto& aligned_byte_offset = input_element_json.at("aligned_byte_offset");
+        if (aligned_byte_offset.is_string()) {
+          assert(aligned_byte_offset == "APPEND_ALIGNED_ELEMENT" && "only D3D12_APPEND_ALIGNED_ELEMENT is implemented");
+          input_element[i].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+        } else {
+          input_element[i].AlignedByteOffset = aligned_byte_offset;
+        }
+      } else {
+        input_element[i].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+      }
+      if (input_element_json.contains("slot_class")) {
+        input_element[i].InputSlotClass = (input_element_json.at("slot_class") == "PER_INSTANCE_DATA") ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+      } else {
+        input_element[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+      }
+      if (input_element[i].InputSlotClass == D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA) {
+        input_element[i].InstanceDataStepRate = 0;
+      } else {
+        input_element[i].InstanceDataStepRate = GetNum(input_element_json, "instance_data_step_rate", 0);
+      }
+    }
+    desc->input_layout.pInputElementDescs = input_element;
+  }
+  return desc;
+}
+auto PrepareCompileArgsFromCommonSettings(const nlohmann::json& common_settings, const uint32_t params_num, MemoryAllocationJanitor* allocator) {
+  uint32_t args_num = 4 + params_num; // target+entry
+  uint32_t entry_index = 0, target_index = 0, params_index = 0;
+  if (common_settings.contains("args")) {
+    args_num += GetUint32(common_settings.at("args").size());
+  }
+  auto args = AllocateArray<wchar_t*>(allocator, args_num);
+  uint32_t args_index = 0;
+  if (common_settings.contains("args")) {
+    const auto& args_list = common_settings.at("args");
+    for (; args_index < args_list.size(); args_index++) {
+      args[args_index] = CopyStrToWstrContainer(args_list[args_index], allocator);
+    }
+  }
+  args[args_index] = CopyStrToWstrContainer("-E", allocator);
+  args_index++;
+  entry_index = args_index;
+  args_index++;
+  args[args_index] = CopyStrToWstrContainer("-T", allocator);
+  args_index++;
+  target_index = args_index;
+  args_index++;
+  params_index = args_index;
+  assert(args_index + params_num == args_num);
+  return std::make_tuple(args_num, args, entry_index, target_index, params_index);
+}
+auto WriteVariationParamsToCompileArgs(const nlohmann::json& common_settings, const nlohmann::json& shader_json, const nlohmann::json& params_json, const uint32_t* param_index_list, wchar_t** args, const uint32_t entry_index, const uint32_t target_index, const uint32_t params_index, MemoryAllocationJanitor* allocator) {
+  args[entry_index] = CopyStrToWstrContainer(shader_json.contains("entry") ? shader_json.at("entry") : common_settings.at("entry"), allocator);
+  auto target = GetStringView(shader_json, "target");
+  args[target_index] = CopyStrToWstrContainer(common_settings.at(target.data()), allocator);
+  const auto params_num = GetUint32(params_json.size());
+  for (uint32_t i = 0; i < params_num; i++) {
+    auto name = GetStringView(params_json[i], "name");
+    auto val = GetStringView(params_json[i].at("val")[param_index_list[i]]);
+    auto str = std::string("-D") + name.data() + std::string("=") + val.data();
+    args[params_index + i] = CopyStrToWstrContainer(str, allocator);
+  }
+}
+auto GetD3d12PipelineStateSubobjectTypeShader(const char* const target) {
+  if (strcmp(target, "cs") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
+  }
+  if (strcmp(target, "ps") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
+  }
+  if (strcmp(target, "vs") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS;
+  }
+  if (strcmp(target, "gs") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS;
+  }
+  if (strcmp(target, "hs") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS;
+  }
+  if (strcmp(target, "ds") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS;
+  }
+  if (strcmp(target, "ms") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
+  }
+  if (strcmp(target, "as") == 0) {
+    return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
+  }
+  logerror("invalid shader target {}", target);
+  assert(false && "invalid shader target");
+  return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
+}
+auto CreatePsoDesc(ID3D12RootSignature* rootsig, const nlohmann::json& shader_json, const uint32_t shader_object_num, IDxcBlob** shader_object_list, PsoDescGraphics* pso_desc_graphics, MemoryAllocationJanitor* allocator) {
+  struct PsoDescRootSignature {
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{};
+    ID3D12RootSignature* root_signature{nullptr};
+  };
+  struct PsoDescShaderBytecode {
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{};
+    D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
+  };
+  const auto size = GetUint32(sizeof(PsoDescRootSignature)) + GetUint32(sizeof(PsoDescShaderBytecode)) + (pso_desc_graphics == nullptr ? 0 : GetUint32(sizeof(*pso_desc_graphics)));
+  auto ptr = allocator->Allocate(size);
+  auto head = ptr;
+  if (pso_desc_graphics != nullptr) {
+    memcpy(ptr, pso_desc_graphics, sizeof(*pso_desc_graphics));
+    ptr = SucceedPtrWithStructSize<PsoDescGraphics>(ptr);
+  }
+  {
+    auto desc = new(ptr) PsoDescRootSignature;
+    ptr = SucceedPtrWithStructSize<PsoDescRootSignature>(ptr);
+    desc->type_root_signature = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
+    desc->root_signature = rootsig;
+  }
+  for (uint32_t i = 0; i < shader_object_num; i++) {
+    auto desc = new(ptr) PsoDescShaderBytecode;
+    ptr = SucceedPtrWithStructSize<PsoDescShaderBytecode>(ptr);
+    desc->type_shader_bytecode = GetD3d12PipelineStateSubobjectTypeShader(GetStringView(shader_json[i], "target").data());
+    desc->shader_bytecode = {
+      .pShaderBytecode = shader_object_list[i]->GetBufferPointer(),
+      .BytecodeLength  = shader_object_list[i]->GetBufferSize()
+    };
+  }
+  return std::make_pair(size, head);
 }
 void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
                uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
@@ -394,15 +621,60 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
     (*rootsig_list)[i] = CreateRootsigFromJsonSetting(common_settings, rootsig_json_list[i], compiler, include_handler, utils, device);
   }
   const auto& material_json_list = json.at("materials");
-  *pso_num = GetUint32(material_json_list.size());
-  *pso_index_to_rootsig_index_map = AllocateArray<uint32_t>(allocator, *pso_num);
+  *pso_num = CountPsoNum(material_json_list);
   *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, *pso_num);
+  *pso_index_to_rootsig_index_map = AllocateArray<uint32_t>(allocator, *pso_num);
+  const auto& input_element_list = common_settings.at("input_elements");
   auto tmp_allocator = GetTemporalMemoryAllocator();
   StrHash* rootsig_name_list{nullptr};
   CreateJsonStrHashList(rootsig_json_list, "name", &rootsig_name_list, &tmp_allocator);
-  for (uint32_t i = 0; i < *pso_num; i++) {
-    (*pso_index_to_rootsig_index_map)[i] = FindHashIndex(*rootsig_num, rootsig_name_list, CalcEntityStrHash(material_json_list[i], "rootsig"));
-    (*pso_list)[i] = CreatePsoFromJsonSetting(common_settings, material_json_list[i], (*rootsig_list)[(*pso_index_to_rootsig_index_map)[i]], compiler, include_handler, utils, device);
+  uint32_t pso_index = 0;
+  for (const auto& material : material_json_list) {
+    const auto rootsig_index = FindHashIndex(*rootsig_num, rootsig_name_list, CalcEntityStrHash(material, "rootsig"));
+    if (!material.contains("variations")) {
+      (*pso_index_to_rootsig_index_map)[pso_index] = rootsig_index;
+      (*pso_list)[pso_index] = CreatePsoFromJsonSetting(common_settings, material, (*rootsig_list)[rootsig_index], compiler, include_handler, utils, device);
+      pso_index++;
+      continue;
+    }
+    const auto& variations = material.at("variations");
+    for (const auto& variation : variations) {
+      const auto shader_json = variation.at("shaders");
+      const auto shader_num = GetUint32(shader_json.size());
+      auto variation_allocator = GetTemporalMemoryAllocator();
+      auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list, &variation_allocator);
+      const auto& params_json = variation.at("params");
+      const auto params_num = GetUint32(params_json.size());
+      auto [compile_args_num, compile_args, entry_index, target_index, params_index] = PrepareCompileArgsFromCommonSettings(common_settings, params_num, &variation_allocator);
+      auto param_array_size_list = AllocateArray<uint32_t>(&variation_allocator, params_num);
+      auto param_index_list = AllocateArray<uint32_t>(&variation_allocator, params_num);
+      for (uint32_t i = 0; i < params_num; i++) {
+        param_array_size_list[i] = GetUint32(params_json[i].at("val").size());
+        param_index_list[i] = 0;
+      }
+      while (true) {
+        auto shader_list_allocator = GetTemporalMemoryAllocator();
+        auto compile_unit_list = AllocateArray<IDxcResult*>(&shader_list_allocator, shader_num);
+        auto shader_object_list = AllocateArray<IDxcBlob*>(&shader_list_allocator, shader_num);
+        for (uint32_t i = 0; i < shader_num; i++) {
+          WriteVariationParamsToCompileArgs(common_settings, shader_json[i], params_json, param_index_list, compile_args, entry_index, target_index, params_index, &shader_list_allocator);
+          auto filename = CopyStrToWstrContainer(GetStringView(shader_json[i], ("file")), &shader_list_allocator);
+          compile_unit_list[i] = CompileShaderFile(utils, compiler, include_handler, filename, compile_args_num, (const wchar_t**)compile_args);
+          shader_object_list[i] = GetShaderObject(compile_unit_list[i]);
+        }
+        (*pso_index_to_rootsig_index_map)[pso_index] = rootsig_index;
+        auto [pso_desc_size, pso_desc] = CreatePsoDesc((*rootsig_list)[rootsig_index], shader_json, shader_num, shader_object_list, pso_desc_graphics, &shader_list_allocator);
+        (*pso_list)[pso_index] = CreatePipelineState(device, pso_desc_size, pso_desc);
+        pso_index++;
+        for (uint32_t i = 0; i < shader_num; i++) {
+          shader_object_list[i]->Release();
+          compile_unit_list[i]->Release();
+        }
+        if (!SucceedMultipleIndex(params_num, param_array_size_list, param_index_list)) {
+          break;
+        }
+      }
+    }
   }
 }
 } // anonymous namespace
@@ -439,6 +711,7 @@ void PsoRootsigManager::Term() {
   }
 }
 uint32_t CreateMaterialStrHashList(const nlohmann::json& material_json, StrHash** hash_list_ptr, MemoryAllocationJanitor* allocator) {
+  // TODO consider shader variations.
   return CreateJsonStrHashList(material_json.at("materials"), "name", hash_list_ptr, allocator);
 }
 } // namespace illuminate
