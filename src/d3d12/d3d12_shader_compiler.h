@@ -8,14 +8,20 @@ class PsoRootsigManager {
  public:
   bool Init(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator);
   void Term();
-  constexpr auto GetRootsigIndex(const uint32_t pso_index) const {
-    return pso_index_to_rootsig_index_map_[pso_index];
+  constexpr auto GetMaterialRootsigIndex(const uint32_t material) const {
+    return material;
   }
-  constexpr auto GetRootsig(const uint32_t pso_index) const {
-    return rootsig_list_[GetRootsigIndex(pso_index)];
+  constexpr auto GetMaterialPsoIndex(const uint32_t material, const uint32_t variation_index) const {
+    return material_pso_offset_[material] + variation_index;
   }
-  constexpr auto GetPso(const uint32_t pso_index) const {
-    return pso_list_[pso_index];
+  constexpr auto GetMaterialRootsig(const uint32_t material) const {
+    return rootsig_list_[GetMaterialRootsigIndex(material)];
+  }
+  constexpr auto GetMaterialPso(const uint32_t material) const {
+    return pso_list_[GetMaterialPsoIndex(material, 0)];
+  }
+  constexpr auto GetMaterialPso(const uint32_t material, const uint32_t variation_index) const {
+    return pso_list_[GetMaterialPsoIndex(material, variation_index)];
   }
  private:
   HMODULE library_{nullptr};
@@ -26,8 +32,15 @@ class PsoRootsigManager {
   ID3D12RootSignature** rootsig_list_{nullptr};
   uint32_t pso_num_{0};
   ID3D12PipelineState** pso_list_{nullptr};
-  uint32_t* pso_index_to_rootsig_index_map_{nullptr};
+  uint32_t* material_pso_offset_{nullptr};
 };
-uint32_t CreateMaterialStrHashList(const nlohmann::json& material_json, StrHash** hash_list_ptr, MemoryAllocationJanitor* allocator);
+struct MaterialVariationMap {
+  uint32_t material_num{0};
+  StrHash* material_hash_list{nullptr};
+  uint32_t* variation_hash_list_len{nullptr};
+  StrHash** variation_hash_list{nullptr};
+};
+MaterialVariationMap CreateMaterialVariationMap(const nlohmann::json& material_json, MemoryAllocationJanitor* allocator);
+uint32_t GetMaterialVariationIndex(const uint32_t material, const StrHash& variation, const MaterialVariationMap& material_variation_map);
 }
 #endif

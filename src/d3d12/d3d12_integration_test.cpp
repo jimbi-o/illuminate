@@ -386,8 +386,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
   uint32_t transform_buffer_allocation_index{kInvalidIndex};
   uint32_t scene_cbv_buffer_config_index{kInvalidIndex};
-  uint32_t material_num{0};
-  StrHash* material_str_hash_list{nullptr};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
   char** render_pass_name{nullptr};
 #endif
@@ -395,7 +393,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   {
     auto material_json = GetTestJson("material.json");
     CHECK_UNARY(pso_rootsig_manager.Init(material_json, device.Get(), &allocator));
-    material_num = CreateMaterialStrHashList(material_json, &material_str_hash_list, &allocator);
+    const auto material_variation_map = CreateMaterialVariationMap(material_json, &allocator);
     nlohmann::json json;
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
@@ -403,11 +401,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
-      frame_loop_num = 5;
+      frame_loop_num = 100;
     }
     AddSystemBuffers(&json);
     AddSystemBarriers(&json);
-    ParseRenderGraphJson(json, material_num, material_str_hash_list, &allocator, &render_graph);
+    ParseRenderGraphJson(json, material_variation_map.material_num, material_variation_map.material_hash_list, &allocator, &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
     CHECK_UNARY(command_list_set.Init(device.Get(),
                                       render_graph.command_queue_num,
