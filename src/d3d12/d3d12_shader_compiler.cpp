@@ -541,6 +541,7 @@ auto WriteVariationParamsToCompileArgs(const nlohmann::json& common_settings, co
   args[target_index] = CopyStrToWstrContainer(common_settings.at(target.data()), allocator);
   const auto params_num = GetUint32(params_json.size());
   for (uint32_t i = 0; i < params_num; i++) {
+    // TODO skip non target params
     auto name = GetStringView(params_json[i], "name");
     auto val = GetStringView(params_json[i].at("val")[param_index_list[i]]);
     auto str = std::string("-D") + name.data() + std::string("=") + val.data();
@@ -585,7 +586,7 @@ auto CreatePsoDesc(ID3D12RootSignature* rootsig, const nlohmann::json& shader_js
     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_shader_bytecode{};
     D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
   };
-  const auto size = GetUint32(sizeof(PsoDescRootSignature)) + GetUint32(sizeof(PsoDescShaderBytecode)) + (pso_desc_graphics == nullptr ? 0 : GetUint32(sizeof(*pso_desc_graphics)));
+  const auto size = GetUint32(sizeof(PsoDescRootSignature)) + GetUint32(sizeof(PsoDescShaderBytecode)) * shader_object_num + (pso_desc_graphics == nullptr ? 0 : GetUint32(sizeof(*pso_desc_graphics)));
   auto ptr = allocator->Allocate(size);
   auto head = ptr;
   if (pso_desc_graphics != nullptr) {
