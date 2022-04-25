@@ -132,50 +132,6 @@ IDxcResult* CompileShaderFile(IDxcUtils* utils, IDxcCompiler3* compiler, IDxcInc
   if (result) { result->Release(); }
   return nullptr;
 }
-auto ParseCompileArgs(const nlohmann::json& common_settings, const nlohmann::json& shader_setting, MemoryAllocationJanitor* allocator) {
-  uint32_t args_num = 4; // target+entry
-  if (common_settings.contains("args")) {
-    args_num += GetUint32(common_settings.at("args").size());
-  }
-  if (shader_setting.contains("args")) {
-    args_num += GetUint32(shader_setting.at("args").size());
-  }
-  auto args = AllocateArray<wchar_t*>(allocator, args_num);
-  uint32_t args_index = 0;
-  if (common_settings.contains("args")) {
-    const auto& args_list = common_settings.at("args");
-    for (; args_index < args_list.size(); args_index++) {
-      args[args_index] = CopyStrToWstrContainer(args_list[args_index], allocator);
-    }
-  }
-  if (shader_setting.contains("args")) {
-    const auto& args_list = shader_setting.at("args");
-    for (; args_index < args_list.size(); args_index++) {
-      args[args_index] = CopyStrToWstrContainer(args_list[args_index], allocator);
-    }
-  }
-  args[args_index] = CopyStrToWstrContainer("-E", allocator);
-  args_index++;
-  args[args_index] = CopyStrToWstrContainer(shader_setting.contains("entry") ? shader_setting.at("entry") : common_settings.at("entry"), allocator);
-  args_index++;
-  args[args_index] = CopyStrToWstrContainer("-T", allocator);
-  args_index++;
-  args[args_index] = CopyStrToWstrContainer(GetStringView(common_settings, GetStringView(shader_setting, ("target")).data()), allocator);
-  args_index++;
-  assert(args_index == args_num);
-  return std::make_pair(args_num, args);
-}
-auto CreateRootsigFromJsonSetting(const nlohmann::json& common_settings, const nlohmann::json& rootsig_json,
-                                  IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device) {
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  const auto [args_num, args] = ParseCompileArgs(common_settings, rootsig_json, &tmp_allocator);
-  auto filename = CopyStrToWstrContainer(GetStringView(rootsig_json, "file"), &tmp_allocator);
-  auto compile_unit = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)args);
-  auto rootsig = CreateRootSignatureLocal(device, compile_unit);
-  SetD3d12Name(rootsig, GetStringView(rootsig_json, "name"));
-  compile_unit->Release();
-  return rootsig;
-}
 auto CountPsoNum(const nlohmann::json& json) {
   uint32_t count = 0;
   for (const auto& material : json) {
@@ -425,7 +381,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
   *rootsig_num = GetUint32(rootsig_json_list.size());
   *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, *rootsig_num);
   for (uint32_t i = 0; i < *rootsig_num; i++) {
-    (*rootsig_list)[i] = CreateRootsigFromJsonSetting(common_settings, rootsig_json_list[i], compiler, include_handler, utils, device);
+    (*rootsig_list)[i] = nullptr;
   }
   const auto& material_json_list = json.at("materials");
   *pso_num = CountPsoNum(material_json_list);
@@ -440,7 +396,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
   for (uint32_t i = 0; i < material_num; i++) {
     (*material_pso_offset)[i] = pso_index;
     const auto& material = material_json_list[i];
-    const auto rootsig = (*rootsig_list)[FindHashIndex(*rootsig_num, rootsig_name_list, CalcEntityStrHash(material, "rootsig"))];
+    const auto rootsig_index = FindHashIndex(*rootsig_num, rootsig_name_list, CalcEntityStrHash(material, "rootsig"));
     const auto& variations = material.at("variations");
     for (const auto& variation : variations) {
       const auto& shader_json = variation.at("shaders");
@@ -470,6 +426,12 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
           auto filename = CopyStrToWstrContainer(GetStringView(shader_json[j], ("file")), &shader_list_allocator);
           compile_unit_list[j] = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)compile_args);
           shader_object_list[j] = GetShaderObject(compile_unit_list[j]);
+        }
+        auto rootsig = (*rootsig_list)[rootsig_index];
+        if (rootsig == nullptr) {
+          rootsig = CreateRootSignatureLocal(device, compile_unit_list[shader_num - 1]);
+          SetD3d12Name(rootsig, GetStringView(material, "rootsig"));
+          (*rootsig_list)[rootsig_index] = rootsig;
         }
         auto [pso_desc_size, pso_desc] = CreatePsoDesc(rootsig, shader_json, shader_num, shader_object_list, pso_desc_graphics, &shader_list_allocator);
         (*pso_list)[pso_index] = CreatePipelineState(device, pso_desc_size, pso_desc);
