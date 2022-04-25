@@ -649,7 +649,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
     }
     const auto& variations = material.at("variations");
     for (const auto& variation : variations) {
-      const auto shader_json = variation.at("shaders");
+      const auto& shader_json = variation.at("shaders");
       const auto shader_num = GetUint32(shader_json.size());
       auto variation_allocator = GetTemporalMemoryAllocator();
       auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list, &variation_allocator);
