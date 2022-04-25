@@ -372,26 +372,65 @@ auto GetPsoName(const std::string_view& material_name, const nlohmann::json* par
   }
   return name;
 }
+auto CountRootsigNum(const nlohmann::json& json) {
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  const auto num = GetUint32(json.size());
+  auto hash_list = AllocateArray<StrHash>(&tmp_allocator, num);
+  uint32_t used_hash = 0;
+  for (uint32_t i = 0; i < num; i++) {
+    const auto rootsig_name_hash = CalcEntityStrHash(json[i], "rootsig");
+    bool found = false;
+    for (uint32_t j = 0; j < used_hash; j++) {
+      if (rootsig_name_hash == hash_list[j]) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      hash_list[used_hash] = rootsig_name_hash;
+      used_hash++;
+    }
+  }
+  return used_hash;
+}
+auto CreateRootsigNameList(const uint32_t num, const nlohmann::json& json, MemoryAllocationJanitor* allocator) {
+  auto hash_list = AllocateArray<StrHash>(allocator, num);
+  uint32_t next_index = 0;
+  for (uint32_t i = 0; i < num; i++) {
+    const auto rootsig_name_hash = CalcEntityStrHash(json[i], "rootsig");
+    bool found = false;
+    for (uint32_t j = 0; j < next_index; j++) {
+      if (rootsig_name_hash == hash_list[j]) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      hash_list[next_index] = rootsig_name_hash;
+      next_index++;
+    }
+  }
+  assert(next_index == num);
+  return hash_list;
+}
 void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
                uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
                uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** material_pso_offset,
                MemoryAllocationJanitor* allocator) {
   const auto& common_settings = json.at("common_settings");
-  const auto& rootsig_json_list = json.at("rootsignatures");
-  *rootsig_num = GetUint32(rootsig_json_list.size());
+  const auto& material_json_list = json.at("materials");
+  *rootsig_num = CountRootsigNum(material_json_list);
   *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, *rootsig_num);
   for (uint32_t i = 0; i < *rootsig_num; i++) {
     (*rootsig_list)[i] = nullptr;
   }
-  const auto& material_json_list = json.at("materials");
   *pso_num = CountPsoNum(material_json_list);
   *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, *pso_num);
   const auto& input_element_list = common_settings.at("input_elements");
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  StrHash* rootsig_name_list{nullptr};
-  CreateJsonStrHashList(rootsig_json_list, "name", &rootsig_name_list, &tmp_allocator);
   const auto material_num = GetUint32(material_json_list.size());
   *material_pso_offset = AllocateArray<uint32_t>(allocator, material_num);
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto rootsig_name_list = CreateRootsigNameList(*rootsig_num, material_json_list, &tmp_allocator);
   uint32_t pso_index = 0;
   for (uint32_t i = 0; i < material_num; i++) {
     (*material_pso_offset)[i] = pso_index;

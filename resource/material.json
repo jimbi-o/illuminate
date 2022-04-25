@@ -47,52 +47,6 @@
       }
     ]
   },
-  "rootsignatures": [
-    {
-      "name": "dispatch cs",
-      "file": "shader/test/dispatch.cs.hlsl",
-      "target": "cs"
-    },
-    {
-      "name": "output to swapchain",
-      "file": "shader/test/output_to_swapchain.vs.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs"
-    },
-    {
-      "name": "pingpong-a",
-      "file": "shader/test/pingong_a.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs"
-    },
-    {
-      "name": "pingpong-bc",
-      "file": "shader/test/pingong_bc.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs"
-    },
-    {
-      "name": "prez",
-      "file": "shader/test/prez.vs.hlsl",
-      "target": "vs"
-    },
-    {
-      "name": "render selected buffer",
-      "file": "shader/test/render_selected_buffer.ps.hlsl",
-      "target": "ps",
-      "entry": "MainPs"
-    },
-    {
-      "name": "brdf forward",
-      "file": "shader/brdf/brdf_forward.ps.hlsl",
-      "target": "ps"
-    },
-    {
-      "name": "postprocess",
-      "file": "shader/postprocess/oetf.ps.hlsl",
-      "target": "ps"
-    }
-  ],
   "materials": [
     {
       "name": "dispatch cs",
