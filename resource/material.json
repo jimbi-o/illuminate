@@ -97,10 +97,14 @@
     {
       "name": "dispatch cs",
       "rootsig": "dispatch cs",
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/test/dispatch.cs.hlsl",
-          "target": "cs"
+          "shaders": [
+            {
+              "file": "shader/test/dispatch.cs.hlsl",
+              "target": "cs"
+            }
+          ]
         }
       ]
     },
@@ -111,15 +115,19 @@
       "depth_stencil": {
         "depth_enable": false
       },
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-          "target": "vs"
-        },
-        {
-          "file": "shader/test/output_to_swapchain.vs.ps.hlsl",
-          "target": "ps",
-          "entry": "MainPs"
+          "shaders": [
+            {
+              "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/test/output_to_swapchain.vs.ps.hlsl",
+              "target": "ps",
+              "entry": "MainPs"
+            }
+          ]
         }
       ]
     },
@@ -130,15 +138,19 @@
       "depth_stencil": {
         "depth_enable": false
       },
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-          "target": "vs"
-        },
-        {
-          "file": "shader/test/pingong_a.ps.hlsl",
-          "target": "ps",
-          "entry": "MainPs"
+          "shaders": [
+            {
+              "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/test/pingong_a.ps.hlsl",
+              "target": "ps",
+              "entry": "MainPs"
+            }
+          ]
         }
       ]
     },
@@ -149,15 +161,19 @@
       "depth_stencil": {
         "depth_enable": false
       },
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-          "target": "vs"
-        },
-        {
-          "file": "shader/test/pingong_bc.ps.hlsl",
-          "target": "ps",
-          "entry": "MainPs"
+          "shaders": [
+            {
+              "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/test/pingong_bc.ps.hlsl",
+              "target": "ps",
+              "entry": "MainPs"
+            }
+          ]
         }
       ]
     },
@@ -219,15 +235,19 @@
       "depth_stencil": {
         "depth_enable": false
       },
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-          "target": "vs"
-        },
-        {
-          "file": "shader/test/render_selected_buffer.ps.hlsl",
-          "target": "ps",
-          "entry": "MainPs"
+          "shaders": [
+            {
+              "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/test/render_selected_buffer.ps.hlsl",
+              "target": "ps",
+              "entry": "MainPs"
+            }
+          ]
         }
       ]
     },
@@ -271,14 +291,18 @@
       "depth_stencil": {
         "depth_enable": false
       },
-      "shaders": [
+      "variations": [
         {
-          "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-          "target": "vs"
-        },
-        {
-          "file": "shader/postprocess/oetf.ps.hlsl",
-          "target": "ps"
+          "shaders": [
+            {
+              "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/postprocess/oetf.ps.hlsl",
+              "target": "ps"
+            }
+          ]
         }
       ]
     }
