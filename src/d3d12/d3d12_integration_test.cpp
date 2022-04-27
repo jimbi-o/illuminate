@@ -24,6 +24,7 @@
 #include "render_pass/d3d12_render_pass_mesh_transform.h"
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "shader_defines.h"
+#define FORCE_SRV_FOR_ALL
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
@@ -401,7 +402,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
-      frame_loop_num = 100;
+      frame_loop_num = 300;
     }
     AddSystemBuffers(&json);
     AddSystemBarriers(&json);
@@ -436,6 +437,18 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .swapchain = render_graph.swapchain_format,
       .primarybuffer = render_graph.primarybuffer_format,
     };
+#ifdef FORCE_SRV_FOR_ALL
+    for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
+      auto& buffer_config = render_graph.buffer_list[i];
+      if ((buffer_config.descriptor_type_flags & kDescriptorTypeFlagCbv) == 0 && (buffer_config.descriptor_type_flags & kDescriptorTypeFlagSrv) == 0) {
+        auto original_flag = buffer_config.descriptor_type_flags;
+        buffer_config.descriptor_type_flags = kDescriptorTypeFlagSrv;
+        render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] += GetBufferAllocationNum(buffer_config, render_graph.frame_buffer_num);
+        buffer_config.descriptor_type_flags |= original_flag;
+        buffer_config.flags = buffer_config.flags & (~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+      }
+    }
+#endif
     buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
     CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num, render_graph.sampler_num, render_graph.descriptor_handle_num_per_type, &allocator));
     command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());

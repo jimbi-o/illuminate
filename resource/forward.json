@@ -114,7 +114,7 @@
       }
     },
     {
-      "name": "oetf",
+      "name": "output to swapchain",
       "type": "postprocess",
       "enabled": true,
       "command_queue": "queue_graphics",
@@ -131,6 +131,30 @@
       ],
       "material": "oetf",
       "sampler": ["bilinear"]
+    },
+    {
+      "name": "debug buffer",
+      "type": "debug buffer",
+      "enabled": false,
+      "command_queue": "queue_graphics",
+      "execute": true,
+      "buffer_list": [
+        {
+          "name": "swapchain",
+          "state": "rtv"
+        }
+      ],
+      "sampler": ["bilinear"],
+      "material": "render selected buffer",
+      "prepass_barrier": [
+        {
+          "buffer_name": "swapchain",
+          "type": "transition",
+          "split_type": "none",
+          "state_before": ["present"],
+          "state_after": ["rtv"]
+        }
+      ]
     },
     {
       "name": "imgui",
