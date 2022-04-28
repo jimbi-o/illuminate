@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_D3D12_RENDER_PASS_COMMON_UTIL_H
-#define ILLUMINATE_D3D12_RENDER_PASS_COMMON_UTIL_H
+#ifndef ILLUMINATE_D3D12_RENDER_PASS_UTIL_H
+#define ILLUMINATE_D3D12_RENDER_PASS_UTIL_H
 #include "d3d12_render_pass_common.h"
 #include "illuminate/math/math.h"
 #include "../d3d12_header_common.h"

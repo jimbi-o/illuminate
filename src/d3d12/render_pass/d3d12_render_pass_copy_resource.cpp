@@ -1,5 +1,5 @@
 #include "d3d12_render_pass_copy_resource.h"
-#include "d3d12_render_pass_common_util.h"
+#include "d3d12_render_pass_util.h"
 namespace illuminate {
 namespace {
 enum class State : uint8_t { kUpload = 0, kUploading, kDone, };

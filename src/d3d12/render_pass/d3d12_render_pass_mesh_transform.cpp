@@ -1,5 +1,5 @@
 #include "d3d12_render_pass_mesh_transform.h"
-#include "d3d12_render_pass_common_util.h"
+#include "d3d12_render_pass_util.h"
 namespace illuminate {
 namespace {
 struct Param {
