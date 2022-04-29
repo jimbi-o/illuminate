@@ -11,6 +11,7 @@ constexpr inline StrHash CompileTimeStrHash(const char (&str)[N], const StrHash 
   return (len <= 1) ? static_cast<std::make_unsigned_t<char>>(str[0]) : (prime * CompileTimeStrHash(str, prime, len-1) + static_cast<std::make_unsigned_t<char>>(str[len-1]));
 }
 StrHash CalcStrHash(const char* const str, const StrHash prime = kStrHashPrime);
+StrHash CombineHash(const StrHash& a, const StrHash& b);
 }
 #define SID CompileTimeStrHash
 #endif

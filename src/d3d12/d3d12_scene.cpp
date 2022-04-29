@@ -143,6 +143,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
   for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
     scene_data.submesh_vertex_buffer_view[i] = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
   }
+  scene_data.submesh_material_variation_hash = AllocateArray<StrHash>(allocator, mesh_num);
   scene_data.buffer_allocation_num = mesh_num * kVertexBufferTypeNum + 1/*transform buffer*/;
   scene_data.buffer_allocation_upload  = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
   scene_data.buffer_allocation_default = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
@@ -177,6 +178,9 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
         FillResourceData(model, primitive.attributes.at("TANGENT"), &scene_data, &buffer_allocation_index, &view.BufferLocation, nullptr, &view.SizeInBytes, nullptr, &view.StrideInBytes, gpu_buffer_allocator, ("mesh_vbpos" + std::to_string(mesh_index)).data());
       } else {
         logwarn("missing TANGENT. {} {} {}", i, j, mesh_index);
+      }
+      if (false) {
+        // submesh_material_variation_hash[mesh_index] = GetMaterialVariationHash(); // TODO
       }
     }
   }

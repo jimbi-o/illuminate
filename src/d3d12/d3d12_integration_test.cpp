@@ -380,21 +380,23 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   DescriptorCpu descriptor_cpu;
   BufferList buffer_list;
   DescriptorGpu descriptor_gpu;
-  PsoRootsigManager pso_rootsig_manager;
   RenderGraph render_graph;
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
   uint32_t transform_buffer_allocation_index{kInvalidIndex};
   uint32_t scene_cbv_buffer_config_index{kInvalidIndex};
+  MaterialList material_list{};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
   char** render_pass_name{nullptr};
 #endif
   auto frame_loop_num = kFrameLoopNum;
   {
     auto material_json = GetTestJson("material.json");
-    CHECK_UNARY(pso_rootsig_manager.Init(material_json, device.Get(), &allocator));
-    const auto material_variation_map = CreateMaterialVariationMap(material_json, &allocator);
+    ShaderCompiler shader_compiler;
+    CHECK_UNARY(shader_compiler.Init());
+    material_list = shader_compiler.BuildMaterials(material_json, device.Get(), &allocator);
+    shader_compiler.Term();
     nlohmann::json json;
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
@@ -406,7 +408,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     AddSystemBuffers(&json);
     AddSystemBarriers(&json);
-    ParseRenderGraphJson(json, material_variation_map.material_num, material_variation_map.material_hash_list, &allocator, &render_graph);
+    ParseRenderGraphJson(json, material_list.material_num, material_list.material_hash_list, &allocator, &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
     CHECK_UNARY(command_list_set.Init(device.Get(),
                                       render_graph.command_queue_num,
@@ -564,7 +566,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .main_buffer_size = &main_buffer_size,
       .scene_data = &scene_data,
       .frame_index = frame_index,
-      .pso_rootsig_manager = &pso_rootsig_manager,
       .buffer_list = &buffer_list,
       .buffer_config_list = render_graph.buffer_list,
       .dynamic_data = &dynamic_data,
@@ -573,6 +574,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .descriptor_gpu = &descriptor_gpu,
       .descriptor_cpu = &descriptor_cpu,
       .resource_state_list = resource_state_list,
+      .material_list = &material_list,
     };
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       if (!render_pass_enable_flag[k]) { continue; }
@@ -628,8 +630,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     RenderPassTerm(&render_pass_function_list, i);
   }
+  ReleasePsoAndRootsig(&material_list);
   swapchain.Term();
-  pso_rootsig_manager.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();
   RegisterResource(swapchain_buffer_allocation_index, nullptr, &buffer_list);

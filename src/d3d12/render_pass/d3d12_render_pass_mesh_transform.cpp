@@ -49,18 +49,25 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
     D3D12_RECT scissor_rect{0L, 0L, static_cast<LONG>(width), static_cast<LONG>(height)};
     command_list->RSSetScissorRects(1, &scissor_rect);
   }
-  command_list->SetGraphicsRootSignature(GetRenderPassRootSig(args_common, args_per_pass));
-  command_list->SetPipelineState(GetRenderPassPso(args_common, args_per_pass));
+  const auto material_id = GetRenderPassMaterial(args_common, args_per_pass);
+  command_list->SetGraphicsRootSignature(GetMaterialRootsig(*args_common->material_list, material_id));
   command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   command_list->OMSetRenderTargets(pass_vars->rtv_num, rtv_handle, true, dsv_handle);
   command_list->OMSetStencilRef(pass_vars->stencil_val);
   command_list->SetGraphicsRootDescriptorTable(1, args_per_pass->gpu_handles[0]);
   const auto scene_data = args_common->scene_data;
+  auto prev_variation_index = MaterialList::kInvalidIndex;
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     if (scene_data->model_instance_num[i] == 0) { continue; }
     command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i], 0);
     for (uint32_t j = 0; j < scene_data->model_submesh_num[i]; j++) {
       const auto submesh_index = scene_data->model_submesh_index[i][j];
+      const auto variation_index = GetMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index], 0);
+      if (variation_index == MaterialList::kInvalidIndex) { continue; }
+      if (prev_variation_index != variation_index) {
+        command_list->SetPipelineState(GetMaterialPso(*args_common->material_list, material_id, variation_index));
+        prev_variation_index = variation_index;
+      }
       command_list->IASetIndexBuffer(&scene_data->submesh_index_buffer_view[submesh_index]);
       D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[] = {
         scene_data->submesh_vertex_buffer_view[kVertexBufferTypePosition][submesh_index],

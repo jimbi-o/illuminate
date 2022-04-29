@@ -132,20 +132,27 @@ IDxcResult* CompileShaderFile(IDxcUtils* utils, IDxcCompiler3* compiler, IDxcInc
   if (result) { result->Release(); }
   return nullptr;
 }
+auto CountParamCombinationNum(const nlohmann::json& variation) {
+  if (!variation.contains("params")) {
+    return 1U;
+  }
+  uint32_t v = 1;
+  for (const auto& param : variation.at("params")) {
+    v *= GetUint32(param.at("val").size());
+  }
+  return v;
+}
+auto CountVariationNum(const nlohmann::json& material) {
+  uint32_t count = 0;
+  for (const auto& variation : material.at("variations")) {
+    count += CountParamCombinationNum(variation);
+  }
+  return count;
+}
 auto CountPsoNum(const nlohmann::json& json) {
   uint32_t count = 0;
   for (const auto& material : json) {
-    for (const auto& variation : material.at("variations")) {
-      if (!variation.contains("params")) {
-        count++;
-        continue;
-      }
-      uint32_t v = 1;
-      for (const auto& param : variation.at("params")) {
-        v *= GetUint32(param.at("val").size());
-      }
-      count += v;
-    }
+    count += CountVariationNum(material);
   }
   return count;
 }
@@ -447,14 +454,12 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
       auto [compile_args_num, compile_args, entry_index, target_index, params_index] = PrepareCompileArgsFromCommonSettings(common_settings, params_num, &variation_allocator);
       auto param_array_size_list = AllocateArray<uint32_t>(&variation_allocator, params_num);
       auto param_index_list = AllocateArray<uint32_t>(&variation_allocator, params_num);
+      SetArrayValues(0, params_num, param_index_list);
+      SetArrayValues(1, params_num, param_array_size_list);
       if (params_json) {
         for (uint32_t j = 0; j < params_num; j++) {
           param_array_size_list[j] = GetUint32((*params_json)[j].at("val").size());
-          param_index_list[j] = 0;
         }
-      } else {
-        param_array_size_list[0] = 1;
-        param_index_list[0] = 0;
       }
       while (true) {
         auto shader_list_allocator = GetTemporalMemoryAllocator();
@@ -487,8 +492,51 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
     }
   }
 }
+auto CalcMaterialVariationParamsHash(const nlohmann::json& params, const uint32_t* param_index) {
+  StrHash hash{};
+  for (uint32_t i = 0; i < params.size(); i++) {
+    hash = CombineHash(CalcEntityStrHash(params[i], "name"), hash);
+    hash = CombineHash(CalcEntityStrHash(params[i].at("val")[param_index[i]]), hash);
+  }
+  return hash;
+}
+void SetMaterialVariationValues(const nlohmann::json& material_json, MemoryAllocationJanitor* allocator, uint32_t* material_num, uint32_t** material_hash_list, uint32_t** variation_hash_list_len, uint32_t*** variation_hash_list) {
+  const auto& material_list_json = material_json.at("materials");
+  *material_num = CreateJsonStrHashList(material_list_json, "name", material_hash_list, allocator);
+  *variation_hash_list_len = AllocateArray<uint32_t>(allocator, *material_num);
+  *variation_hash_list = AllocateArray<StrHash*>(allocator, *material_num);
+  for (uint32_t i = 0; i < *material_num; i++) {
+    const auto& material = material_list_json[i];
+    const auto variation_num = CountVariationNum(material);
+    (*variation_hash_list_len)[i] = variation_num;
+    (*variation_hash_list)[i] = AllocateArray<StrHash>(allocator, variation_num);
+    uint32_t hash_index = 0;
+    for (const auto& variation : material.at("variations")) {
+      const auto& params_json = variation.contains("params") ? &variation.at("params") : nullptr;
+      const auto params_num = params_json ? GetUint32(params_json->size()) : 1;
+      auto tmp_allocator = GetTemporalMemoryAllocator();
+      auto param_array_size_list = AllocateArray<uint32_t>(&tmp_allocator, params_num);
+      auto param_index_list = AllocateArray<uint32_t>(&tmp_allocator, params_num);
+      SetArrayValues(0, params_num, param_index_list);
+      SetArrayValues(1, params_num, param_array_size_list);
+      if (params_json) {
+        for (uint32_t j = 0; j < params_num; j++) {
+          param_array_size_list[j] = GetUint32((*params_json)[j].at("val").size());
+        }
+      }
+      while (true) {
+        (*variation_hash_list)[i][hash_index] = params_json ? CalcMaterialVariationParamsHash(*params_json, param_index_list) : StrHash();
+        hash_index++;
+        if (!SucceedMultipleIndex(params_num, param_array_size_list, param_index_list)) {
+          break;
+        }
+      }
+    }
+    assert(hash_index == (*variation_hash_list_len)[i]);
+  }
+}
 } // anonymous namespace
-bool PsoRootsigManager::Init(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator) {
+bool ShaderCompiler::Init() {
   library_ = LoadDxcLibrary();
   if (library_ == nullptr) { return false; }
   compiler_ = CreateDxcShaderCompiler(library_);
@@ -497,16 +545,9 @@ bool PsoRootsigManager::Init(const nlohmann::json& material_json, D3d12Device* d
   if (compiler_ == nullptr) { return false; }
   include_handler_ = CreateDxcIncludeHandler(utils_);
   if (include_handler_ == nullptr) { return false; }
-  ParseJson(material_json, compiler_, include_handler_, utils_, device, &rootsig_num_, &rootsig_list_, &pso_num_, &pso_list_, &material_pso_offset_, allocator);
   return true;
 }
-void PsoRootsigManager::Term() {
-  for (uint32_t i = 0; i < pso_num_; i++) {
-    pso_list_[i]->Release();
-  }
-  for (uint32_t i = 0; i < rootsig_num_; i++) {
-    rootsig_list_[i]->Release();
-  }
+void ShaderCompiler::Term() {
   if (include_handler_) {
     include_handler_->Release();
   }
@@ -520,16 +561,28 @@ void PsoRootsigManager::Term() {
     FreeLibrary(library_);
   }
 }
-MaterialVariationMap CreateMaterialVariationMap(const nlohmann::json& material_json, MemoryAllocationJanitor* allocator) {
-  MaterialVariationMap map{};
-  map.material_num = CreateJsonStrHashList(material_json.at("materials"), "name", &map.material_hash_list, allocator);
-  map.variation_hash_list_len = AllocateArray<uint32_t>(allocator, map.material_num);
-  map.variation_hash_list = AllocateArray<StrHash*>(allocator, map.material_num);
-  return map;
+MaterialList ShaderCompiler::BuildMaterials(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator) {
+  MaterialList list{};
+  ParseJson(material_json, compiler_, include_handler_, utils_, device, &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, allocator);
+  SetMaterialVariationValues(material_json, allocator, &list.material_num, &list.material_hash_list, &list.variation_hash_list_len, &list.variation_hash_list);
+  return list;
 }
-uint32_t GetMaterialVariationIndex(const uint32_t material, const StrHash& variation, const MaterialVariationMap& material_variation_map) {
-  // TODO
-  return 0;
+void ReleasePsoAndRootsig(MaterialList* list) {
+  for (uint32_t i = 0; i < list->pso_num; i++) {
+    list->pso_list[i]->Release();
+  }
+  for (uint32_t i = 0; i < list->rootsig_num; i++) {
+    list->rootsig_list[i]->Release();
+  }
+}
+uint32_t GetMaterialVariationIndex(const MaterialList& material_list, const uint32_t material, const StrHash variation_hash, const uint32_t fallback_index) {
+  if (material >= material_list.material_num) { return MaterialList::kInvalidIndex; }
+  for (uint32_t i = 0; i < material_list.variation_hash_list_len[material]; i++) {
+    if (material_list.variation_hash_list[material][i] == variation_hash) {
+      return i;
+    }
+  }
+  return fallback_index;
 }
 } // namespace illuminate
 #include "doctest/doctest.h"

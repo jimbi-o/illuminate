@@ -38,13 +38,13 @@ constexpr inline auto GetRenderPassMaterial(RenderPassFuncArgsRenderCommon* args
   return GetRenderPass(args_common, args_per_pass).material;
 }
 constexpr inline auto GetRenderPassRootSig(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  return args_common->pso_rootsig_manager->GetMaterialRootsig(GetRenderPassMaterial(args_common, args_per_pass));
+  return GetMaterialRootsig(*args_common->material_list, GetRenderPassMaterial(args_common, args_per_pass));
 }
 constexpr inline auto GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  return args_common->pso_rootsig_manager->GetMaterialPso(GetRenderPassMaterial(args_common, args_per_pass));
+  return GetMaterialPso(*args_common->material_list, GetRenderPassMaterial(args_common, args_per_pass));
 }
 constexpr inline auto GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t variation_index) {
-  return args_common->pso_rootsig_manager->GetMaterialPso(GetRenderPassMaterial(args_common, args_per_pass), variation_index);
+  return GetMaterialPso(*args_common->material_list, GetRenderPassMaterial(args_common, args_per_pass), variation_index);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator);
 }

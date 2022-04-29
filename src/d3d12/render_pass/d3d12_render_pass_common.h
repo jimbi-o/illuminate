@@ -5,10 +5,9 @@
 namespace illuminate {
 class DescriptorCpu;
 class DescriptorGpu;
-class PsoRootsigManager;
 struct BufferConfig;
 struct BufferList;
-struct MaterialCategoryList;
+struct MaterialList;
 struct RenderPass;
 struct SceneData;
 struct RenderPassFuncArgsInit {
@@ -36,7 +35,6 @@ struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
   SceneData* scene_data{nullptr};
   uint32_t frame_index{0};
-  PsoRootsigManager* pso_rootsig_manager{nullptr};
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
   RenderPassConfigDynamicData* dynamic_data{nullptr};
@@ -45,6 +43,7 @@ struct RenderPassFuncArgsRenderCommon {
   DescriptorGpu* descriptor_gpu{nullptr};
   DescriptorCpu* descriptor_cpu{nullptr};
   const ResourceStateType*** resource_state_list{nullptr};
+  MaterialList* material_list{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};

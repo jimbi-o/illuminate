@@ -14,6 +14,12 @@ StrHash CalcStrHash(const char* const str, const StrHash prime) {
 #endif
   return hash;
 }
+StrHash CombineHash(const StrHash& a, const StrHash& b) {
+  // https://www.boost.org/doc/libs/1_55_0/doc/html/hash/reference.html#boost.hash_combine
+  StrHash seed{a};
+  seed ^= b + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+  return seed;
+}
 } // namespace illuminate
 #include "doctest/doctest.h"
 TEST_CASE("strhash") {

@@ -20,6 +20,7 @@ struct SceneData {
   uint32_t* submesh_index_buffer_len{nullptr};
   D3D12_INDEX_BUFFER_VIEW*  submesh_index_buffer_view{nullptr};
   D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view[kVertexBufferTypeNum]{};
+  StrHash* submesh_material_variation_hash{nullptr};
   // buffer allocations
   uint32_t buffer_allocation_num{0};
   BufferAllocation* buffer_allocation_upload{nullptr};

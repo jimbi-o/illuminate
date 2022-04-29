@@ -11,6 +11,11 @@ bool SucceedMultipleIndex(const uint32_t array_size, const uint32_t* array_size_
   }
   return false;
 }
+void SetArrayValues(const uint32_t val, const uint32_t array_size, uint32_t* array) {
+  for (uint32_t i = 0; i < array_size; i++) {
+    array[i] = val;
+  }
+}
 }
 #include "doctest/doctest.h"
 #include "illuminate/memory/memory_allocation.h"
