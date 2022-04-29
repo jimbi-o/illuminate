@@ -575,14 +575,14 @@ void ReleasePsoAndRootsig(MaterialList* list) {
     list->rootsig_list[i]->Release();
   }
 }
-uint32_t GetMaterialVariationIndex(const MaterialList& material_list, const uint32_t material, const StrHash variation_hash, const uint32_t fallback_index) {
+uint32_t FindMaterialVariationIndex(const MaterialList& material_list, const uint32_t material, const StrHash variation_hash) {
   if (material >= material_list.material_num) { return MaterialList::kInvalidIndex; }
   for (uint32_t i = 0; i < material_list.variation_hash_list_len[material]; i++) {
     if (material_list.variation_hash_list[material][i] == variation_hash) {
       return i;
     }
   }
-  return fallback_index;
+  return MaterialList::kInvalidIndex;
 }
 } // namespace illuminate
 #include "doctest/doctest.h"

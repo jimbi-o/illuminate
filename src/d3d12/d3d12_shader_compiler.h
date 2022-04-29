@@ -42,7 +42,7 @@ constexpr auto GetMaterialPso(const MaterialList& material_list, const uint32_t 
 constexpr auto GetMaterialPso(const MaterialList& material_list, const uint32_t material, const uint32_t variation_index) {
   return material_list.pso_list[GetMaterialPsoIndex(material_list, material, variation_index)];
 }
-uint32_t GetMaterialVariationIndex(const MaterialList& material_list, const uint32_t material, const StrHash variation_hash, const uint32_t fallback_index);
+uint32_t FindMaterialVariationIndex(const MaterialList& material_list, const uint32_t material, const StrHash variation_hash);
 void ReleasePsoAndRootsig(MaterialList*);
 }
 #endif

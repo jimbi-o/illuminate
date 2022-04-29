@@ -62,8 +62,11 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
     command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i], 0);
     for (uint32_t j = 0; j < scene_data->model_submesh_num[i]; j++) {
       const auto submesh_index = scene_data->model_submesh_index[i][j];
-      const auto variation_index = GetMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index], 0);
-      if (variation_index == MaterialList::kInvalidIndex) { continue; }
+      auto variation_index = FindMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index]);
+      if (variation_index == MaterialList::kInvalidIndex) {
+        logwarn("material variation not found. pass:{} material:{} submesh:{}", GetRenderPass(args_common, args_per_pass).name, material_id, submesh_index);
+        variation_index = 0;
+      }
       if (prev_variation_index != variation_index) {
         command_list->SetPipelineState(GetMaterialPso(*args_common->material_list, material_id, variation_index));
         prev_variation_index = variation_index;

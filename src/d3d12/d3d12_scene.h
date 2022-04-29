@@ -21,6 +21,7 @@ struct SceneData {
   D3D12_INDEX_BUFFER_VIEW*  submesh_index_buffer_view{nullptr};
   D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view[kVertexBufferTypeNum]{};
   StrHash* submesh_material_variation_hash{nullptr};
+  uint32_t* submesh_material_instance_index{nullptr};
   // buffer allocations
   uint32_t buffer_allocation_num{0};
   BufferAllocation* buffer_allocation_upload{nullptr};
@@ -31,7 +32,7 @@ struct SceneData {
   uint32_t transform_buffer_allocation_index{0};
 };
 class MemoryAllocationJanitor;
-SceneData GetSceneFromTinyGltfText(const char* const gltf_text, const char* const base_dir, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator);
+struct MaterialList;
 SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator);
 void ReleaseSceneData(SceneData* scene_data);
 }
