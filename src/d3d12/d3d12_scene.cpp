@@ -158,7 +158,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
     scene_data.submesh_vertex_buffer_view[i] = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
   }
   scene_data.submesh_material_variation_hash = AllocateArray<StrHash>(allocator, mesh_num);
-  scene_data.submesh_material_instance_index = AllocateArray<uint32_t>(allocator, mesh_num);
+  scene_data.submesh_material_index = AllocateArray<uint32_t>(allocator, mesh_num);
   scene_data.buffer_allocation_num = mesh_num * kVertexBufferTypeNum + 1/*transform buffer*/;
   scene_data.buffer_allocation_upload  = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
   scene_data.buffer_allocation_default = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
@@ -194,13 +194,13 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
       } else {
         logwarn("missing TANGENT. {} {} {}", i, j, mesh_index);
       }
-      if (primitive.material < model.materials.size()) {
+      if (primitive.material >= 0 && primitive.material < model.materials.size()) {
         scene_data.submesh_material_variation_hash[mesh_index] = GetModelMaterialVariationHash(model.materials[primitive.material]);
-        scene_data.submesh_material_instance_index[mesh_index] = primitive.material;
+        scene_data.submesh_material_index[mesh_index] = primitive.material;
       } else {
         logwarn("invalid material i:{} j:{} mesh_index:{} m:{} msize:{}", i, j, mesh_index, primitive.material, model.materials.size());
         scene_data.submesh_material_variation_hash[mesh_index] = MaterialList::kInvalidIndex;
-        scene_data.submesh_material_instance_index[mesh_index] = 0;
+        scene_data.submesh_material_index[mesh_index] = 0;
       }
     }
   }

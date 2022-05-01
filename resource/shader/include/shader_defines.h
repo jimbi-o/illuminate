@@ -1,6 +1,7 @@
 #ifndef ILLUMINATE_RESOURCE_SHADER_SHADER_DEFINE_H
 #define ILLUMINATE_RESOURCE_SHADER_SHADER_DEFINE_H
 #ifdef __cplusplus
+#include "illuminate/math/math.h"
 namespace illuminate::shader {
 using uint = uint32_t;
 #endif

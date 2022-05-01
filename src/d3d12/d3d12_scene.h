@@ -2,6 +2,7 @@
 #define ILLUMINATE_D3D12_SCENE_H
 #include "d3d12_header_common.h"
 #include "d3d12_gpu_buffer_allocator.h"
+#include "shader_defines.h"
 namespace illuminate {
 enum VertexBufferType : uint8_t {
   kVertexBufferTypePosition = 0,
@@ -21,7 +22,9 @@ struct SceneData {
   D3D12_INDEX_BUFFER_VIEW*  submesh_index_buffer_view{nullptr};
   D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view[kVertexBufferTypeNum]{};
   StrHash* submesh_material_variation_hash{nullptr};
-  uint32_t* submesh_material_instance_index{nullptr};
+  uint32_t* submesh_material_index{nullptr};
+  // per material
+  shader::MaterialIndexList* material_index_list{nullptr};
   // buffer allocations
   uint32_t buffer_allocation_num{0};
   BufferAllocation* buffer_allocation_upload{nullptr};
