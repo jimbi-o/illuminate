@@ -1,7 +1,8 @@
 #ifndef ILLUMINATE_RESOURCE_SHADER_TEST_PREZ_HLSLI
 #define ILLUMINATE_RESOURCE_SHADER_TEST_PREZ_HLSLI
+#include "shader/include/shader_defines.h"
+#include "shader/include/mesh_deform_defines.hlsli"
 #include "shader/include/material_defines.hlsli"
-#include "shader/mesh_transform/mesh_transform.hlsli"
 #define PrezRootsig                                     \
   "RootFlags(                                           \
   ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |                  \

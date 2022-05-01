@@ -214,7 +214,7 @@
       },
       "variations": [
         {
-          "input_element": ["POSITION", "NORMAL", "TANGENT"],
+          "input_element": ["POSITION", "NORMAL", "TANGENT", "TEXCOORD0"],
           "params": [
             {
               "name": "MESH_DEFORM_TYPE",
