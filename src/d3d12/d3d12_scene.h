@@ -29,14 +29,10 @@ struct SceneData {
   uint32_t buffer_allocation_num{0};
   BufferAllocation* buffer_allocation_upload{nullptr};
   BufferAllocation* buffer_allocation_default{nullptr};
-  // transform buffer info
-  uint32_t transform_element_num{0};
-  uint32_t transform_buffer_stride_size{0};
-  uint32_t transform_buffer_allocation_index{0};
 };
 class MemoryAllocationJanitor;
 struct MaterialList;
-SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator);
+SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator, ID3D12Resource* transform_resource);
 void ReleaseSceneData(SceneData* scene_data);
 }
 #endif

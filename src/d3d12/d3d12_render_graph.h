@@ -27,6 +27,10 @@ struct BufferConfig {
   bool descriptor_only{false};
   bool pingpong{false};
   bool frame_buffered{false};
+  bool need_upload{false};
+  uint32_t num_elements{0};
+  uint32_t stride_bytes{0};
+  bool raw_buffer{false};
 };
 struct RenderPassBuffer {
   uint32_t buffer_index{~0U};

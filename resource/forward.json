@@ -34,6 +34,17 @@
   },
   "buffer": [
     {
+      "name": "transforms",
+      "format": "UNKNOWN",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "num_elements": 1024,
+      "stride_bytes": 64,
+      "raw_buffer": false,
+      "need_upload": true,
+      "comment": "stride_bytes:64=4*4*4(matrix)"
+    },
+    {
       "name": "primary",
       "initial_state": "rtv"
     },

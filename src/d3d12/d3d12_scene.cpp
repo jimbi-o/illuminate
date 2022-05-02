@@ -135,7 +135,7 @@ auto GetModelMaterialVariationHash(const tinygltf::Material& material) {
   }
   return hash;
 }
-auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
+auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator, ID3D12Resource* transform_resource) {
   SceneData scene_data{};
   scene_data.model_num = GetUint32(model.meshes.size());
   scene_data.model_instance_num = AllocateArray<uint32_t>(allocator, scene_data.model_num);
@@ -159,7 +159,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
   }
   scene_data.submesh_material_variation_hash = AllocateArray<StrHash>(allocator, mesh_num);
   scene_data.submesh_material_index = AllocateArray<uint32_t>(allocator, mesh_num);
-  scene_data.buffer_allocation_num = mesh_num * kVertexBufferTypeNum + 1/*transform buffer*/;
+  scene_data.buffer_allocation_num = mesh_num * kVertexBufferTypeNum;
   scene_data.buffer_allocation_upload  = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
   scene_data.buffer_allocation_default = AllocateArray<BufferAllocation>(allocator, scene_data.buffer_allocation_num);
   uint32_t buffer_allocation_index = 0;
@@ -207,46 +207,34 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, D3D12MA::Allocator* gpu_bu
   for (const auto& node : model.scenes[0].nodes) {
     CountModelInstanceNum(model, node, scene_data.model_instance_num);
   }
-  scene_data.transform_element_num = 0;
+  uint32_t transform_element_num = 0;
   for (uint32_t i = 0; i < scene_data.model_num; i++) {
-    scene_data.transform_offset[i] = scene_data.transform_element_num;
-    scene_data.transform_element_num += scene_data.model_instance_num[i];
-  }
-  scene_data.transform_buffer_allocation_index = buffer_allocation_index;
-  buffer_allocation_index++;
-  void* transform_buffer = nullptr;
-  {
-    scene_data.transform_buffer_stride_size = GetUint32(sizeof(matrix));
-    const auto transform_buffer_size = scene_data.transform_buffer_stride_size * scene_data.transform_element_num;
-    auto resource_desc = GetD3d12ResourceDescForBuffer(transform_buffer_size);
-    auto& upload_buffer = scene_data.buffer_allocation_upload[scene_data.transform_buffer_allocation_index];
-    upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, resource_desc, nullptr, gpu_buffer_allocator);
-    auto& default_buffer = scene_data.buffer_allocation_default[scene_data.transform_buffer_allocation_index];
-    default_buffer = CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_desc, nullptr, gpu_buffer_allocator);
-    transform_buffer = MapResource(upload_buffer.resource, transform_buffer_size);
+    scene_data.transform_offset[i] = transform_element_num;
+    transform_element_num += scene_data.model_instance_num[i];
   }
   auto tmp_allocator = GetTemporalMemoryAllocator();
   auto transform_offset_index = AllocateArray<uint32_t>(&tmp_allocator, scene_data.model_num);
   for (uint32_t i = 0; i < scene_data.model_num; i++) {
     transform_offset_index[i] = 0;
   }
+  auto transform_buffer = MapResource(transform_resource, sizeof(matrix) * mesh_num);
   for (const auto& node : model.scenes[0].nodes) {
     matrix m{};
     GetIdentityMatrix(m);
     SetTransform(model, node, m, scene_data.transform_offset, transform_offset_index, static_cast<matrix*>(transform_buffer));
   }
-  UnmapResource(scene_data.buffer_allocation_upload[scene_data.transform_buffer_allocation_index].resource);
+  UnmapResource(transform_resource);
   assert(scene_data.buffer_allocation_num == buffer_allocation_index);
   return scene_data;
 }
 } // namespace anonymous
-SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator) {
+SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator, ID3D12Resource* transform_resource) {
   tinygltf::Model model;
   if (!GetTinyGltfModelFromBinaryFile(binary_filename, &model)) {
     logerror("gltf load failed. {}", binary_filename);
     return {};
   }
-  return ParseTinyGltfScene(model, gpu_buffer_allocator, allocator);
+  return ParseTinyGltfScene(model, gpu_buffer_allocator, allocator, transform_resource);
 }
 void ReleaseSceneData(SceneData* scene_data) {
   for (uint32_t i = 0; i < scene_data->buffer_allocation_num; i++) {

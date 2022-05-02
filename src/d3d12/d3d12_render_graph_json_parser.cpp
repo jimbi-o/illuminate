@@ -82,6 +82,7 @@ auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) 
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->pingpong = GetBool(j, "pingpong", false);
   config->frame_buffered = GetBool(j, "frame_buffered", false);
+  config->need_upload = GetBool(j, "need_upload", false);
   if (config->pingpong) {
     assert(!config->frame_buffered);
   }
@@ -114,8 +115,11 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->mip_width = GetNum(j, "mip_width", 0);
   config->mip_height = GetNum(j, "mip_height", 0);
   config->mip_depth = GetNum(j, "mip_depth", 0);
-  config->initial_state = GetResourceStateType(j, "initial_state");
+  config->initial_state = GetResourceStateType(j, "initial_state", ResourceStateType::kCommon);
   config->clear_value.Format = config->format;
+  config->num_elements = GetNum(j, "num_elements", 0);
+  config->stride_bytes = GetNum(j, "stride_bytes", 0);
+  config->raw_buffer = GetBool(j, "raw_buffer", false);
   // clear color/depth/stencil are set later.
 }
 D3D12_FILTER_TYPE GetFilterType(const nlohmann::json& j, const char* const name) {

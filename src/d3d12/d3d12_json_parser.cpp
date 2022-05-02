@@ -100,8 +100,10 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   assert(false && "invalid ResourceStateType");
   return ResourceStateType::kCommon;
 }
-ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* const name) {
-  assert(j.contains(name));
+ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* const name, const ResourceStateType default_val) {
+  if (!j.contains(name)) {
+    return default_val;
+  }
   return GetResourceStateType(j.at(name));
 }
 DescriptorType GetDescriptorType(const std::string_view& str) {

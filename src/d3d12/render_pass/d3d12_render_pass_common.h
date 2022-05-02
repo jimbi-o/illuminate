@@ -30,6 +30,9 @@ struct RenderPassConfigDynamicData {
   float camera_pos[3]{0.0f, 1.2f, -5.0f};
   float camera_focus[3]{};
   float fov_vertical{30.0f}, near_z{0.001f}, far_z{1000.0f};
+  uint32_t copy_buffer_num{0};
+  ID3D12Resource** copy_buffer_resource_upload{nullptr};
+  ID3D12Resource** copy_buffer_resource_default{nullptr};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};

@@ -147,7 +147,12 @@ bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, cons
           break;
         }
         case D3D12_SRV_DIMENSION_BUFFER: {
-          assert(false && "D3D12_SRV_DIMENSION_BUFFER not implemented");
+          desc.Buffer = {
+            .FirstElement = 0,
+            .NumElements = config.num_elements,
+            .StructureByteStride = config.stride_bytes,
+            .Flags = config.raw_buffer ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE,
+          };
           break;
         }
         case D3D12_SRV_DIMENSION_TEXTURE1D: {

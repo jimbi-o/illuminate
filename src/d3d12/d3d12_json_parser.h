@@ -37,7 +37,7 @@ D3D12_RESOURCE_STATES GetD3d12ResourceState(const nlohmann::json& j, const char*
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j, const char* const entity_name);
 DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j);
 ResourceStateType GetResourceStateType(const nlohmann::json& j);
-ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* const name);
+ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* const name, const ResourceStateType default_val);
 DescriptorType GetDescriptorType(const nlohmann::json& j);
 DescriptorType GetDescriptorType(const nlohmann::json& j, const char* const name);
 D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);

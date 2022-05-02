@@ -52,11 +52,6 @@ auto AddSystemBuffers(nlohmann::json* json) {
       "descriptor_only": true,
       "frame_buffered": true,
       "descriptor_types": ["cbv"]
-    },
-    {
-      "name": "transforms",
-      "descriptor_only": true,
-      "descriptor_types": ["srv"]
     }
   ]
   )"_json;
@@ -140,9 +135,6 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         break;
       }
       case SID("copy resource"): {
-        funcs.init[i] = RenderPassCopyResource::Init;
-        funcs.update[i] = RenderPassCopyResource::Update;
-        funcs.is_render_needed[i] = RenderPassCopyResource::IsRenderNeeded;
         funcs.render[i] = RenderPassCopyResource::Render;
         break;
       }
@@ -309,26 +301,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
-auto GetSceneData(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list, MemoryAllocationJanitor* allocator, const uint32_t transform_buffer_allocation_index, DescriptorCpu* descriptor_cpu, D3d12Device* device) {
-  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", buffer_allocator, allocator);
-  auto resource = scene_data.buffer_allocation_default[scene_data.transform_buffer_allocation_index].resource;
-  RegisterResource(transform_buffer_allocation_index, resource, buffer_list);
-  auto cpu_handle = descriptor_cpu->GetHandle(transform_buffer_allocation_index, DescriptorType::kSrv);
-  auto desc = D3D12_SHADER_RESOURCE_VIEW_DESC{
-    .Format = DXGI_FORMAT_UNKNOWN,
-    .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-    .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-    .Buffer = {
-      .FirstElement = 0,
-      .NumElements = scene_data.transform_element_num,
-      .StructureByteStride = scene_data.transform_buffer_stride_size,
-      .Flags = D3D12_BUFFER_SRV_FLAG_NONE,
-    },
-  };
-  device->CreateShaderResourceView(resource, &desc, cpu_handle);
-  SetD3d12Name(resource, "transforms");
-  return scene_data;
-}
 auto PrepareSceneCbvBuffer(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list, const uint32_t frame_buffer_num, const uint32_t scene_cbv_buffer_config_index, DescriptorCpu* descriptor_cpu, MemoryAllocationJanitor* allocator, D3d12Device* device) {
   const auto buffer_size = GetUint32(sizeof(shader::SceneCbvData));
   const auto cbv_buffer_size = AlignAddress(buffer_size, 256); // cbv size must be multiple of 256
@@ -384,7 +356,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
-  uint32_t transform_buffer_allocation_index{kInvalidIndex};
+  uint32_t transform_buffer_config_index{kInvalidIndex};
   uint32_t scene_cbv_buffer_config_index{kInvalidIndex};
   MaterialList material_list{};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
@@ -474,8 +446,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (str.compare("swapchain") == 0) {
         swapchain_buffer_allocation_index = i;
       }
-      if (str.compare("transforms") == 0) {
-        transform_buffer_allocation_index = i;
+      if (transform_buffer_config_index == kInvalidIndex && str.compare("transforms") == 0) {
+        transform_buffer_config_index = buffer_config_index;
       }
       if (scene_cbv_buffer_config_index == kInvalidIndex && str.compare("scene_data") == 0) {
         scene_cbv_buffer_config_index = buffer_config_index;
@@ -524,12 +496,19 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     render_pass_signal[i] = 0UL;
   }
-  auto scene_data = GetSceneData(buffer_allocator, &buffer_list, &allocator, transform_buffer_allocation_index, &descriptor_cpu, device.Get());
+  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", buffer_allocator, &allocator, GetResource(buffer_list, transform_buffer_config_index, kBufferSubIndexUpload));
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
   }
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
+  {
+    dynamic_data.copy_buffer_num = 1;
+    const auto buffer_allocation_index_upload  = GetBufferAllocationIndex(buffer_list, transform_buffer_config_index, kBufferSubIndexUpload);
+    dynamic_data.copy_buffer_resource_upload   = &buffer_list.resource_list[buffer_allocation_index_upload];
+    const auto buffer_allocation_index_default = GetBufferAllocationIndex(buffer_list, transform_buffer_config_index, kBufferSubIndexDefault);
+    dynamic_data.copy_buffer_resource_default  = &buffer_list.resource_list[buffer_allocation_index_default];
+  }
   auto scene_cbv_ptr = PrepareSceneCbvBuffer(buffer_allocator, &buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_config_index, &descriptor_cpu, &allocator, device.Get());
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
@@ -624,6 +603,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
     swapchain.Present();
+    dynamic_data.copy_buffer_num = 0;
   }
   command_queue_signals.WaitAll(device.Get());
   ReleaseSceneData(&scene_data);
@@ -635,7 +615,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   descriptor_gpu.Term();
   descriptor_cpu.Term();
   RegisterResource(swapchain_buffer_allocation_index, nullptr, &buffer_list);
-  RegisterResource(transform_buffer_allocation_index, nullptr, &buffer_list);
   ReleaseBuffers(&buffer_list);
   buffer_allocator->Release();
   command_queue_signals.Term();
