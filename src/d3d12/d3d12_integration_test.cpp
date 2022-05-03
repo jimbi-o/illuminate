@@ -46,12 +46,6 @@ auto AddSystemBuffers(nlohmann::json* json) {
     {
       "name": "imgui_font",
       "descriptor_only": true
-    },
-    {
-      "name": "scene_data",
-      "descriptor_only": true,
-      "frame_buffered": true,
-      "descriptor_types": ["cbv"]
     }
   ]
   )"_json;
@@ -301,23 +295,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
-auto PrepareSceneCbvBuffer(D3D12MA::Allocator* buffer_allocator, BufferList* buffer_list, const uint32_t frame_buffer_num, const uint32_t scene_cbv_buffer_config_index, DescriptorCpu* descriptor_cpu, MemoryAllocationJanitor* allocator, D3d12Device* device) {
-  const auto buffer_size = GetUint32(sizeof(shader::SceneCbvData));
-  const auto cbv_buffer_size = AlignAddress(buffer_size, 256); // cbv size must be multiple of 256
-  auto resource_desc = GetD3d12ResourceDescForBuffer(cbv_buffer_size);
+auto PrepareSceneCbvBuffer(BufferList* buffer_list, const uint32_t frame_buffer_num, const uint32_t scene_cbv_buffer_config_index, const uint32_t buffer_size, MemoryAllocationJanitor* allocator) {
   auto ptr_list = AllocateArray<void*>(allocator, frame_buffer_num);
   for (uint32_t i = 0; i < frame_buffer_num; i++) {
-    auto upload_buffer = CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, resource_desc, nullptr, buffer_allocator);
-    const auto scene_cbv_buffer_allocation_index = GetBufferAllocationIndex(*buffer_list, scene_cbv_buffer_config_index, i);
-    RegisterBufferAllocation(scene_cbv_buffer_allocation_index, upload_buffer, buffer_list);
-    auto cpu_handle = descriptor_cpu->GetHandle(scene_cbv_buffer_allocation_index, DescriptorType::kCbv);
-    D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc{
-      .BufferLocation = upload_buffer.resource->GetGPUVirtualAddress(),
-      .SizeInBytes = cbv_buffer_size,
-    };
-    device->CreateConstantBufferView(&view_desc, cpu_handle);
-    SetD3d12Name(upload_buffer.resource, "scenecbv" + std::to_string(i));
-    ptr_list[i] = MapResource(upload_buffer.resource, buffer_size);
+    ptr_list[i] = MapResource(GetResource(*buffer_list, scene_cbv_buffer_config_index, i), buffer_size);
   }
   return ptr_list;
 }
@@ -509,7 +490,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     const auto buffer_allocation_index_default = GetBufferAllocationIndex(buffer_list, transform_buffer_config_index, kBufferSubIndexDefault);
     dynamic_data.copy_buffer_resource_default  = &buffer_list.resource_list[buffer_allocation_index_default];
   }
-  auto scene_cbv_ptr = PrepareSceneCbvBuffer(buffer_allocator, &buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_config_index, &descriptor_cpu, &allocator, device.Get());
+  auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_config_index, static_cast<uint32_t>(render_graph.buffer_list[scene_cbv_buffer_config_index].width), &allocator);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();

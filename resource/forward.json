@@ -45,6 +45,16 @@
       "comment": "stride_bytes:64=4*4*4(matrix)"
     },
     {
+      "name": "scene_data",
+      "frame_buffered": true,
+      "format": "UNKNOWN",
+      "heap_type": "upload",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "width": 256,
+      "initial_state": "generic_read"
+    },
+    {
       "name": "primary",
       "initial_state": "rtv"
     },
