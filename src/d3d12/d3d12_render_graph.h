@@ -93,6 +93,8 @@ struct RenderGraph {
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
   uint32_t gpu_handle_num_view{0};
   uint32_t gpu_handle_num_sampler{0};
+  uint32_t additional_buffer_num{0};
+  uint32_t additional_buffer_size_in_bytes{0};
 };
 static const uint32_t kBarrierExecutionTimingNum = 2;
 }

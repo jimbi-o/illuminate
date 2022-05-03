@@ -103,6 +103,10 @@
       "clear_stencil": 0
     }
   ],
+  "additional_buffer": {
+    "num": 1024,
+    "size_in_bytes": 16384
+  },
   "sampler": [
     {
       "name": "bilinear",

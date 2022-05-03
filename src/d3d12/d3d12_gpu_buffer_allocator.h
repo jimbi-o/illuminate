@@ -11,8 +11,6 @@ struct BufferAllocation {
 };
 D3D12MA::Allocator* GetBufferAllocator(DxgiAdapter* adapter, D3d12Device* device);
 D3D12_RESOURCE_DESC1 ConvertToD3d12ResourceDesc1(const BufferConfig& config, const MainBufferSize& main_buffer_size);
-BufferAllocation CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* allocator); // TODO remove
-BufferAllocation CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES initial_state, D3D12_RESOURCE_DESC1& resource_desc, const D3D12_CLEAR_VALUE* clear_value, D3D12MA::Allocator* allocator); // TODO remove
 void ReleaseBufferAllocation(BufferAllocation* b);
 void* MapResource(ID3D12Resource* resource, const uint32_t size, const uint32_t read_begin = 0, const uint32_t read_end = 0);
 void UnmapResource(ID3D12Resource* resource);
@@ -21,9 +19,12 @@ static const uint32_t kBufferSubIndexUpload = 1;
 struct BufferList {
   uint32_t** buffer_allocation_index{nullptr};
   uint32_t buffer_allocation_num{0};
+  uint32_t buffer_allocation_num_wo_additional_buffers{0};
   D3D12MA::Allocation** buffer_allocation_list{nullptr};
   ID3D12Resource** resource_list{nullptr};
   uint32_t* buffer_config_index{nullptr};
+  uint32_t additional_buffer_index_upload{};
+  uint32_t additional_buffer_index_default{};
 };
 constexpr inline auto GetBufferAllocationNum(const BufferConfig& config, const uint32_t frame_buffer_num) {
   if (config.pingpong) {
@@ -37,7 +38,7 @@ constexpr inline auto GetBufferAllocationNum(const BufferConfig& config, const u
   }
   return 1U;
 }
-BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator);
+BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const uint32_t additional_buffer_num, const uint32_t additional_buffer_size_in_bytes, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator);
 void ReleaseBuffers(BufferList* buffer_list);
 constexpr inline auto GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const uint32_t index) {
   return buffer_list.buffer_allocation_index[buffer_index][index];

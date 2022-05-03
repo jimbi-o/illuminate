@@ -21,27 +21,5 @@ inline auto CopyStrToWstrContainer(const std::string_view src, MemoryAllocationJ
 // https://stackoverflow.com/questions/49454005/how-to-get-an-array-size-at-compile-time
 template<uint32_t N, class T>
 constexpr auto countof(T(&)[N]) { return N; }
-constexpr inline auto GetD3d12ResourceDescForBuffer(const uint32_t buffer_size) {
-  return D3D12_RESOURCE_DESC1{
-    .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-    .Alignment = 0,
-    .Width = buffer_size,
-    .Height = 1,
-    .DepthOrArraySize = 1,
-    .MipLevels = 1,
-    .Format = DXGI_FORMAT_UNKNOWN,
-    .SampleDesc = {
-      .Count = 1,
-      .Quality = 0,
-    },
-    .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-    .Flags = D3D12_RESOURCE_FLAG_NONE,
-    .SamplerFeedbackMipRegion = {
-      .Width = 0,
-      .Height = 0,
-      .Depth = 0,
-    },
-  };
-}
 }
 #endif

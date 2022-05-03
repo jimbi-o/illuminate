@@ -59,9 +59,9 @@ void RenderPassDebugRenderSelectedBuffer::Render(RenderPassFuncArgsRenderCommon*
   }
 }
 uint32_t RenderPassDebugRenderSelectedBuffer::GetBufferAllocationIndexList(const BufferList& buffer_list, const BufferConfig* buffer_config_list, MemoryAllocationJanitor* allocator, uint32_t** dst_buffer_allocation_index_list) {
-  *dst_buffer_allocation_index_list = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
+  *dst_buffer_allocation_index_list = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num_wo_additional_buffers);
   uint32_t index = 0;
-  for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
+  for (uint32_t i = 0; i < buffer_list.buffer_allocation_num_wo_additional_buffers; i++) {
     if (buffer_list.buffer_allocation_list[i] == nullptr) { continue; }
     auto& buffer_config = buffer_config_list[buffer_list.buffer_config_index[i]];
     if (buffer_config.dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) { continue; }

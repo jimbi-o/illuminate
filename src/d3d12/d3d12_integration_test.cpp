@@ -395,7 +395,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
 #ifdef FORCE_SRV_FOR_ALL
     for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
       auto& buffer_config = render_graph.buffer_list[i];
-      if ((buffer_config.descriptor_type_flags & kDescriptorTypeFlagCbv) == 0 && (buffer_config.descriptor_type_flags & kDescriptorTypeFlagSrv) == 0) {
+      if ((buffer_config.descriptor_type_flags & kDescriptorTypeFlagCbv) == 0
+          && (buffer_config.descriptor_type_flags & kDescriptorTypeFlagSrv) == 0
+          && (buffer_config.descriptor_type_flags & ~kDescriptorTypeFlagCbv) != 0) {
         auto original_flag = buffer_config.descriptor_type_flags;
         buffer_config.descriptor_type_flags = kDescriptorTypeFlagSrv;
         render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] += GetBufferAllocationNum(buffer_config, render_graph.frame_buffer_num);
@@ -404,11 +406,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
 #endif
-    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
-    CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num, render_graph.sampler_num, render_graph.descriptor_handle_num_per_type, &allocator));
+    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, render_graph.additional_buffer_num, render_graph.additional_buffer_size_in_bytes, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
+    CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num_wo_additional_buffers, render_graph.sampler_num, render_graph.descriptor_handle_num_per_type, &allocator));
     command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
     auto& json_buffer_list = json.at("buffer");
-    for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
+    for (uint32_t i = 0; i < buffer_list.buffer_allocation_num_wo_additional_buffers; i++) {
       const auto buffer_config_index = buffer_list.buffer_config_index[i];
       auto& buffer_config = render_graph.buffer_list[buffer_config_index];
       CHECK_UNARY(CreateCpuHandleWithView(buffer_config, i, buffer_list.resource_list[i], &descriptor_cpu, device.Get()));
@@ -477,18 +479,30 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     render_pass_signal[i] = 0UL;
   }
-  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", buffer_allocator, &allocator, GetResource(buffer_list, transform_buffer_config_index, kBufferSubIndexUpload));
+  SceneResources scene_resources {
+    .transform_resource              = GetResource(buffer_list, transform_buffer_config_index, kBufferSubIndexUpload),
+    .mesh_resources_upload           = &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],
+    .mesh_resources_default          = &buffer_list.resource_list[buffer_list.additional_buffer_index_default],
+    .mesh_resource_num               = render_graph.additional_buffer_num,
+    .per_mesh_resource_size_in_bytes = render_graph.additional_buffer_size_in_bytes,
+  };
+  uint32_t used_resource_num = 0;
+  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", &allocator, &scene_resources, &used_resource_num);
+  assert(used_resource_num <= render_graph.additional_buffer_num);
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
   }
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
   {
-    dynamic_data.copy_buffer_num = 1;
-    const auto buffer_allocation_index_upload  = GetBufferAllocationIndex(buffer_list, transform_buffer_config_index, kBufferSubIndexUpload);
-    dynamic_data.copy_buffer_resource_upload   = &buffer_list.resource_list[buffer_allocation_index_upload];
-    const auto buffer_allocation_index_default = GetBufferAllocationIndex(buffer_list, transform_buffer_config_index, kBufferSubIndexDefault);
-    dynamic_data.copy_buffer_resource_default  = &buffer_list.resource_list[buffer_allocation_index_default];
+    dynamic_data.copy_buffer_num = used_resource_num + 1;
+    dynamic_data.copy_buffer_resource_upload  = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
+    dynamic_data.copy_buffer_resource_default = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
+    dynamic_data.copy_buffer_resource_upload[0]  = GetResource(buffer_list, transform_buffer_config_index, kBufferSubIndexUpload);
+    dynamic_data.copy_buffer_resource_default[0] = GetResource(buffer_list, transform_buffer_config_index, kBufferSubIndexDefault);
+    const auto copy_size = sizeof(dynamic_data.copy_buffer_resource_upload[1]) * used_resource_num;
+    memcpy(&dynamic_data.copy_buffer_resource_upload[1],  &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],  copy_size);
+    memcpy(&dynamic_data.copy_buffer_resource_default[1], &buffer_list.resource_list[buffer_list.additional_buffer_index_default], copy_size);
   }
   auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_config_index, static_cast<uint32_t>(render_graph.buffer_list[scene_cbv_buffer_config_index].width), &allocator);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
@@ -587,7 +601,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     dynamic_data.copy_buffer_num = 0;
   }
   command_queue_signals.WaitAll(device.Get());
-  ReleaseSceneData(&scene_data);
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     RenderPassTerm(&render_pass_function_list, i);
   }

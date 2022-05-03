@@ -25,14 +25,16 @@ struct SceneData {
   uint32_t* submesh_material_index{nullptr};
   // per material
   shader::MaterialIndexList* material_index_list{nullptr};
-  // buffer allocations
-  uint32_t buffer_allocation_num{0};
-  BufferAllocation* buffer_allocation_upload{nullptr};
-  BufferAllocation* buffer_allocation_default{nullptr};
 };
 class MemoryAllocationJanitor;
 struct MaterialList;
-SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, D3D12MA::Allocator* gpu_buffer_allocator, MemoryAllocationJanitor* allocator, ID3D12Resource* transform_resource);
-void ReleaseSceneData(SceneData* scene_data);
+struct SceneResources {
+  ID3D12Resource*  transform_resource{};
+  ID3D12Resource** mesh_resources_upload{};
+  ID3D12Resource** mesh_resources_default{};
+  uint32_t mesh_resource_num{};
+  uint32_t per_mesh_resource_size_in_bytes{};
+};
+SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num);
 }
 #endif

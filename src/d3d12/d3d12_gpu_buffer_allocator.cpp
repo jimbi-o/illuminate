@@ -100,26 +100,17 @@ void CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_
   CreateBuffer(GetHeapType(config, sub_index), GetInitialState(config, sub_index), resource_desc, clear_value, allocator, allocation, resource);
 }
 } // namespace anonymous
-BufferAllocation CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES initial_state, D3D12_RESOURCE_DESC1& resource_desc, const D3D12_CLEAR_VALUE* clear_value, D3D12MA::Allocator* allocator) {
-  BufferAllocation buffer_allocation{};
-  CreateBuffer(heap_type, initial_state, resource_desc, clear_value, allocator, &buffer_allocation.allocation, &buffer_allocation.resource);
-  return buffer_allocation;
-}
-BufferAllocation CreateBuffer(const BufferConfig& config, const MainBufferSize& main_buffer_size, D3D12MA::Allocator* allocator) {
-  BufferAllocation buffer_allocation{};
-  CreateBuffer(config, main_buffer_size, allocator, 0, &buffer_allocation.allocation, &buffer_allocation.resource);
-  return buffer_allocation;
-}
-BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator) {
+BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const uint32_t additional_buffer_num, const uint32_t additional_buffer_size_in_bytes, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator) {
   BufferList buffer_list{};
   buffer_list.buffer_allocation_index = AllocateArray<uint32_t*>(allocator, buffer_config_num);
-  buffer_list.buffer_allocation_num = 0;
+  buffer_list.buffer_allocation_num_wo_additional_buffers = 0;
   for (uint32_t i = 0; i < buffer_config_num; i++) {
-    buffer_list.buffer_allocation_num += GetBufferAllocationNum(buffer_config_list[i], frame_buffer_num);
+    buffer_list.buffer_allocation_num_wo_additional_buffers += GetBufferAllocationNum(buffer_config_list[i], frame_buffer_num);
   }
+  buffer_list.buffer_allocation_num = buffer_list.buffer_allocation_num_wo_additional_buffers + additional_buffer_num * 2;
   buffer_list.buffer_allocation_list = AllocateArray<D3D12MA::Allocation*>(allocator, buffer_list.buffer_allocation_num);
   buffer_list.resource_list = AllocateArray<ID3D12Resource*>(allocator, buffer_list.buffer_allocation_num);
-  buffer_list.buffer_config_index = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
+  buffer_list.buffer_config_index = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num_wo_additional_buffers);
   uint32_t buffer_allocation_index = 0;
   for (uint32_t i = 0; i < buffer_config_num; i++) {
     auto& buffer_config = buffer_config_list[i];
@@ -137,7 +128,42 @@ BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* b
       buffer_allocation_index++;
     }
   }
-  assert(buffer_allocation_index == buffer_list.buffer_allocation_num && "buffer allocation count bug");
+  assert(buffer_allocation_index == buffer_list.buffer_allocation_num_wo_additional_buffers);
+  buffer_list.additional_buffer_index_default = buffer_allocation_index;
+  D3D12_RESOURCE_DESC1 additional_buffer_desc{
+    .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+    .Alignment = 0,
+    .Width = additional_buffer_size_in_bytes,
+    .Height = 1,
+    .DepthOrArraySize = 1,
+    .MipLevels = 1,
+    .Format = DXGI_FORMAT_UNKNOWN,
+    .SampleDesc = {
+      .Count = 1,
+      .Quality = 0,
+    },
+    .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+    .Flags = D3D12_RESOURCE_FLAG_NONE,
+    .SamplerFeedbackMipRegion = {
+      .Width = 0,
+      .Height = 0,
+      .Depth = 0,
+    },
+  };
+  for (uint32_t i = 0; i < additional_buffer_num; i++) {
+    CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, additional_buffer_desc, nullptr, buffer_allocator,
+                 &buffer_list.buffer_allocation_list[buffer_allocation_index],
+                 &buffer_list.resource_list[buffer_allocation_index]);
+    buffer_allocation_index++;
+  }
+  buffer_list.additional_buffer_index_upload = buffer_allocation_index;
+  for (uint32_t i = 0; i < additional_buffer_num; i++) {
+    CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, additional_buffer_desc, nullptr, buffer_allocator,
+                 &buffer_list.buffer_allocation_list[buffer_allocation_index],
+                 &buffer_list.resource_list[buffer_allocation_index]);
+    buffer_allocation_index++;
+  }
+  assert(buffer_allocation_index == buffer_list.buffer_allocation_num);
   return buffer_list;
 }
 void ReleaseBufferAllocation(BufferAllocation* b) {
