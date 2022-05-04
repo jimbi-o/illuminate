@@ -34,6 +34,7 @@ struct BufferConfig {
 };
 struct RenderPassBuffer {
   uint32_t buffer_index{~0U};
+  uint32_t index_offset{0U};
   ResourceStateType state{};
 };
 struct Barrier {
@@ -52,6 +53,7 @@ struct RenderPass {
   uint32_t command_queue_index{0};
   uint32_t buffer_num{0};
   RenderPassBuffer* buffer_list{nullptr};
+  uint32_t max_buffer_index_offset{0};
   uint32_t material{};
   uint32_t prepass_barrier_num{0};
   Barrier* prepass_barrier{nullptr};
@@ -93,8 +95,9 @@ struct RenderGraph {
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
   uint32_t gpu_handle_num_view{0};
   uint32_t gpu_handle_num_sampler{0};
-  uint32_t additional_buffer_num{0};
-  uint32_t additional_buffer_size_in_bytes{0};
+  uint32_t max_mesh_buffer_num{1024};
+  uint32_t per_mesh_buffer_size_in_bytes{16384};
+  uint32_t max_material_num{1024};
 };
 static const uint32_t kBarrierExecutionTimingNum = 2;
 }

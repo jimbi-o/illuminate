@@ -8,6 +8,8 @@ struct Param {
   uint32_t rtv_num{};
   uint32_t dsv_index{};
   bool clear_depth{false};
+  bool use_material{false};
+  uint32_t gpu_handle_num{1U};
 };
 } // namespace anonymous
 void* RenderPassMeshTransform::Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
@@ -28,7 +30,9 @@ void* RenderPassMeshTransform::Init(RenderPassFuncArgsInit* args, [[maybe_unused
       param->dsv_index = i;
     }
   }
+  param->gpu_handle_num = args->render_pass_list[render_pass_index].max_buffer_index_offset + 1;
   param->clear_depth = GetBool(*args->json, "clear_depth", false);
+  param->use_material = GetBool(*args->json, "use_material", false);
   return param;
 }
 void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
@@ -54,14 +58,20 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
   command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   command_list->OMSetRenderTargets(pass_vars->rtv_num, rtv_handle, true, dsv_handle);
   command_list->OMSetStencilRef(pass_vars->stencil_val);
-  command_list->SetGraphicsRootDescriptorTable(1, args_per_pass->gpu_handles[0]);
+  for (uint32_t i = 0; i < pass_vars->gpu_handle_num; i++) {
+    command_list->SetGraphicsRootDescriptorTable(1 + i, args_per_pass->gpu_handles[i]);
+  }
   const auto scene_data = args_common->scene_data;
+  uint32_t prev_material_index = ~0U;
   auto prev_variation_index = MaterialList::kInvalidIndex;
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     if (scene_data->model_instance_num[i] == 0) { continue; }
-    command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i] * sizeof(matrix), 0);
+    command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i], 0);
     for (uint32_t j = 0; j < scene_data->model_submesh_num[i]; j++) {
       const auto submesh_index = scene_data->model_submesh_index[i][j];
+      if (const auto material_index = scene_data->submesh_material_index[submesh_index]; material_index != prev_material_index && pass_vars->use_material) {
+        command_list->SetGraphicsRoot32BitConstant(0, material_index, 1);
+      }
       auto variation_index = FindMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index]);
       if (variation_index == MaterialList::kInvalidIndex) {
         logwarn("material variation not found. pass:{} material:{} submesh:{}", GetRenderPass(args_common, args_per_pass).name, material_id, submesh_index);

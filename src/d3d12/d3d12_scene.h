@@ -23,8 +23,6 @@ struct SceneData {
   D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view[kVertexBufferTypeNum]{};
   StrHash* submesh_material_variation_hash{nullptr};
   uint32_t* submesh_material_index{nullptr};
-  // per material
-  shader::MaterialIndexList* material_index_list{nullptr};
 };
 class MemoryAllocationJanitor;
 struct MaterialList;

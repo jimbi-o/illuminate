@@ -34,27 +34,6 @@
   },
   "buffer": [
     {
-      "name": "transforms",
-      "format": "UNKNOWN",
-      "dimension": "buffer",
-      "size_type": "absolute",
-      "num_elements": 1024,
-      "stride_bytes": 64,
-      "raw_buffer": false,
-      "need_upload": true,
-      "comment": "stride_bytes:64=4*4*4(matrix)"
-    },
-    {
-      "name": "scene_data",
-      "frame_buffered": true,
-      "format": "UNKNOWN",
-      "heap_type": "upload",
-      "dimension": "buffer",
-      "size_type": "absolute",
-      "width": 256,
-      "initial_state": "generic_read"
-    },
-    {
       "name": "primary",
       "initial_state": "rtv"
     },
@@ -66,10 +45,6 @@
       "clear_stencil": 0
     }
   ],
-  "additional_buffer": {
-    "num": 1024,
-    "size_in_bytes": 16384
-  },
   "gpu_handle_num_view": 32,
   "gpu_handle_num_sampler": 8,
   "sampler": [
@@ -124,6 +99,11 @@
           "state": "srv_non_ps"
         },
         {
+          "name": "material_index",
+          "state": "srv_ps",
+          "index_offset" : 1
+        },
+        {
           "name": "primary",
           "state": "rtv"
         },
@@ -135,7 +115,8 @@
       "material": "brdf forward",
       "pass_vars": {
         "clear_depth": true,
-        "stencil_val": 255
+        "stencil_val": 255,
+        "use_material": true
       }
     },
     {

@@ -119,6 +119,8 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
           auto& dst_buffer = dst_pass.buffer_list[buffer_index];
           auto& src_buffer = buffer_list[buffer_index];
           dst_buffer.state = GetResourceStateType(GetStringView(src_buffer, "state"));
+          dst_buffer.index_offset = GetNum(src_buffer, "index_offset", 0);
+          dst_pass.max_buffer_index_offset = std::max(dst_buffer.index_offset, dst_pass.max_buffer_index_offset);
           auto buffer_name = GetStringView(src_buffer, "name");
           for (uint32_t graph_buffer_index = 0; graph_buffer_index < r.buffer_num; graph_buffer_index++) {
             if (GetStringView(graph_buffer_list[graph_buffer_index], "name").compare(buffer_name) == 0) {
@@ -278,13 +280,11 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
     r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", 1024);
     r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", 16);
   }
-  if (j.contains("additional_buffer")) {
-    const auto& additional_buffer = j.at("additional_buffer");
-    r.additional_buffer_num = GetNum(additional_buffer, "num", 1024);
-    r.additional_buffer_size_in_bytes = GetNum(additional_buffer, "size_in_bytes", 16384);
-  } else {
-    r.additional_buffer_num = 1024;
-    r.additional_buffer_size_in_bytes = 16384;
+  if (j.contains("scene_buffer_settings")) {
+    const auto& scene_buffer_settings = j.at("scene_buffer_settings");
+    r.max_mesh_buffer_num = GetNum(scene_buffer_settings, "max_mesh_buffer_num", 1024);
+    r.per_mesh_buffer_size_in_bytes = GetNum(scene_buffer_settings, "per_mesh_buffer_size_in_bytes", 1024);
+    r.max_material_num = GetNum(scene_buffer_settings, "max_material_num", 1024);
   }
 }
 }

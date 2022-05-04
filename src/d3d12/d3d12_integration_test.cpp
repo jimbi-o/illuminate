@@ -37,21 +37,78 @@ auto GetTestJson(const char* const filename) {
   return json;
 }
 auto AddSystemBuffers(nlohmann::json* json) {
-  auto system_buffers = R"(
-  [
+  auto& buffer_list = json->at("buffer");
+  {
+    auto buffer_json = R"(
     {
       "name": "swapchain",
       "descriptor_only": true
-    },
+    }
+    )"_json;
+    buffer_list.push_back(buffer_json);
+  }
+  {
+    auto buffer_json = R"(
     {
       "name": "imgui_font",
       "descriptor_only": true
     }
-  ]
-  )"_json;
-  auto& buffer_list = json->at("buffer");
-  for (const auto& s : system_buffers) {
-    buffer_list.push_back(s);
+    )"_json;
+    buffer_list.push_back(buffer_json);
+  }
+  {
+    auto buffer_json = R"(
+    {
+      "name": "transforms",
+      "format": "UNKNOWN",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "num_elements": 1024,
+      "raw_buffer": true,
+      "need_upload": true
+    }
+    )"_json;
+    buffer_json["stride_bytes"] = sizeof(matrix);
+    if (json->contains("scene_buffer_settings")) {
+      buffer_json["num_elements"] = json->at("scene_buffer_settings")["max_mesh_buffer_num"];
+    }
+    buffer_list.push_back(buffer_json);
+  }
+  {
+    auto buffer_json = R"(
+    {
+      "name": "scene_data",
+      "frame_buffered": true,
+      "format": "UNKNOWN",
+      "heap_type": "upload",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "width": 256,
+      "initial_state": "generic_read"
+    }
+    )"_json;
+    if (buffer_json["width"] < sizeof(shader::SceneCbvData)) {
+      buffer_json["width"] = AlignAddress(sizeof(shader::SceneCbvData), 256);
+    }
+    buffer_list.push_back(buffer_json);
+  }
+  {
+    auto buffer_json = R"(
+    {
+      "name": "material_index",
+      "format": "UNKNOWN",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "num_elements": 1024,
+      "raw_buffer": true,
+      "need_upload": true
+    }
+    )"_json;
+    buffer_json["stride_bytes"] = sizeof(shader::MaterialIndexList);
+    if (json->contains("scene_buffer_settings")) {
+      buffer_json["num_elements"] = json->at("scene_buffer_settings")["max_material_num"];
+    }
+    buffer_list.push_back(buffer_json);
   }
 }
 auto GetRenderPassSwapchainState(const nlohmann::json& render_pass) {
@@ -178,24 +235,28 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
   return std::make_tuple(resource_list, cpu_handle_list);
 }
 auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, const uint32_t frame_index, const DescriptorCpu& descriptor_cpu, DescriptorGpu* const descriptor_gpu, MemoryAllocationJanitor* allocator) {
-  auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, 2); // 0:view 1:sampler
-  {
-    // view
+  const auto view_list_num = render_pass.buffer_num > 0 ? render_pass.max_buffer_index_offset + 1 : 0;
+  const auto list_num = view_list_num + (render_pass.sampler_num > 0 ? 1 : 0);
+  if (list_num == 0) { return (D3D12_GPU_DESCRIPTOR_HANDLE*)nullptr; }
+  auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, list_num);
+  for (uint32_t i = 0; i < view_list_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
     auto buffer_id_list = AllocateArray<uint32_t>(&tmp_allocator, render_pass.buffer_num);
     auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, render_pass.buffer_num);
+    uint32_t index = 0;
     for (uint32_t j = 0; j < render_pass.buffer_num; j++) {
+      if (render_pass.buffer_list[j].index_offset != i) { continue; }
       const auto buffer_index = render_pass.buffer_list[j].buffer_index;
       const auto local_index = GetBufferLocalIndex(buffer_config_list[buffer_index], render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index], frame_index);
-      buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, buffer_index, local_index);
-      descriptor_type_list[j] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
-      logtrace("pass:{} j:{} config:{} local:{} alloc:{} desc:{}", render_pass.index, j, buffer_index, local_index, buffer_id_list[j], descriptor_type_list[j]);
+      buffer_id_list[index] = GetBufferAllocationIndex(buffer_list, buffer_index, local_index);
+      descriptor_type_list[index] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
+      index++;
+      logtrace("pass:{} j:{} config:{} local:{} alloc:{} desc:{} index:{}", render_pass.index, j, buffer_index, local_index, buffer_id_list[j], descriptor_type_list[j], index);
     }
-    gpu_handle_list[0] = descriptor_gpu->CopyViewDescriptors(device, render_pass.buffer_num, buffer_id_list, descriptor_type_list, descriptor_cpu);
+    gpu_handle_list[i] = descriptor_gpu->CopyViewDescriptors(device, index, buffer_id_list, descriptor_type_list, descriptor_cpu);
   }
-  {
-    // sampler
-    gpu_handle_list[1] = descriptor_gpu->CopySamplerDescriptors(device, render_pass.sampler_num, render_pass.sampler_index_list, descriptor_cpu);
+  if (render_pass.sampler_num > 0) {
+    gpu_handle_list[view_list_num] = descriptor_gpu->CopySamplerDescriptors(device, render_pass.sampler_num, render_pass.sampler_index_list, descriptor_cpu);
   }
   return gpu_handle_list;
 }
@@ -408,7 +469,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
 #endif
-    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, render_graph.additional_buffer_num, render_graph.additional_buffer_size_in_bytes, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
+    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, render_graph.max_mesh_buffer_num, render_graph.per_mesh_buffer_size_in_bytes, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
     CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num_wo_additional_buffers, render_graph.sampler_num, render_graph.descriptor_handle_num_per_type, &allocator));
     command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
     auto& json_buffer_list = json.at("buffer");
@@ -485,12 +546,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     .transform_resource              = GetResource(buffer_list, transform_buffer_config_index, kBufferSubIndexUpload),
     .mesh_resources_upload           = &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],
     .mesh_resources_default          = &buffer_list.resource_list[buffer_list.additional_buffer_index_default],
-    .mesh_resource_num               = render_graph.additional_buffer_num,
-    .per_mesh_resource_size_in_bytes = render_graph.additional_buffer_size_in_bytes,
+    .mesh_resource_num               = render_graph.max_mesh_buffer_num,
+    .per_mesh_resource_size_in_bytes = render_graph.per_mesh_buffer_size_in_bytes,
   };
   uint32_t used_resource_num = 0;
   auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", &allocator, &scene_resources, &used_resource_num);
-  assert(used_resource_num <= render_graph.additional_buffer_num);
+  assert(used_resource_num <= render_graph.max_mesh_buffer_num);
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
