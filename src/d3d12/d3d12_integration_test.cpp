@@ -411,16 +411,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
-  enum NamedBuffer {
-    kNamedBufferTransform = 0,
-    kNamedBufferSceneCbvBuffer,
-    kNamedBufferMaterialIndices,
-    kNamedBufferColors,
-    kNamedBufferNum,
-  };
-  uint32_t named_buffer_config_index[kNamedBufferNum]{};
-  for (uint32_t j = 0; j < kNamedBufferNum; j++) {
-    named_buffer_config_index[j] = ~0U;
+  uint32_t scene_cbv_buffer_allocation_index{kInvalidIndex};
+  uint32_t scene_buffer_config_index[kSceneBufferNum]{};
+  for (uint32_t i = 0; i < kSceneBufferNum; i++) {
+    scene_buffer_config_index[i] = ~0U;
   }
   MaterialList material_list{};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
@@ -430,11 +424,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   {
     const char* named_buffer_names[] = {
       "transforms",
-      "scene_data",
       "material_indices",
       "colors",
     };
-    static_assert(std::size(named_buffer_names) == kNamedBufferNum);
+    static_assert(std::size(named_buffer_names) == kSceneBufferNum);
     auto material_json = GetTestJson("material.json");
     ShaderCompiler shader_compiler;
     CHECK_UNARY(shader_compiler.Init());
@@ -519,10 +512,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (str.compare("swapchain") == 0) {
         swapchain_buffer_allocation_index = i;
       }
-      for (uint32_t j = 0; j < kNamedBufferNum; j++) {
-        if (named_buffer_config_index[j] != ~0U) { continue; }
+      if (scene_cbv_buffer_allocation_index == kInvalidIndex && str.compare("scene_data") == 0) {
+        scene_cbv_buffer_allocation_index = buffer_config_index;
+      }
+      for (uint32_t j = 0; j < kSceneBufferNum; j++) {
+        if (scene_buffer_config_index[j] != ~0U) { continue; }
         if (str.compare(named_buffer_names[j]) == 0) {
-          named_buffer_config_index[j] = buffer_config_index;
+          scene_buffer_config_index[j] = buffer_config_index;
         }
       }
     }
@@ -570,14 +566,14 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     render_pass_signal[i] = 0UL;
   }
   SceneResources scene_resources {
-    .transform_resource              = GetResource(buffer_list, named_buffer_config_index[kNamedBufferTransform], kBufferSubIndexUpload),
-    .material_index_list_resource    = GetResource(buffer_list, named_buffer_config_index[kNamedBufferMaterialIndices], kBufferSubIndexUpload),
-    .albedo_factor_resource          = GetResource(buffer_list, named_buffer_config_index[kNamedBufferColors], kBufferSubIndexUpload),
     .mesh_resources_upload           = &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],
     .mesh_resources_default          = &buffer_list.resource_list[buffer_list.additional_buffer_index_default],
     .mesh_resource_num               = render_graph.max_mesh_buffer_num,
     .per_mesh_resource_size_in_bytes = render_graph.per_mesh_buffer_size_in_bytes,
   };
+  for (uint32_t i = 0; i < kSceneBufferNum; i++) {
+    scene_resources.resource[i] = GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexUpload);
+  }
   uint32_t used_resource_num = 0;
   auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", &allocator, &scene_resources, &used_resource_num);
   assert(used_resource_num <= render_graph.max_mesh_buffer_num);
@@ -587,22 +583,18 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
   {
-    const uint32_t excluded_buffer_num = 1; // kNamedBufferSceneCbvBuffer
-    dynamic_data.copy_buffer_num = used_resource_num + kNamedBufferNum - excluded_buffer_num;
+    dynamic_data.copy_buffer_num = used_resource_num + kSceneBufferNum;
     dynamic_data.copy_buffer_resource_upload  = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
     dynamic_data.copy_buffer_resource_default = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
-    uint32_t index = 0;
-    for (uint32_t i = 0; i < kNamedBufferNum; i++) {
-      if (i == kNamedBufferSceneCbvBuffer) { continue; }
-      dynamic_data.copy_buffer_resource_upload[index]  = GetResource(buffer_list, named_buffer_config_index[i], kBufferSubIndexUpload);
-      dynamic_data.copy_buffer_resource_default[index] = GetResource(buffer_list, named_buffer_config_index[i], kBufferSubIndexDefault);
-      index++;
+    for (uint32_t i = 0; i < kSceneBufferNum; i++) {
+      dynamic_data.copy_buffer_resource_upload[i]  = GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexUpload);
+      dynamic_data.copy_buffer_resource_default[i] = GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexDefault);
     }
     const auto copy_size = sizeof(dynamic_data.copy_buffer_resource_upload[0]) * used_resource_num;
-    memcpy(&dynamic_data.copy_buffer_resource_upload[kNamedBufferNum - excluded_buffer_num],  &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],  copy_size);
-    memcpy(&dynamic_data.copy_buffer_resource_default[kNamedBufferNum - excluded_buffer_num], &buffer_list.resource_list[buffer_list.additional_buffer_index_default], copy_size);
+    memcpy(&dynamic_data.copy_buffer_resource_upload[kSceneBufferNum],  &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],  copy_size);
+    memcpy(&dynamic_data.copy_buffer_resource_default[kSceneBufferNum], &buffer_list.resource_list[buffer_list.additional_buffer_index_default], copy_size);
   }
-  auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, named_buffer_config_index[kNamedBufferSceneCbvBuffer], static_cast<uint32_t>(render_graph.buffer_list[named_buffer_config_index[kNamedBufferSceneCbvBuffer]].width), &allocator);
+  auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_allocation_index, static_cast<uint32_t>(render_graph.buffer_list[scene_cbv_buffer_allocation_index].width), &allocator);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();

@@ -24,12 +24,16 @@ struct SceneData {
   StrHash* submesh_material_variation_hash{nullptr};
   uint32_t* submesh_material_index{nullptr};
 };
+enum SceneBuffer {
+  kSceneBufferTransform = 0,
+  kSceneBufferMaterialIndices,
+  kSceneBufferColors,
+  kSceneBufferNum,
+};
 class MemoryAllocationJanitor;
 struct MaterialList;
 struct SceneResources {
-  ID3D12Resource*  transform_resource{};
-  ID3D12Resource*  material_index_list_resource{};
-  ID3D12Resource*  albedo_factor_resource{};
+  ID3D12Resource*  resource[kSceneBufferNum]{};
   ID3D12Resource** mesh_resources_upload{};
   ID3D12Resource** mesh_resources_default{};
   uint32_t mesh_resource_num{};

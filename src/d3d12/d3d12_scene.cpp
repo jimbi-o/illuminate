@@ -193,7 +193,7 @@ auto FindAlbedoFactorIndex(const std::array<float, 4>* colors, const uint32_t nu
   }
   return ~0U;
 }
-void SetMaterialIndexListValues(const tinygltf::Model& model, SceneResources* scene_resources) {
+void SetMaterialValues(const tinygltf::Model& model, SceneResources* scene_resources) {
   auto tmp_allocator = GetTemporalMemoryAllocator();
   const auto material_num = GetUint32(model.materials.size());
   auto material_indices = AllocateArray<shader::MaterialIndexList>(&tmp_allocator, material_num);
@@ -211,15 +211,15 @@ void SetMaterialIndexListValues(const tinygltf::Model& model, SceneResources* sc
     material_index.albedo_factor = albedo_factor_index;
   }
   const auto indice_copy_size = GetUint32(sizeof(shader::MaterialIndexList)) * material_num;
-  memcpy(MapResource(scene_resources->material_index_list_resource, indice_copy_size), material_indices, indice_copy_size);
-  UnmapResource(scene_resources->material_index_list_resource);
+  memcpy(MapResource(scene_resources->resource[kSceneBufferMaterialIndices], indice_copy_size), material_indices, indice_copy_size);
+  UnmapResource(scene_resources->resource[kSceneBufferMaterialIndices]);
   if (next_color_index > 0) {
-    auto color_dst = MapResource(scene_resources->albedo_factor_resource, next_color_index * sizeof(float) * 4);
+    auto color_dst = MapResource(scene_resources->resource[kSceneBufferColors], next_color_index * sizeof(float) * 4);
     for (uint32_t i = 0; i < next_color_index; i++) {
       memcpy(color_dst, material_colors[i].data(), sizeof(float) * 4);
       color_dst = SucceedPtrWithStructSize<float[4]>(color_dst);
     }
-    UnmapResource(scene_resources->albedo_factor_resource);
+    UnmapResource(scene_resources->resource[kSceneBufferColors]);
   }
 }
 auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
@@ -275,8 +275,8 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* a
   for (const auto& node : model.scenes[0].nodes) {
     CountModelInstanceNum(model, node, scene_data.model_instance_num);
   }
-  SetTransformValues(model, &scene_data, mesh_num, scene_resources->transform_resource);
-  SetMaterialIndexListValues(model, scene_resources);
+  SetTransformValues(model, &scene_data, mesh_num, scene_resources->resource[kSceneBufferTransform]);
+  SetMaterialValues(model, scene_resources);
   return scene_data;
 }
 } // namespace anonymous
