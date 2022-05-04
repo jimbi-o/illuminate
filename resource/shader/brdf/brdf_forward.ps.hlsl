@@ -43,25 +43,6 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
 #endif
 }
 #if 0
-    {
-      "name": "colors"
-    },
-    {
-      "name": "alpha_cutoffs"
-    },
-    {
-      "name": "textures"
-    },
-        {
-          "name": "colors",
-          "state": "srv_ps",
-          "index_offset" : 1
-        },
-        {
-          "name": "alpha_cutoffs",
-          "state": "srv_ps",
-          "index_offset" : 1
-        },
         {
           "name": "textures",
           "state": "srv_ps",

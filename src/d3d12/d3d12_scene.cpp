@@ -176,7 +176,7 @@ void SetTransformValues(const tinygltf::Model& model, SceneData* scene_data, con
   UnmapResource(resource);
 }
 auto IsColorSame(const float* a, const double* b) {
-  const double epsilon = static_cast<double>(std::numeric_limits<float>::epsilon());
+  const auto epsilon = static_cast<double>(std::numeric_limits<float>::epsilon());
   for (uint32_t i = 0; i < 4; i++) {
     if (std::abs(a[i] - b[i]) > epsilon) { return false; }
   }
@@ -193,26 +193,49 @@ auto FindAlbedoFactorIndex(const std::array<float, 4>* colors, const uint32_t nu
   }
   return ~0U;
 }
+auto FindFloat(const float* list, const uint32_t num, const double finding_value) {
+  const auto epsilon = static_cast<double>(std::numeric_limits<float>::epsilon());
+  for (uint32_t i = 0; i < num; i++) {
+    if (std::abs(list[i] - finding_value <= epsilon)) { return i; }
+  }
+  return ~0U;
+}
 void SetMaterialValues(const tinygltf::Model& model, SceneResources* scene_resources) {
   auto tmp_allocator = GetTemporalMemoryAllocator();
   const auto material_num = GetUint32(model.materials.size());
   auto material_indices = AllocateArray<shader::MaterialIndexList>(&tmp_allocator, material_num);
   auto material_colors = AllocateArray<std::array<float, 4>>(&tmp_allocator, material_num);
+  auto alpha_cutoffs = AllocateArray<float>(&tmp_allocator, material_num);
   uint32_t next_color_index = 0;
+  uint32_t next_alpha_cutoff_index = 0;
   for (uint32_t i = 0; i < material_num; i++) {
     const auto& src_material = model.materials[i];
     auto& material_index = material_indices[i];
-    auto albedo_factor_index = FindAlbedoFactorIndex(material_colors, next_color_index, src_material.pbrMetallicRoughness.baseColorFactor);
-    if (albedo_factor_index > next_color_index) {
-      SetColor(src_material.pbrMetallicRoughness.baseColorFactor.data(), material_colors[next_color_index].data());
-      albedo_factor_index = next_color_index;
-      next_color_index++;
+    {
+      // albedo factor
+      auto albedo_factor_index = FindAlbedoFactorIndex(material_colors, next_color_index, src_material.pbrMetallicRoughness.baseColorFactor);
+      if (albedo_factor_index > next_color_index) {
+        SetColor(src_material.pbrMetallicRoughness.baseColorFactor.data(), material_colors[next_color_index].data());
+        albedo_factor_index = next_color_index;
+        next_color_index++;
+      }
+      material_index.albedo_factor = albedo_factor_index;
     }
-    material_index.albedo_factor = albedo_factor_index;
+    {
+      // alpha cutoff
+      auto alpha_cutoff_index = FindFloat(alpha_cutoffs, next_alpha_cutoff_index, src_material.alphaCutoff);
+      if (alpha_cutoff_index > next_alpha_cutoff_index) {
+        alpha_cutoffs[next_alpha_cutoff_index] = static_cast<float>(src_material.alphaCutoff);
+        next_alpha_cutoff_index++;
+      }
+      material_index.alpha_cutoff = alpha_cutoff_index;
+    }
   }
-  const auto indice_copy_size = GetUint32(sizeof(shader::MaterialIndexList)) * material_num;
-  memcpy(MapResource(scene_resources->resource[kSceneBufferMaterialIndices], indice_copy_size), material_indices, indice_copy_size);
-  UnmapResource(scene_resources->resource[kSceneBufferMaterialIndices]);
+  {
+    const auto indice_copy_size = GetUint32(sizeof(shader::MaterialIndexList)) * material_num;
+    memcpy(MapResource(scene_resources->resource[kSceneBufferMaterialIndices], indice_copy_size), material_indices, indice_copy_size);
+    UnmapResource(scene_resources->resource[kSceneBufferMaterialIndices]);
+  }
   if (next_color_index > 0) {
     auto color_dst = MapResource(scene_resources->resource[kSceneBufferColors], next_color_index * sizeof(float) * 4);
     for (uint32_t i = 0; i < next_color_index; i++) {
@@ -220,6 +243,11 @@ void SetMaterialValues(const tinygltf::Model& model, SceneResources* scene_resou
       color_dst = SucceedPtrWithStructSize<float[4]>(color_dst);
     }
     UnmapResource(scene_resources->resource[kSceneBufferColors]);
+  }
+  if (next_alpha_cutoff_index > 0) {
+    const auto copy_size = GetUint32(sizeof(float)) * next_alpha_cutoff_index;
+    memcpy(MapResource(scene_resources->resource[kSceneBufferAlphaCutoff], copy_size), alpha_cutoffs, copy_size);
+    UnmapResource(scene_resources->resource[kSceneBufferAlphaCutoff]);
   }
 }
 auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {

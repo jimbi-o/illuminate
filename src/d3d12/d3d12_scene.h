@@ -28,6 +28,7 @@ enum SceneBuffer {
   kSceneBufferTransform = 0,
   kSceneBufferMaterialIndices,
   kSceneBufferColors,
+  kSceneBufferAlphaCutoff,
   kSceneBufferNum,
 };
 class MemoryAllocationJanitor;

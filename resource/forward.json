@@ -109,6 +109,11 @@
           "index_offset" : 1
         },
         {
+          "name": "alpha_cutoffs",
+          "state": "srv_ps",
+          "index_offset" : 1
+        },
+        {
           "name": "primary",
           "state": "rtv"
         },

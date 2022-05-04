@@ -121,6 +121,20 @@ auto AddSystemBuffers(nlohmann::json* json) {
     buffer_json["num_elements"] = max_material_num;
     buffer_list.push_back(buffer_json);
   }
+  {
+    auto buffer_json = R"(
+    {
+      "name": "alpha_cutoffs",
+      "format": "UNKNOWN",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "need_upload": true
+    }
+    )"_json;
+    buffer_json["stride_bytes"] = sizeof(float);
+    buffer_json["num_elements"] = max_material_num;
+    buffer_list.push_back(buffer_json);
+  }
 }
 auto GetRenderPassSwapchainState(const nlohmann::json& render_pass) {
   if (!render_pass.contains("buffer_list")) { return std::make_pair(false, std::string_view()); }
@@ -426,6 +440,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       "transforms",
       "material_indices",
       "colors",
+      "alpha_cutoffs",
     };
     static_assert(std::size(named_buffer_names) == kSceneBufferNum);
     auto material_json = GetTestJson("material.json");
