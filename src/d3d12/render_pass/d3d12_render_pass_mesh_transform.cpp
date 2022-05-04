@@ -59,7 +59,7 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
   auto prev_variation_index = MaterialList::kInvalidIndex;
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     if (scene_data->model_instance_num[i] == 0) { continue; }
-    command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i], 0);
+    command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i] * sizeof(matrix), 0);
     for (uint32_t j = 0; j < scene_data->model_submesh_num[i]; j++) {
       const auto submesh_index = scene_data->model_submesh_index[i][j];
       auto variation_index = FindMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index]);

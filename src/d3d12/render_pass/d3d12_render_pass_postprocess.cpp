@@ -51,8 +51,7 @@ void* RenderPassPostprocess::Init(RenderPassFuncArgsInit* args, const uint32_t r
       param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
       param->cbv_ptr = AllocateArray<void*>(args->allocator, args->frame_buffer_num);
       for (uint32_t j = 0; j < args->frame_buffer_num; j++) {
-        auto resource = args->buffer_list->resource_list[GetBufferAllocationIndex(*args->buffer_list, buffer_config_index, j)];
-        param->cbv_ptr[j] = MapResource(resource, param->cbv_size);
+        param->cbv_ptr[j] = MapResource(GetResource(*args->buffer_list, buffer_config_index, j), param->cbv_size);
       }
       param->use_views = true;
       break;

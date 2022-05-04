@@ -30,6 +30,7 @@ class CommandListPool {
   uint32_t command_list_num_per_queue_type_[kCommandQueueTypeNum]{};
   D3d12CommandList** command_list_pool_[kCommandQueueTypeNum]{};
   CommandAllocatorPool command_allocator_pool_;
+  uint32_t created_num_{0};
 };
 class CommandListInUse {
  public:

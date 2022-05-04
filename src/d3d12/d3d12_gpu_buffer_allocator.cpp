@@ -125,6 +125,7 @@ BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* b
       } else {
         CreateBuffer(buffer_config, main_buffer_size, buffer_allocator, j, &buffer_list.buffer_allocation_list[buffer_allocation_index], &buffer_list.resource_list[buffer_allocation_index]);
       }
+      logdebug("buffer created. config_index:{} local_index:{} alloc_index:{}", i, j, buffer_allocation_index);
       buffer_allocation_index++;
     }
   }
@@ -150,6 +151,7 @@ BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* b
       .Depth = 0,
     },
   };
+  logdebug("additional buffer start:{}", buffer_allocation_index);
   for (uint32_t i = 0; i < additional_buffer_num; i++) {
     CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, additional_buffer_desc, nullptr, buffer_allocator,
                  &buffer_list.buffer_allocation_list[buffer_allocation_index],

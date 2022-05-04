@@ -120,6 +120,7 @@ void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type, cons
     }
   }
   command_allocator_pool_.Init(frame_buffer_num, command_allocator_num_per_queue_type);
+  created_num_ = 0;
 }
 void CommandListPool::Term() {
   command_allocator_pool_.Term();
@@ -164,6 +165,8 @@ D3d12CommandList* CommandListPool::RetainCommandList(D3d12Device* device, const 
     assert(false && "command_list->Reset on creation failed");
     return nullptr;
   }
+  SetD3d12Name(command_list, "command_list" + std::to_string(created_num_));
+  created_num_++;
   return command_list;
 }
 void CommandListPool::ReturnCommandList(const D3D12_COMMAND_LIST_TYPE type, const uint32_t num, D3d12CommandList** list) {

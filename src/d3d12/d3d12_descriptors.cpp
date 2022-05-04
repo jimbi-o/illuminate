@@ -17,6 +17,36 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D1
   }
   return descriptor_heap;
 }
+bool DescriptorCpu::Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator) {
+  buffer_allocation_num_ = buffer_allocation_num;
+  sampler_num_ = sampler_num;
+  for (uint32_t i = 0; i < kDescriptorTypeNum; i++) {
+    const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num : buffer_allocation_num;
+    handles_[i] = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, num);
+    for (uint32_t j = 0; j < num; j++) {
+      handles_[i][j].ptr = 0;
+    }
+    total_handle_num_[GetDescriptorTypeIndex(static_cast<DescriptorType>(i))] += descriptor_handle_num_per_type[i];
+  }
+  for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
+    if (total_handle_num_[i] == 0) { continue; }
+    const auto type = static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(i);
+    handle_increment_size_[i] = device->GetDescriptorHandleIncrementSize(type);
+    descriptor_heap_[i] = CreateDescriptorHeap(device, type, total_handle_num_[i], D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+    if (descriptor_heap_[i] == nullptr) {
+      assert(false && "CreateDescriptorHeap failed");
+      for (uint32_t j = 0; j < i; j++) {
+        descriptor_heap_[j]->Release();
+        descriptor_heap_[j] = nullptr;
+      }
+      return false;
+    }
+    SetD3d12Name(descriptor_heap_[i], "descriptor_heap" + std::to_string(i));
+    heap_start_[i] = descriptor_heap_[i]->GetCPUDescriptorHandleForHeapStart().ptr;
+    handle_num_[i] = 0;
+  }
+  return true;
+}
 void DescriptorCpu::Term() {
   for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
     if (descriptor_heap_[i]) {
@@ -37,11 +67,13 @@ const D3D12_CPU_DESCRIPTOR_HANDLE& DescriptorCpu::CreateHandle(const uint32_t in
   handles_[descriptor_type_index][index].ptr = handle.ptr;
   handle_num_[heap_index]++;
   assert(handle_num_[heap_index] <= total_handle_num_[heap_index] && "handle num exceeded handle pool size");
+  logtrace("handle created. alloc:{} desc:{} ptr:{}", index, type, handles_[descriptor_type_index][index].ptr);
   return handles_[descriptor_type_index][index];
 }
 void DescriptorCpu::RegisterExternalHandle(const uint32_t index, const DescriptorType type, const D3D12_CPU_DESCRIPTOR_HANDLE& handle) {
   auto descriptor_type_index = static_cast<uint32_t>(type);
   handles_[descriptor_type_index][index].ptr = handle.ptr;
+  logtrace("handle registered. alloc:{} desc:{} ptr:{}", index, type, handles_[descriptor_type_index][index].ptr);
 }
 namespace {
 uint32_t GetViewNum(const uint32_t buffer_num, const DescriptorType* descriptor_type_list) {
@@ -77,8 +109,13 @@ bool DescriptorGpu::Init(D3d12Device* device, const uint32_t handle_num_view, co
   if (descriptor_cbv_srv_uav_.descriptor_heap == nullptr) {
     return false;
   }
+  SetD3d12Name(descriptor_cbv_srv_uav_.descriptor_heap, "descriptor_heap_gpu_view");
   descriptor_sampler_ = InitDescriptorHeapSetGpu(device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, handle_num_sampler);
-  return descriptor_sampler_.descriptor_heap != nullptr;
+  if (descriptor_sampler_.descriptor_heap == nullptr) {
+    return false;
+  }
+  SetD3d12Name(descriptor_sampler_.descriptor_heap, "descriptor_heap_gpu_sampler");
+  return true;
 }
 void DescriptorGpu::Term() {
   {

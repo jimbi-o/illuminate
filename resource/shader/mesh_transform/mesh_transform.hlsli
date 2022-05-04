@@ -28,5 +28,5 @@ struct ModelInfo {
 };
 ConstantBuffer<ModelInfo>     model_info : register(b0);
 ConstantBuffer<SceneCbvData>  scene_data : register(b1);
-StructuredBuffer<matrix>      transforms : register(t0);
+ByteAddressBuffer             transforms : register(t0);
 #endif

@@ -147,12 +147,22 @@ bool CreateView(D3d12Device* device, const DescriptorType& descriptor_type, cons
           break;
         }
         case D3D12_SRV_DIMENSION_BUFFER: {
-          desc.Buffer = {
-            .FirstElement = 0,
-            .NumElements = config.num_elements,
-            .StructureByteStride = config.stride_bytes,
-            .Flags = config.raw_buffer ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE,
-          };
+          if (config.raw_buffer) {
+            desc.Format = DXGI_FORMAT_R32_TYPELESS;
+            desc.Buffer = {
+              .FirstElement = 0,
+              .NumElements = config.num_elements * config.stride_bytes / 4, // 4 for sizeof(R32_TYPELESS)
+              .StructureByteStride = 0,
+              .Flags = D3D12_BUFFER_SRV_FLAG_RAW,
+            };
+          } else {
+            desc.Buffer = {
+              .FirstElement = 0,
+              .NumElements = config.num_elements,
+              .StructureByteStride = config.stride_bytes,
+              .Flags = D3D12_BUFFER_SRV_FLAG_NONE,
+            };
+          }
           break;
         }
         case D3D12_SRV_DIMENSION_TEXTURE1D: {

@@ -87,6 +87,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
     for (uint32_t i = 0; i < r.buffer_num; i++) {
       r.buffer_list[i].buffer_index = i;
       GetBufferConfig(buffer_list[i], &r.buffer_list[i]);
+      logdebug("buffer name:{} id:{}", GetStringView(buffer_list[i], "name"), i);
     }
   }
   if (j.contains("sampler")) {

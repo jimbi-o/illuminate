@@ -41,9 +41,9 @@
       "size_type": "absolute",
       "num_elements": 1024,
       "stride_bytes": 64,
-      "raw_buffer": false,
+      "raw_buffer": true,
       "need_upload": true,
-      "comment": "stride_bytes:64=4*4*4(matrix)"
+      "comment": "stride_bytes:64=4*4*4(matrix), set num_elements for raw buffer like StructuredBuffer (num_elements for raw_buffer will be handled by code. i.e.NumElements=num_elements*stride_bytes/4)"
     },
     {
       "name": "scene_data",

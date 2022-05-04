@@ -6,38 +6,10 @@
 #include "illuminate/util/hash_map.h"
 namespace illuminate {
 ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags);
+class MemoryAllocationJanitor;
 class DescriptorCpu {
  public:
-  template <typename A>
-  bool Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, A* allocator) {
-    buffer_allocation_num_ = buffer_allocation_num;
-    sampler_num_ = sampler_num;
-    for (uint32_t i = 0; i < kDescriptorTypeNum; i++) {
-      const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num : buffer_allocation_num;
-      handles_[i] = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, num);
-      for (uint32_t j = 0; j < num; j++) {
-        handles_[i][j].ptr = 0;
-      }
-      total_handle_num_[GetDescriptorTypeIndex(static_cast<DescriptorType>(i))] += descriptor_handle_num_per_type[i];
-    }
-    for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
-      if (total_handle_num_[i] == 0) { continue; }
-      const auto type = static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(i);
-      handle_increment_size_[i] = device->GetDescriptorHandleIncrementSize(type);
-      descriptor_heap_[i] = CreateDescriptorHeap(device, type, total_handle_num_[i], D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
-      if (descriptor_heap_[i] == nullptr) {
-        assert(false && "CreateDescriptorHeap failed");
-        for (uint32_t j = 0; j < i; j++) {
-          descriptor_heap_[j]->Release();
-          descriptor_heap_[j] = nullptr;
-        }
-        return false;
-      }
-      heap_start_[i] = descriptor_heap_[i]->GetCPUDescriptorHandleForHeapStart().ptr;
-      handle_num_[i] = 0;
-    }
-    return true;
-  }
+  bool Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator);
   void Term();
   const D3D12_CPU_DESCRIPTOR_HANDLE& CreateHandle(const uint32_t index, const DescriptorType type);
   const D3D12_CPU_DESCRIPTOR_HANDLE& GetHandle(const uint32_t index, const DescriptorType type) const {

@@ -173,6 +173,7 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
     } else {
       cpu_handle_list[b].ptr = 0;
     }
+    logtrace("pass:{} b:{} config:{} local:{} alloc:{} desc:{} ptr:{}", render_pass.index, b, buffer.buffer_index, local_index, buffer_allocation_index, descriptor_type, cpu_handle_list[b].ptr);
   }
   return std::make_tuple(resource_list, cpu_handle_list);
 }
@@ -188,6 +189,7 @@ auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, co
       const auto local_index = GetBufferLocalIndex(buffer_config_list[buffer_index], render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index], frame_index);
       buffer_id_list[j] = GetBufferAllocationIndex(buffer_list, buffer_index, local_index);
       descriptor_type_list[j] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
+      logtrace("pass:{} j:{} config:{} local:{} alloc:{} desc:{}", render_pass.index, j, buffer_index, local_index, buffer_id_list[j], descriptor_type_list[j]);
     }
     gpu_handle_list[0] = descriptor_gpu->CopyViewDescriptors(device, render_pass.buffer_num, buffer_id_list, descriptor_type_list, descriptor_cpu);
   }
@@ -421,7 +423,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         } else {
           SetD3d12Name(buffer_list.resource_list[i], str + "_B");
         }
-      } else if (buffer_config.frame_buffered) {
+      } else if (buffer_config.frame_buffered || buffer_config.need_upload) {
         SetD3d12Name(buffer_list.resource_list[i], str + std::to_string(GetBufferLocalIndex(buffer_list, buffer_config_index, i)));
       } else if (!buffer_config.descriptor_only) {
         SetD3d12Name(buffer_list.resource_list[i], str);
