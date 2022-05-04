@@ -14,6 +14,7 @@
                   SRV(t0, numDescriptors=1),             \
                   visibility=SHADER_VISIBILITY_VERTEX),  \
   DescriptorTable(SRV(t1, numDescriptors=1),             \
+                  SRV(t2, numDescriptors=1),             \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
   DescriptorTable(Sampler(s0, numDescriptors=unbounded), \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
@@ -27,7 +28,8 @@ sampler            samplers[]          : register(s0);
 float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
 #if 1
   MaterialIndexList material_indices = material_index_list.Load<MaterialIndexList>(model_info.material_offset * 4);
-  return material_indices.albedo_factor;
+  float4 albedo_factor = colors.Load(material_indices.albedo_factor);
+  return albedo_factor;
 #else
   MaterialIndexList  material_indices = material_index_list.Load<MaterialIndexList>(model_info.material_offset);
   Texture2D<float4>  albedo_tex       = textures[material_indices.albedo_tex];

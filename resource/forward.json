@@ -99,7 +99,12 @@
           "state": "srv_non_ps"
         },
         {
-          "name": "material_index",
+          "name": "material_indices",
+          "state": "srv_ps",
+          "index_offset" : 1
+        },
+        {
+          "name": "colors",
           "state": "srv_ps",
           "index_offset" : 1
         },

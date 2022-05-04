@@ -28,6 +28,8 @@ class MemoryAllocationJanitor;
 struct MaterialList;
 struct SceneResources {
   ID3D12Resource*  transform_resource{};
+  ID3D12Resource*  material_index_list_resource{};
+  ID3D12Resource*  albedo_factor_resource{};
   ID3D12Resource** mesh_resources_upload{};
   ID3D12Resource** mesh_resources_default{};
   uint32_t mesh_resource_num{};

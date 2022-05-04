@@ -156,6 +156,72 @@ void SetSubmeshMaterials(const tinygltf::Model& model, SceneData* scene_data) {
     }
   }
 }
+void SetTransformValues(const tinygltf::Model& model, SceneData* scene_data, const uint32_t mesh_num, ID3D12Resource* resource) {
+  uint32_t transform_element_num = 0;
+  for (uint32_t i = 0; i < scene_data->model_num; i++) {
+    scene_data->transform_offset[i] = transform_element_num;
+    transform_element_num += scene_data->model_instance_num[i];
+  }
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto transform_offset_index = AllocateArray<uint32_t>(&tmp_allocator, scene_data->model_num);
+  for (uint32_t i = 0; i < scene_data->model_num; i++) {
+    transform_offset_index[i] = 0;
+  }
+  auto transform_buffer = MapResource(resource, sizeof(matrix) * mesh_num);
+  for (const auto& node : model.scenes[0].nodes) {
+    matrix m{};
+    GetIdentityMatrix(m);
+    SetTransform(model, node, m, scene_data->transform_offset, transform_offset_index, static_cast<matrix*>(transform_buffer));
+  }
+  UnmapResource(resource);
+}
+auto IsColorSame(const float* a, const double* b) {
+  const double epsilon = static_cast<double>(std::numeric_limits<float>::epsilon());
+  for (uint32_t i = 0; i < 4; i++) {
+    if (std::abs(a[i] - b[i]) > epsilon) { return false; }
+  }
+  return true;
+}
+void SetColor(const double* src, float* dst) {
+  for (uint32_t i = 0; i < 4; i++) {
+    dst[i] = static_cast<float>(src[i]);
+  }
+}
+auto FindAlbedoFactorIndex(const std::array<float, 4>* colors, const uint32_t num, const std::vector<double>& finding_color) {
+  for (uint32_t i = 0; i < num; i++) {
+    if (IsColorSame(colors[i].data(), finding_color.data())) { return i; }
+  }
+  return ~0U;
+}
+void SetMaterialIndexListValues(const tinygltf::Model& model, SceneResources* scene_resources) {
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  const auto material_num = GetUint32(model.materials.size());
+  auto material_indices = AllocateArray<shader::MaterialIndexList>(&tmp_allocator, material_num);
+  auto material_colors = AllocateArray<std::array<float, 4>>(&tmp_allocator, material_num);
+  uint32_t next_color_index = 0;
+  for (uint32_t i = 0; i < material_num; i++) {
+    const auto& src_material = model.materials[i];
+    auto& material_index = material_indices[i];
+    auto albedo_factor_index = FindAlbedoFactorIndex(material_colors, next_color_index, src_material.pbrMetallicRoughness.baseColorFactor);
+    if (albedo_factor_index > next_color_index) {
+      SetColor(src_material.pbrMetallicRoughness.baseColorFactor.data(), material_colors[next_color_index].data());
+      albedo_factor_index = next_color_index;
+      next_color_index++;
+    }
+    material_index.albedo_factor = albedo_factor_index;
+  }
+  const auto indice_copy_size = GetUint32(sizeof(shader::MaterialIndexList)) * material_num;
+  memcpy(MapResource(scene_resources->material_index_list_resource, indice_copy_size), material_indices, indice_copy_size);
+  UnmapResource(scene_resources->material_index_list_resource);
+  if (next_color_index > 0) {
+    auto color_dst = MapResource(scene_resources->albedo_factor_resource, next_color_index * sizeof(float) * 4);
+    for (uint32_t i = 0; i < next_color_index; i++) {
+      memcpy(color_dst, material_colors[i].data(), sizeof(float) * 4);
+      color_dst = SucceedPtrWithStructSize<float[4]>(color_dst);
+    }
+    UnmapResource(scene_resources->albedo_factor_resource);
+  }
+}
 auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
   SceneData scene_data{};
   scene_data.model_num = GetUint32(model.meshes.size());
@@ -209,23 +275,8 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* a
   for (const auto& node : model.scenes[0].nodes) {
     CountModelInstanceNum(model, node, scene_data.model_instance_num);
   }
-  uint32_t transform_element_num = 0;
-  for (uint32_t i = 0; i < scene_data.model_num; i++) {
-    scene_data.transform_offset[i] = transform_element_num;
-    transform_element_num += scene_data.model_instance_num[i];
-  }
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto transform_offset_index = AllocateArray<uint32_t>(&tmp_allocator, scene_data.model_num);
-  for (uint32_t i = 0; i < scene_data.model_num; i++) {
-    transform_offset_index[i] = 0;
-  }
-  auto transform_buffer = MapResource(scene_resources->transform_resource, sizeof(matrix) * mesh_num);
-  for (const auto& node : model.scenes[0].nodes) {
-    matrix m{};
-    GetIdentityMatrix(m);
-    SetTransform(model, node, m, scene_data.transform_offset, transform_offset_index, static_cast<matrix*>(transform_buffer));
-  }
-  UnmapResource(scene_resources->transform_resource);
+  SetTransformValues(model, &scene_data, mesh_num, scene_resources->transform_resource);
+  SetMaterialIndexListValues(model, scene_resources);
   return scene_data;
 }
 } // namespace anonymous

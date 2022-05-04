@@ -37,6 +37,12 @@ auto GetTestJson(const char* const filename) {
   return json;
 }
 auto AddSystemBuffers(nlohmann::json* json) {
+  uint32_t max_mesh_buffer_num = 1024;
+  uint32_t max_material_num = 1024;
+  if (json->contains("scene_buffer_settings")) {
+    max_mesh_buffer_num = json->at("scene_buffer_settings")["max_mesh_buffer_num"];
+    max_material_num    = json->at("scene_buffer_settings")["max_material_num"];
+  }
   auto& buffer_list = json->at("buffer");
   {
     auto buffer_json = R"(
@@ -63,15 +69,12 @@ auto AddSystemBuffers(nlohmann::json* json) {
       "format": "UNKNOWN",
       "dimension": "buffer",
       "size_type": "absolute",
-      "num_elements": 1024,
       "raw_buffer": true,
       "need_upload": true
     }
     )"_json;
     buffer_json["stride_bytes"] = sizeof(matrix);
-    if (json->contains("scene_buffer_settings")) {
-      buffer_json["num_elements"] = json->at("scene_buffer_settings")["max_mesh_buffer_num"];
-    }
+    buffer_json["num_elements"] = max_mesh_buffer_num;
     buffer_list.push_back(buffer_json);
   }
   {
@@ -83,31 +86,39 @@ auto AddSystemBuffers(nlohmann::json* json) {
       "heap_type": "upload",
       "dimension": "buffer",
       "size_type": "absolute",
-      "width": 256,
       "initial_state": "generic_read"
     }
     )"_json;
-    if (buffer_json["width"] < sizeof(shader::SceneCbvData)) {
-      buffer_json["width"] = AlignAddress(sizeof(shader::SceneCbvData), 256);
-    }
+    buffer_json["width"] = AlignAddress(sizeof(shader::SceneCbvData), 256);
     buffer_list.push_back(buffer_json);
   }
   {
     auto buffer_json = R"(
     {
-      "name": "material_index",
+      "name": "material_indices",
       "format": "UNKNOWN",
       "dimension": "buffer",
       "size_type": "absolute",
-      "num_elements": 1024,
       "raw_buffer": true,
       "need_upload": true
     }
     )"_json;
     buffer_json["stride_bytes"] = sizeof(shader::MaterialIndexList);
-    if (json->contains("scene_buffer_settings")) {
-      buffer_json["num_elements"] = json->at("scene_buffer_settings")["max_material_num"];
+    buffer_json["num_elements"] = max_material_num;
+    buffer_list.push_back(buffer_json);
+  }
+  {
+    auto buffer_json = R"(
+    {
+      "name": "colors",
+      "format": "UNKNOWN",
+      "dimension": "buffer",
+      "size_type": "absolute",
+      "need_upload": true
     }
+    )"_json;
+    buffer_json["stride_bytes"] = sizeof(float) * 4;
+    buffer_json["num_elements"] = max_material_num;
     buffer_list.push_back(buffer_json);
   }
 }
@@ -403,7 +414,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   enum NamedBuffer {
     kNamedBufferTransform = 0,
     kNamedBufferSceneCbvBuffer,
-    kNamedBufferMaterialIndex,
+    kNamedBufferMaterialIndices,
+    kNamedBufferColors,
     kNamedBufferNum,
   };
   uint32_t named_buffer_config_index[kNamedBufferNum]{};
@@ -419,7 +431,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     const char* named_buffer_names[] = {
       "transforms",
       "scene_data",
-      "material_index",
+      "material_indices",
+      "colors",
     };
     static_assert(std::size(named_buffer_names) == kNamedBufferNum);
     auto material_json = GetTestJson("material.json");
@@ -558,6 +571,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   SceneResources scene_resources {
     .transform_resource              = GetResource(buffer_list, named_buffer_config_index[kNamedBufferTransform], kBufferSubIndexUpload),
+    .material_index_list_resource    = GetResource(buffer_list, named_buffer_config_index[kNamedBufferMaterialIndices], kBufferSubIndexUpload),
+    .albedo_factor_resource          = GetResource(buffer_list, named_buffer_config_index[kNamedBufferColors], kBufferSubIndexUpload),
     .mesh_resources_upload           = &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],
     .mesh_resources_default          = &buffer_list.resource_list[buffer_list.additional_buffer_index_default],
     .mesh_resource_num               = render_graph.max_mesh_buffer_num,
@@ -572,14 +587,20 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
   {
-    dynamic_data.copy_buffer_num = used_resource_num + 1;
+    const uint32_t excluded_buffer_num = 1; // kNamedBufferSceneCbvBuffer
+    dynamic_data.copy_buffer_num = used_resource_num + kNamedBufferNum - excluded_buffer_num;
     dynamic_data.copy_buffer_resource_upload  = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
     dynamic_data.copy_buffer_resource_default = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
-    dynamic_data.copy_buffer_resource_upload[0]  = GetResource(buffer_list, named_buffer_config_index[kNamedBufferTransform], kBufferSubIndexUpload);
-    dynamic_data.copy_buffer_resource_default[0] = GetResource(buffer_list, named_buffer_config_index[kNamedBufferTransform], kBufferSubIndexDefault);
-    const auto copy_size = sizeof(dynamic_data.copy_buffer_resource_upload[1]) * used_resource_num;
-    memcpy(&dynamic_data.copy_buffer_resource_upload[1],  &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],  copy_size);
-    memcpy(&dynamic_data.copy_buffer_resource_default[1], &buffer_list.resource_list[buffer_list.additional_buffer_index_default], copy_size);
+    uint32_t index = 0;
+    for (uint32_t i = 0; i < kNamedBufferNum; i++) {
+      if (i == kNamedBufferSceneCbvBuffer) { continue; }
+      dynamic_data.copy_buffer_resource_upload[index]  = GetResource(buffer_list, named_buffer_config_index[i], kBufferSubIndexUpload);
+      dynamic_data.copy_buffer_resource_default[index] = GetResource(buffer_list, named_buffer_config_index[i], kBufferSubIndexDefault);
+      index++;
+    }
+    const auto copy_size = sizeof(dynamic_data.copy_buffer_resource_upload[0]) * used_resource_num;
+    memcpy(&dynamic_data.copy_buffer_resource_upload[kNamedBufferNum - excluded_buffer_num],  &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],  copy_size);
+    memcpy(&dynamic_data.copy_buffer_resource_default[kNamedBufferNum - excluded_buffer_num], &buffer_list.resource_list[buffer_list.additional_buffer_index_default], copy_size);
   }
   auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, named_buffer_config_index[kNamedBufferSceneCbvBuffer], static_cast<uint32_t>(render_graph.buffer_list[named_buffer_config_index[kNamedBufferSceneCbvBuffer]].width), &allocator);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
