@@ -38,6 +38,8 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_barriers.cpp
   d3d12_resource_transferer.h
   d3d12_resource_transferer.cpp
+  d3d12_texture_util.h
+  d3d12_texture_util.cpp
 )
 if(USE_D3D12_AGILITY_SDK)
   target_sources(${CMAKE_PROJECT_NAME} PRIVATE d3d12_core_dll_version.cpp)

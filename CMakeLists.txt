@@ -71,6 +71,9 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
   file(COPY "${gltf_samples_SOURCE_DIR}/2.0/Box/glTF-Binary/Box.glb" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
 endif()
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/textures")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/textures")
+endif()
 
 option(LIB_MODE "build static library." OFF)
 option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
@@ -125,7 +128,9 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
   "${tinygltf_SOURCE_DIR}"
   "${imgui_SOURCE_DIR}"
-  "${WinPixEventRuntime_SOURCE_DIR}/Include/"
+  "${WinPixEventRuntime_SOURCE_DIR}/Include"
+  "${DirectXTK12_SOURCE_DIR}/Inc"
+  "${DirectX-Headers_SOURCE_DIR}/include/directx"
   "resource/shader/include"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
@@ -145,6 +150,9 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${tinygltf_SOURCE_DIR}/tiny_gltf.h"
   "${imgui_SOURCE_DIR}/imgui.h"
   "${WinPixEventRuntime_SOURCE_DIR}/Include/WinPixEventRuntime/pix3.h"
+  "${DirectXTK12_SOURCE_DIR}/Inc/DDSTextureLoader.h"
+  "${DirectX-Headers_SOURCE_DIR}/include/directx/d3d12.h"
+  "${DirectX-Headers_SOURCE_DIR}/include/directx/d3dx12.h"
 )
 if(USE_D3D12_AGILITY_SDK)
   target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_D3D12_AGILITY_SDK)
