@@ -130,31 +130,3 @@ TEST_CASE("create white texture") { // NOLINT
   dxgi_core.Term();
   gSystemMemoryAllocator->Reset();
 }
-TEST_CASE("texture util") { // NOLINT
-  using namespace illuminate; // NOLINT
-  DxgiCore dxgi_core;
-  dxgi_core.Init(); // NOLINT
-  Device device;
-  device.Init(dxgi_core.GetAdapter()); // NOLINT
-  CommandListSet command_list_set;
-  {
-    const auto type = D3D12_COMMAND_LIST_TYPE_COPY;
-    const auto priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-    const uint32_t command_list_num_per_queue[] = {0,0,1};
-    const uint32_t command_allocator_num_per_queue_type[] = {0,0,1};
-    command_list_set.Init(device.Get(), 1, &type, &priority, command_list_num_per_queue, 2, command_allocator_num_per_queue_type);
-  }
-  CommandQueueSignals command_queue_signals;
-  uint64_t signal_val_list[] = {0UL};
-  command_queue_signals.Init(device.Get(), 1, command_list_set.GetCommandQueueList());
-  {
-    // main process
-  }
-  command_queue_signals.WaitOnCpu(device.Get(), signal_val_list);
-  command_queue_signals.WaitAll(device.Get());
-  command_queue_signals.Term();
-  command_list_set.Term();
-  device.Term();
-  dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
-}
