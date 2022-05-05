@@ -4,26 +4,112 @@
 #include "d3dx12.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
+namespace {
+auto GetBufferDesc(const uint32_t size_in_bytes) {
+  return D3D12_RESOURCE_DESC1 {
+    .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+    .Alignment = 0,
+    .Width = size_in_bytes,
+    .Height = 1,
+    .DepthOrArraySize = 1,
+    .MipLevels = 1,
+    .Format = DXGI_FORMAT_UNKNOWN,
+    .SampleDesc = {
+      .Count = 1,
+      .Quality = 0,
+    },
+    .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+    .Flags = D3D12_RESOURCE_FLAG_NONE,
+    .SamplerFeedbackMipRegion = {
+      .Width = 0,
+      .Height = 0,
+      .Depth = 0,
+    },
+  };
+}
+}
 } // namespace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_dxgi_core.h"
 #include "d3d12_device.h"
 #include "d3d12_command_list.h"
 #include "d3d12_command_queue.h"
+#include "d3d12_gpu_buffer_allocator.h"
 TEST_CASE("create white texture") { // NOLINT
+  // https://www.shader.jp/?page_id=2076
   // ../tools/texconv.exe -nologo -fl 12.1 -keepcoverage 0.75 -sepalpha -if CUBIC -f BC7_UNORM -y ../tmp/white.png
   using namespace illuminate; // NOLINT
   DxgiCore dxgi_core;
   dxgi_core.Init(); // NOLINT
   Device device;
   device.Init(dxgi_core.GetAdapter()); // NOLINT
+  CommandListSet command_list_set;
+  {
+    const auto type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    const auto priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+    const uint32_t command_list_num_per_queue[] = {1,0,0};
+    const uint32_t command_allocator_num_per_queue_type[] = {1,0,0};
+    command_list_set.Init(device.Get(), 1, &type, &priority, command_list_num_per_queue, 2, command_allocator_num_per_queue_type);
+  }
+  CommandQueueSignals command_queue_signals;
+  uint64_t signal_val_list[] = {0UL};
+  command_queue_signals.Init(device.Get(), 1, command_list_set.GetCommandQueueList());
+  // main process
   ID3D12Resource* resource{};
   std::unique_ptr<std::uint8_t[]> dds_data;
   std::vector<D3D12_SUBRESOURCE_DATA> subresources;
   auto hr = DirectX::LoadDDSTextureFromFile(device.Get(), L"textures/white.dds", &resource, dds_data, subresources);
   CHECK_UNARY(SUCCEEDED(hr));
   CHECK_NE(resource, nullptr);
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  const auto subresource_num = GetUint32(subresources.size());
+  auto layout = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(&tmp_allocator, subresource_num);
+  auto num_rows = AllocateArray<uint32_t>(&tmp_allocator, subresource_num);
+  auto row_size_in_bytes = AllocateArray<uint64_t>(&tmp_allocator, subresource_num);
+  uint64_t total_bytes{};
+  auto resource_desc = resource->GetDesc();
+  device.Get()->GetCopyableFootprints(&resource_desc, 0, subresource_num, 0, layout, num_rows, row_size_in_bytes, &total_bytes);
+  auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
+  D3D12MA::Allocation* allocation{nullptr};
+  ID3D12Resource* upload_resource{nullptr};
+  CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, GetBufferDesc(GetUint32(total_bytes)), nullptr, buffer_allocator, &allocation, &upload_resource);
+  CHECK_NE(allocation, nullptr);
+  CHECK_NE(upload_resource, nullptr);
+  // based on UpdateSubresources.
+  auto upload_buffer = MapResource(upload_resource, GetUint32(total_bytes));
+  for (uint32_t i = 0; i < subresource_num; i++) {
+    auto ptr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(upload_buffer) + layout[i].Offset);
+    D3D12_MEMCPY_DEST DestData = { ptr, layout[i].Footprint.RowPitch, SIZE_T(layout[i].Footprint.RowPitch) * SIZE_T(num_rows[i]) };
+    MemcpySubresource(&DestData, &subresources[i], static_cast<SIZE_T>(row_size_in_bytes[i]), num_rows[i], layout[i].Footprint.Depth);
+  }
+  UnmapResource(upload_resource);
+  auto command_list = command_list_set.GetCommandList(device.Get(), 0);
+  for (uint32_t i = 0; i < subresource_num; i++) {
+    CD3DX12_TEXTURE_COPY_LOCATION dst(resource, i);
+    CD3DX12_TEXTURE_COPY_LOCATION src(upload_resource, layout[i]);
+    command_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+  }
+  D3D12_RESOURCE_BARRIER barrier {
+    .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+    .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+    .Transition = {
+      .pResource = resource,
+      .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+      .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+      .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+    },
+  };
+  command_list->ResourceBarrier(1, &barrier);
+  command_list_set.ExecuteCommandList(0);
+  // term
+  command_queue_signals.WaitOnCpu(device.Get(), signal_val_list);
+  command_queue_signals.WaitAll(device.Get());
+  allocation->Release();
+  upload_resource->Release();
+  buffer_allocator->Release();
   resource->Release();
+  command_queue_signals.Term();
+  command_list_set.Term();
   device.Term();
   dxgi_core.Term();
   gSystemMemoryAllocator->Reset();
