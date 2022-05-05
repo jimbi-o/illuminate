@@ -9,6 +9,7 @@ struct BufferConfig;
 struct BufferList;
 struct MaterialList;
 struct RenderPass;
+struct ResourceTransfer;
 struct SceneData;
 struct RenderPassFuncArgsInit {
   const nlohmann::json* json{nullptr};
@@ -30,9 +31,6 @@ struct RenderPassConfigDynamicData {
   float camera_pos[3]{0.0f, 1.2f, -5.0f};
   float camera_focus[3]{};
   float fov_vertical{30.0f}, near_z{0.001f}, far_z{1000.0f};
-  uint32_t copy_buffer_num{0};
-  ID3D12Resource** copy_buffer_resource_upload{nullptr};
-  ID3D12Resource** copy_buffer_resource_default{nullptr};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
@@ -47,6 +45,7 @@ struct RenderPassFuncArgsRenderCommon {
   DescriptorCpu* descriptor_cpu{nullptr};
   const ResourceStateType*** resource_state_list{nullptr};
   MaterialList* material_list{nullptr};
+  ResourceTransfer* resource_transfer{nullptr};
 };
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};

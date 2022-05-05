@@ -40,6 +40,7 @@ struct SceneResources {
   uint32_t mesh_resource_num{};
   uint32_t per_mesh_resource_size_in_bytes{};
 };
+D3D12_RESOURCE_DESC1 GetModelBufferDesc(const uint32_t size_in_bytes);
 SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num);
 }
 #endif

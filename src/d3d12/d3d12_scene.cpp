@@ -316,4 +316,26 @@ SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, MemoryAl
   }
   return ParseTinyGltfScene(model, allocator, scene_resources, used_resource_num);
 }
+D3D12_RESOURCE_DESC1 GetModelBufferDesc(const uint32_t size_in_bytes) {
+  return {
+    .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+    .Alignment = 0,
+    .Width = size_in_bytes,
+    .Height = 1,
+    .DepthOrArraySize = 1,
+    .MipLevels = 1,
+    .Format = DXGI_FORMAT_UNKNOWN,
+    .SampleDesc = {
+      .Count = 1,
+      .Quality = 0,
+    },
+    .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+    .Flags = D3D12_RESOURCE_FLAG_NONE,
+    .SamplerFeedbackMipRegion = {
+      .Width = 0,
+      .Height = 0,
+      .Depth = 0,
+    },
+  };
+}
 } // namespace illuminate

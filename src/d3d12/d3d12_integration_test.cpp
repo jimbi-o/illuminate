@@ -9,6 +9,7 @@
 #include "d3d12_dxgi_core.h"
 #include "d3d12_gpu_buffer_allocator.h"
 #include "d3d12_render_graph_json_parser.h"
+#include "d3d12_resource_transferer.h"
 #include "d3d12_scene.h"
 #include "d3d12_shader_compiler.h"
 #include "d3d12_swapchain.h"
@@ -504,7 +505,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
 #endif
-    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, render_graph.max_mesh_buffer_num, render_graph.per_mesh_buffer_size_in_bytes, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
+    const auto model_buffer_desc = GetModelBufferDesc(render_graph.per_mesh_buffer_size_in_bytes);
+    buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, render_graph.max_mesh_buffer_num, model_buffer_desc, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator, &allocator);
     CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num_wo_additional_buffers, render_graph.sampler_num, render_graph.descriptor_handle_num_per_type, &allocator));
     command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList());
     auto& json_buffer_list = json.at("buffer");
@@ -580,9 +582,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     render_pass_signal[i] = 0UL;
   }
+  auto resource_transfer = PrepareResourceTransferer(render_graph.frame_buffer_num, render_graph.max_mesh_buffer_num * 2);
   SceneResources scene_resources {
-    .mesh_resources_upload           = &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],
-    .mesh_resources_default          = &buffer_list.resource_list[buffer_list.additional_buffer_index_default],
+    .mesh_resources_upload           = RetainUploadBuffer(render_graph.max_mesh_buffer_num, GetModelBufferDesc(render_graph.per_mesh_buffer_size_in_bytes), &allocator, buffer_allocator, &resource_transfer),
+    .mesh_resources_default          = &buffer_list.resource_list[buffer_list.additional_buffer_index],
     .mesh_resource_num               = render_graph.max_mesh_buffer_num,
     .per_mesh_resource_size_in_bytes = render_graph.per_mesh_buffer_size_in_bytes,
   };
@@ -592,24 +595,24 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t used_resource_num = 0;
   auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", &allocator, &scene_resources, &used_resource_num);
   assert(used_resource_num <= render_graph.max_mesh_buffer_num);
+  {
+    for (uint32_t i = 0; i < kSceneBufferNum; i++) {
+      CHECK_UNARY(ReserveResourceTransfer(0/*frame_index*/,
+                                          GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexUpload),
+                                          GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexDefault),
+                                          &resource_transfer));
+    }
+    ReturnUploadBuffer(render_graph.max_mesh_buffer_num - used_resource_num, &scene_resources.mesh_resources_upload[used_resource_num], &resource_transfer);
+    CHECK_UNARY(ReserveResourceTransfer(0/*frame_index*/, used_resource_num,
+                                        scene_resources.mesh_resources_upload, scene_resources.mesh_resources_default,
+                                        &resource_transfer));
+  }
+  auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
+  auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_allocation_index, static_cast<uint32_t>(render_graph.buffer_list[scene_cbv_buffer_allocation_index].width), &allocator);
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
   }
-  auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
-  {
-    dynamic_data.copy_buffer_num = used_resource_num + kSceneBufferNum;
-    dynamic_data.copy_buffer_resource_upload  = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
-    dynamic_data.copy_buffer_resource_default = AllocateArray<ID3D12Resource*>(&allocator, dynamic_data.copy_buffer_num);
-    for (uint32_t i = 0; i < kSceneBufferNum; i++) {
-      dynamic_data.copy_buffer_resource_upload[i]  = GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexUpload);
-      dynamic_data.copy_buffer_resource_default[i] = GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexDefault);
-    }
-    const auto copy_size = sizeof(dynamic_data.copy_buffer_resource_upload[0]) * used_resource_num;
-    memcpy(&dynamic_data.copy_buffer_resource_upload[kSceneBufferNum],  &buffer_list.resource_list[buffer_list.additional_buffer_index_upload],  copy_size);
-    memcpy(&dynamic_data.copy_buffer_resource_default[kSceneBufferNum], &buffer_list.resource_list[buffer_list.additional_buffer_index_default], copy_size);
-  }
-  auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_allocation_index, static_cast<uint32_t>(render_graph.buffer_list[scene_cbv_buffer_allocation_index].width), &allocator);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
     auto single_frame_allocator = GetTemporalMemoryAllocator();
@@ -654,6 +657,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .descriptor_cpu = &descriptor_cpu,
       .resource_state_list = resource_state_list,
       .material_list = &material_list,
+      .resource_transfer = &resource_transfer,
     };
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       if (!render_pass_enable_flag[k]) { continue; }
@@ -703,7 +707,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
     swapchain.Present();
-    dynamic_data.copy_buffer_num = 0;
   }
   command_queue_signals.WaitAll(device.Get());
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
