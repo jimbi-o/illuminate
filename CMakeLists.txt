@@ -62,6 +62,11 @@ CPMAddPackage(
   GIT_TAG "b590f6f07cd6931deab8486b9b54e8174386dd49"
   DOWNLOAD_ONLY yes
 )
+CPMAddPackage(
+  NAME DirectXTK12
+  GITHUB_REPOSITORY "microsoft/DirectXTK12"
+  GIT_TAG "3356e06c6cb7e4684bc1418b864799c098ab6704"
+)
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
   file(COPY "${gltf_samples_SOURCE_DIR}/2.0/Box/glTF-Binary/Box.glb" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
@@ -93,6 +98,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   spdlog
   D3D12MemoryAllocator
   "${WinPixEventRuntime_SOURCE_DIR}/bin/x64/WinPixEventRuntime.lib"
+  DirectXTK12
   $<$<CONFIG:Debug>:dxguid.lib>
 )
 
