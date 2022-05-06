@@ -604,6 +604,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   uint32_t used_resource_num = 0;
   auto scene_data = GetSceneFromTinyGltf(TEST_MODEL_PATH, &allocator, &scene_resources, &used_resource_num);
+  loginfo("used_resource_num:{}", used_resource_num);
   assert(used_resource_num <= render_graph.max_mesh_buffer_num);
   {
     for (uint32_t i = 0; i < kSceneBufferNum; i++) {

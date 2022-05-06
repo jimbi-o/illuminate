@@ -279,9 +279,10 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
   }
   if (j.contains("scene_buffer_settings")) {
     const auto& scene_buffer_settings = j.at("scene_buffer_settings");
+    r.max_model_num = GetNum(scene_buffer_settings, "max_model_num", 1024);
+    r.max_material_num = GetNum(scene_buffer_settings, "max_material_num", 1024);
     r.max_mesh_buffer_num = GetNum(scene_buffer_settings, "max_mesh_buffer_num", 1024);
     r.per_mesh_buffer_size_in_bytes = GetNum(scene_buffer_settings, "per_mesh_buffer_size_in_bytes", 1024);
-    r.max_material_num = GetNum(scene_buffer_settings, "max_material_num", 1024);
   }
 }
 }
