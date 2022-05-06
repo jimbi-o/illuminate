@@ -6,6 +6,12 @@ project(illuminate
 )
 
 option(USE_D3D12_AGILITY_SDK "enable d3d12 agility SDK" OFF)
+option(LIB_MODE "build static library." OFF)
+option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
+option(USE_GRAPHICS_DEBUG_SCOPE "enable graphics scope name" ON)
+if(BUILD_WITH_TEST)
+  set(TEST_MODEL_NAME "Box" CACHE STRING "model to load")
+endif()
 
 include(cmake/CPM.cmake)
 CPMAddPackage("gh:onqtam/doctest#2.4.6")
@@ -67,18 +73,15 @@ CPMAddPackage(
   GITHUB_REPOSITORY "microsoft/DirectXTK12"
   GIT_TAG "3356e06c6cb7e4684bc1418b864799c098ab6704"
 )
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
+if(BUILD_WITH_TEST AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata/${TEST_MODEL_NAME}")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
-  file(COPY "${gltf_samples_SOURCE_DIR}/2.0/Box" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
+  file(COPY "${gltf_samples_SOURCE_DIR}/2.0/${TEST_MODEL_NAME}" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
 endif()
 
-option(LIB_MODE "build static library." OFF)
-option(BUILD_WITH_TEST "build project with test (not used when LIB_MODE=ON)." OFF)
-option(USE_GRAPHICS_DEBUG_SCOPE "enable graphics scope name" ON)
 if (NOT LIB_MODE AND CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   add_executable(${CMAKE_PROJECT_NAME})
   if (BUILD_WITH_TEST)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BUILD_WITH_TEST DOCTEST_CONFIG_SUPER_FAST_ASSERTS)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BUILD_WITH_TEST DOCTEST_CONFIG_SUPER_FAST_ASSERTS TEST_MODEL_PATH="scenedata/${TEST_MODEL_NAME}/glTF/${TEST_MODEL_NAME}.gltf")
     target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM PUBLIC "${doctest_SOURCE_DIR}")
     add_subdirectory(tests)
   else()

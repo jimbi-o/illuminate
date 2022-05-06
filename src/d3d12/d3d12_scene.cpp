@@ -272,6 +272,17 @@ void SetMaterialValues(const tinygltf::Model& model, SceneResources* scene_resou
     UnmapResource(scene_resources->resource[kSceneBufferAlphaCutoff]);
   }
 }
+struct SceneTextureInfo {
+};
+auto CreateTextures(const tinygltf::Model& model) {
+  const auto texture_num = GetUint32(model.images.size());
+  SceneTextureInfo scene_texture_info{};
+  for (uint32_t i = 0; i < texture_num; i++) {
+    const auto& src_file_name = model.images[i].uri;
+    loginfo("{}", src_file_name);
+  }
+  return scene_texture_info;
+}
 auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
   SceneData scene_data{};
   scene_data.model_num = GetUint32(model.meshes.size());
@@ -327,10 +338,12 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* a
   }
   SetTransformValues(model, &scene_data, mesh_num, scene_resources->resource[kSceneBufferTransform]);
   SetMaterialValues(model, scene_resources);
+  auto scene_texture_info = CreateTextures(model);
   return scene_data;
 }
 } // namespace anonymous
 SceneData GetSceneFromTinyGltf(const char* const filename, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
+  loginfo("loading {}", filename);
   tinygltf::Model model;
   if (!GetTinyGltfModel(filename, &model)) {
     logerror("gltf load failed. {}", filename);
