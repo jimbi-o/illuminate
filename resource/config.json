@@ -84,7 +84,7 @@
   ],
   "scene_buffer_settings": {
     "max_mesh_buffer_num": 1024,
-    "per_mesh_buffer_size_in_bytes": 16384,
+    "per_mesh_buffer_size_in_bytes": 1048576,
     "max_material_num": 1024
   },
   "sampler": [

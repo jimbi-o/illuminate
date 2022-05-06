@@ -137,7 +137,10 @@ void SetMeshBuffers(const tinygltf::Model& model, const std::string& attribute_n
         head_addr = scene_resources->mesh_resources_default[resource_index]->GetGPUVirtualAddress();
         SetD3d12Name(scene_resources->mesh_resources_default[resource_index], buffer_name_prefix + std::to_string(i) + "_" + std::to_string(j));
       }
-      assert(used_size_in_bytes + buffer_size <= scene_resources->per_mesh_resource_size_in_bytes && "implement buffer split");
+      if (used_size_in_bytes + buffer_size > scene_resources->per_mesh_resource_size_in_bytes) {
+        logfatal("model buffer size exceeds given buffer size {} {} {}", used_size_in_bytes + buffer_size, buffer_size, scene_resources->per_mesh_resource_size_in_bytes);
+        assert(false && "implement buffer split");
+      }
       const auto& buffer_view = model.bufferViews[accessor.bufferView];
       memcpy(dst, &model.buffers[buffer_view.buffer].data[accessor.byteOffset + buffer_view.byteOffset], buffer_size);
       set_mesh_info(head_addr + used_size_in_bytes, buffer_size, accessor.type, accessor.componentType, accessor.count, scene_data.model_submesh_index[i][j]);
