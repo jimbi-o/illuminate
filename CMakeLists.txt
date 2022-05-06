@@ -69,10 +69,7 @@ CPMAddPackage(
 )
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
-  file(COPY "${gltf_samples_SOURCE_DIR}/2.0/Box/glTF-Binary/Box.glb" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
-endif()
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/textures")
-  file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/textures")
+  file(COPY "${gltf_samples_SOURCE_DIR}/2.0/Box" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
 endif()
 
 option(LIB_MODE "build static library." OFF)

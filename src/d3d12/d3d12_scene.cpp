@@ -13,6 +13,14 @@ bool CheckError(const bool ret, const std::string& err, const std::string& warn)
   }
   return ret;
 }
+bool GetTinyGltfModel(const char* const filename, tinygltf::Model* model) {
+  using namespace tinygltf;
+  TinyGLTF loader;
+  std::string err;
+  std::string warn;
+  bool result = loader.LoadASCIIFromFile(model, &err, &warn, filename);
+  return CheckError(result, err, warn);
+}
 bool GetTinyGltfModel(const char* const gltf_text, const char* const base_dir, tinygltf::Model* model) {
   using namespace tinygltf;
   TinyGLTF loader;
@@ -208,6 +216,8 @@ void SetMaterialValues(const tinygltf::Model& model, SceneResources* scene_resou
   auto alpha_cutoffs = AllocateArray<float>(&tmp_allocator, material_num);
   uint32_t next_color_index = 0;
   uint32_t next_alpha_cutoff_index = 0;
+  const auto white_texture_index = GetUint32(model.images.size()); // TODO
+  const auto bilinear_sampler_index = GetUint32(model.samplers.size()); // TODO
   for (uint32_t i = 0; i < material_num; i++) {
     const auto& src_material = model.materials[i];
     auto& material_index = material_indices[i];
@@ -220,6 +230,18 @@ void SetMaterialValues(const tinygltf::Model& model, SceneResources* scene_resou
         next_color_index++;
       }
       material_index.albedo_factor = albedo_factor_index;
+    }
+    {
+      // albedo tex, sampler
+      const auto& texture_index = src_material.pbrMetallicRoughness.baseColorTexture.index;
+      if (texture_index == -1) {
+        material_index.albedo_tex = white_texture_index;
+        material_index.albedo_sampler = bilinear_sampler_index;
+      } else {
+        const auto& texture_info = model.textures[texture_index];
+        material_index.albedo_tex = texture_info.source;
+        material_index.albedo_sampler = texture_info.sampler;
+      }
     }
     {
       // alpha cutoff
@@ -308,10 +330,10 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* a
   return scene_data;
 }
 } // namespace anonymous
-SceneData GetSceneFromTinyGltfBinary(const char* const binary_filename, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
+SceneData GetSceneFromTinyGltf(const char* const filename, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
   tinygltf::Model model;
-  if (!GetTinyGltfModelFromBinaryFile(binary_filename, &model)) {
-    logerror("gltf load failed. {}", binary_filename);
+  if (!GetTinyGltfModel(filename, &model)) {
+    logerror("gltf load failed. {}", filename);
     return {};
   }
   return ParseTinyGltfScene(model, allocator, scene_resources, used_resource_num);

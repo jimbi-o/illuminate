@@ -603,7 +603,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     scene_resources.resource[i] = GetResource(buffer_list, scene_buffer_config_index[i], kBufferSubIndexUpload);
   }
   uint32_t used_resource_num = 0;
-  auto scene_data = GetSceneFromTinyGltfBinary("scenedata/Box.glb", &allocator, &scene_resources, &used_resource_num);
+  auto scene_data = GetSceneFromTinyGltf("scenedata/Box/glTF/Box.gltf", &allocator, &scene_resources, &used_resource_num);
   assert(used_resource_num <= render_graph.max_mesh_buffer_num);
   {
     for (uint32_t i = 0; i < kSceneBufferNum; i++) {
