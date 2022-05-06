@@ -96,6 +96,7 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
     }
   }
   config->descriptor_only = GetBool(j, "descriptor_only", false);
+  config->descriptor_num = GetNum(j, "descriptor_num", 1);
   if (config->descriptor_only) { return; }
   config->heap_type = GetHeapType(j, "heap_type");
   config->dimension = GetDimension(j, "dimension");

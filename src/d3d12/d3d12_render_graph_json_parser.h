@@ -229,23 +229,20 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
     const auto rtv_index = static_cast<uint32_t>(DescriptorType::kRtv);
     const auto dsv_index = static_cast<uint32_t>(DescriptorType::kDsv);
     for (uint32_t i = 0; i < r.buffer_num; i++) {
+      const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num) * r.buffer_list[i].descriptor_num;
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagCbv) {
-        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
         r.descriptor_handle_num_per_type[cbv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagSrv) {
-        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
         r.descriptor_handle_num_per_type[srv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagUav) {
-        r.descriptor_handle_num_per_type[uav_index]++;
+        r.descriptor_handle_num_per_type[uav_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagRtv) {
-        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
         r.descriptor_handle_num_per_type[rtv_index] += add_val;
       }
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagDsv) {
-        const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
         r.descriptor_handle_num_per_type[dsv_index] += add_val;
       }
     }

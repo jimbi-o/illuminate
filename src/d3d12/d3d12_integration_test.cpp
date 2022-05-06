@@ -136,6 +136,16 @@ auto AddSystemBuffers(nlohmann::json* json) {
     buffer_json["num_elements"] = max_material_num;
     buffer_list.push_back(buffer_json);
   }
+  {
+    auto buffer_json = R"(
+    {
+      "name": "textures",
+      "descriptor_only": true
+    }
+    )"_json;
+    buffer_json["descriptor_num"] = max_material_num * 4; // 4 = albedo, normal, metallic-roughness, emissive
+    buffer_list.push_back(buffer_json);
+  }
 }
 auto GetRenderPassSwapchainState(const nlohmann::json& render_pass) {
   if (!render_pass.contains("buffer_list")) { return std::make_pair(false, std::string_view()); }
