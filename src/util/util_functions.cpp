@@ -16,9 +16,6 @@ void SetArrayValues(const uint32_t val, const uint32_t array_size, uint32_t* arr
     array[i] = val;
   }
 }
-std::filesystem::path GetDirectory(const char* const path) {
-  return std::filesystem::path(path).parent_path();
-}
 }
 #include "doctest/doctest.h"
 #include "illuminate/memory/memory_allocation.h"
@@ -157,7 +154,4 @@ TEST_CASE("succeed multiple index") {
   CHECK_EQ(array[1], 0);
   CHECK_EQ(array[2], 0);
   CHECK_EQ(array[3], 0);
-}
-TEST_CASE("GetDirectory") {
-  CHECK_EQ(illuminate::GetDirectory("var/tmp/hoge.txt"), "var/tmp");
 }

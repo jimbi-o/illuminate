@@ -1,5 +1,7 @@
 #include "d3d12_scene.h"
+#include <filesystem>
 #include "illuminate/math/math.h"
+#include "illuminate/util/util_functions.h"
 #include "d3d12_shader_compiler.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
@@ -277,16 +279,18 @@ void SetMaterialValues(const tinygltf::Model& model, SceneResources* scene_resou
 }
 struct SceneTextureInfo {
 };
-auto CreateTextures(const tinygltf::Model& model) {
+auto CreateTextures(const tinygltf::Model& model, const char* const gltf_path) {
+  std::filesystem::path path(gltf_path);
   const auto texture_num = GetUint32(model.images.size());
   SceneTextureInfo scene_texture_info{};
   for (uint32_t i = 0; i < texture_num; i++) {
-    const auto& src_file_name = model.images[i].uri;
-    loginfo("{}", src_file_name);
+    path.replace_filename(model.images[i].uri);
+    path.replace_extension(".dds");
+    logdebug("{}", path.string());
   }
   return scene_texture_info;
 }
-auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
+auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_path, MemoryAllocationJanitor* allocator, SceneResources* scene_resources, uint32_t* used_resource_num) {
   SceneData scene_data{};
   scene_data.model_num = GetUint32(model.meshes.size());
   scene_data.model_instance_num = AllocateArray<uint32_t>(allocator, scene_data.model_num);
@@ -341,7 +345,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, MemoryAllocationJanitor* a
   }
   SetTransformValues(model, &scene_data, mesh_num, scene_resources->resource[kSceneBufferTransform]);
   SetMaterialValues(model, scene_resources);
-  auto scene_texture_info = CreateTextures(model);
+  auto scene_texture_info = CreateTextures(model, gltf_path);
   return scene_data;
 }
 } // namespace anonymous
@@ -352,7 +356,7 @@ SceneData GetSceneFromTinyGltf(const char* const filename, MemoryAllocationJanit
     logerror("gltf load failed. {}", filename);
     return {};
   }
-  return ParseTinyGltfScene(model, allocator, scene_resources, used_resource_num);
+  return ParseTinyGltfScene(model, filename, allocator, scene_resources, used_resource_num);
 }
 D3D12_RESOURCE_DESC1 GetModelBufferDesc(const uint32_t size_in_bytes) {
   return {
