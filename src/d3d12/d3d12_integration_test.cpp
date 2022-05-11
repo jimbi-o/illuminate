@@ -207,30 +207,32 @@ auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, co
   const auto list_num = view_list_num + (render_pass.sampler_num > 0 ? 1 : 0);
   if (list_num == 0) { return (D3D12_GPU_DESCRIPTOR_HANDLE*)nullptr; }
   auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, list_num);
-  for (uint32_t i = 0; i < view_list_num; i++) {
-    auto tmp_allocator = GetTemporalMemoryAllocator();
-    auto buffer_id_list = AllocateArray<uint32_t>(&tmp_allocator, render_pass.buffer_num);
-    auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, render_pass.buffer_num);
-    auto cpu_handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.buffer_num);
-    uint32_t index = 0;
-    for (uint32_t j = 0; j < render_pass.buffer_num; j++) {
-      if (render_pass.buffer_list[j].index_offset != i) { continue; }
-      descriptor_type_list[index] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
-      const auto buffer_index = render_pass.buffer_list[j].buffer_index;
-      if (IsSceneBuffer(buffer_index)) {
-        cpu_handles[index].ptr = GetSceneBufferHandle(buffer_index, scene_data).ptr;
-        buffer_id_list[index] = ~0U;
-        logtrace("gpu handle/pass:{} j:{} scene:{} handle:{:x} desc:{} index:{} offset:{}", render_pass.index, j, (buffer_index & ~0xFFFF0000), cpu_handles[index].ptr, descriptor_type_list[j], index, render_pass.buffer_list[j].index_offset);
-      } else {
-        cpu_handles[index].ptr = 0;
-        const auto local_index = GetBufferLocalIndex(buffer_config_list[buffer_index], render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index], frame_index);
-        buffer_id_list[index] = GetBufferAllocationIndex(buffer_list, buffer_index, local_index);
-        logtrace("gpu handle/pass:{} j:{} config:{} alloc:{} local:{} handle:{:x} desc:{} index:{} offset:{}", render_pass.index, j, buffer_index, buffer_id_list[index], local_index, cpu_handles[index].ptr, descriptor_type_list[j], index, render_pass.buffer_list[j].index_offset);
+  if (render_pass.buffer_num > 0) {
+    for (uint32_t i = 0; i < view_list_num; i++) {
+      auto tmp_allocator = GetTemporalMemoryAllocator();
+      auto buffer_id_list = AllocateArray<uint32_t>(&tmp_allocator, render_pass.buffer_num);
+      auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, render_pass.buffer_num);
+      auto cpu_handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.buffer_num);
+      uint32_t index = 0;
+      for (uint32_t j = 0; j < render_pass.buffer_num; j++) {
+        if (render_pass.buffer_list[j].index_offset != i) { continue; }
+        descriptor_type_list[index] = ConvertToDescriptorType(render_pass.buffer_list[j].state);
+        const auto buffer_index = render_pass.buffer_list[j].buffer_index;
+        if (IsSceneBuffer(buffer_index)) {
+          cpu_handles[index].ptr = GetSceneBufferHandle(buffer_index, scene_data).ptr;
+          buffer_id_list[index] = ~0U;
+          logtrace("gpu handle/pass:{} j:{} scene:{} handle:{:x} desc:{} index:{} offset:{}", render_pass.index, j, (buffer_index & ~0xFFFF0000), cpu_handles[index].ptr, descriptor_type_list[j], index, render_pass.buffer_list[j].index_offset);
+        } else {
+          cpu_handles[index].ptr = 0;
+          const auto local_index = GetBufferLocalIndex(buffer_config_list[buffer_index], render_pass.buffer_list[j].state, write_to_sub[buffer_index][render_pass.index], frame_index);
+          buffer_id_list[index] = GetBufferAllocationIndex(buffer_list, buffer_index, local_index);
+          logtrace("gpu handle/pass:{} j:{} config:{} alloc:{} local:{} handle:{:x} desc:{} index:{} offset:{}", render_pass.index, j, buffer_index, buffer_id_list[index], local_index, cpu_handles[index].ptr, descriptor_type_list[j], index, render_pass.buffer_list[j].index_offset);
+        }
+        index++;
       }
-      index++;
+      gpu_handle_list[i] = descriptor_gpu->CopyViewDescriptors(device, index, buffer_id_list, descriptor_type_list, cpu_handles, descriptor_cpu);
+      logtrace("gpu handle/pass:{} index:{} ptr:{:x}", render_pass.index, index, gpu_handle_list[i].ptr);
     }
-    gpu_handle_list[i] = descriptor_gpu->CopyViewDescriptors(device, index, buffer_id_list, descriptor_type_list, cpu_handles, descriptor_cpu);
-    logtrace("gpu handle/pass:{} index:{} ptr:{:x}", render_pass.index, index, gpu_handle_list[i].ptr);
   }
   if (render_pass.sampler_num > 0) {
     gpu_handle_list[view_list_num] = descriptor_gpu->CopySamplerDescriptors(device, render_pass.sampler_num, render_pass.sampler_index_list, descriptor_cpu);

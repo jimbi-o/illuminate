@@ -116,7 +116,7 @@
         {
           "name": "textures",
           "state": "srv_ps",
-          "index_offset" : 2
+          "index_offset" : 1
         },
         {
           "name": "primary",
