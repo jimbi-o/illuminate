@@ -50,10 +50,8 @@ bool DescriptorCpu::Init(D3d12Device* const device, const uint32_t buffer_alloca
 void DescriptorCpu::Term() {
   for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
     if (descriptor_heap_[i]) {
-      auto refval = descriptor_heap_[i]->Release();
-      if (refval != 0) {
-        assert(false && "descriptor_heap_ refefence left");
-      }
+      const auto refval = descriptor_heap_[i]->Release();
+      logtrace("DescriptorCpu refval:{}", refval);
     }
   }
 }
@@ -67,13 +65,18 @@ const D3D12_CPU_DESCRIPTOR_HANDLE& DescriptorCpu::CreateHandle(const uint32_t in
   handles_[descriptor_type_index][index].ptr = handle.ptr;
   handle_num_[heap_index]++;
   assert(handle_num_[heap_index] <= total_handle_num_[heap_index] && "handle num exceeded handle pool size");
-  logtrace("handle created. alloc:{} desc:{} ptr:{}", index, type, handles_[descriptor_type_index][index].ptr);
+  logtrace("handle created. alloc:{} type:{} ptr:{:x}", index, type, handles_[descriptor_type_index][index].ptr);
   return handles_[descriptor_type_index][index];
 }
 void DescriptorCpu::RegisterExternalHandle(const uint32_t index, const DescriptorType type, const D3D12_CPU_DESCRIPTOR_HANDLE& handle) {
   auto descriptor_type_index = static_cast<uint32_t>(type);
   handles_[descriptor_type_index][index].ptr = handle.ptr;
   logtrace("handle registered. alloc:{} desc:{} ptr:{}", index, type, handles_[descriptor_type_index][index].ptr);
+}
+ID3D12DescriptorHeap* DescriptorCpu::RetainDescriptorHeap(const DescriptorType type) {
+  auto heap = descriptor_heap_[GetDescriptorTypeIndex(type)];
+  heap->AddRef();
+  return heap;
 }
 namespace {
 uint32_t GetViewNum(const uint32_t buffer_num, const DescriptorType* descriptor_type_list) {
@@ -162,7 +165,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyToGpuDescriptor(const uint32_t sr
   descriptor->current_handle_num += src_descriptor_num;
   return gpu_handle;
 }
-D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const uint32_t* buffer_id_list, const DescriptorType* descriptor_type_list, const DescriptorCpu& descriptor_cpu) {
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const uint32_t* buffer_id_list, const DescriptorType* descriptor_type_list, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, const DescriptorCpu& descriptor_cpu) {
   const auto view_num = GetViewNum(buffer_num, descriptor_type_list);
   if (view_num == 0) {
     return D3D12_GPU_DESCRIPTOR_HANDLE{};
@@ -182,7 +185,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* devi
       case DescriptorType::kCbv:
       case DescriptorType::kSrv:
       case DescriptorType::kUav: {
-        auto handle = descriptor_cpu.GetHandle(buffer_id_list[i], descriptor_type_list[i]);
+        const auto& handle = (cpu_handles[i].ptr != 0) ? cpu_handles[i] : descriptor_cpu.GetHandle(buffer_id_list[i], descriptor_type_list[i]);
         if (handle.ptr == 0) {
           logerror("descriptor_cpu.GetHandle failed {} {}", buffer_id_list[i], descriptor_type_list[i]);
           assert(false && "descriptor_cpu.GetHandle failed.");
@@ -190,6 +193,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* devi
         }
         if (!first_buffer && handles[view_index].ptr + descriptor_cbv_srv_uav_.handle_increment_size == handle.ptr) {
           handle_num[view_index]++;
+          logtrace("i:{} view_index:{} num:{} first:{} ptr:{:x}/incr", i, view_index, handle_num[view_index], first_buffer, handles[view_index].ptr);
           break;
         }
         if (!first_buffer) {
@@ -197,6 +201,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyViewDescriptors(D3d12Device* devi
         }
         handle_num[view_index] = 1;
         handles[view_index].ptr = handle.ptr;
+        logtrace("i:{} view_index:{} num:{} first:{} ptr:{:x}", i, view_index, handle_num[view_index], first_buffer, handles[view_index].ptr);
         first_buffer = false;
         break;
       }

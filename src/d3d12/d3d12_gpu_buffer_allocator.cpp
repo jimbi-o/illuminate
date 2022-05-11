@@ -78,34 +78,15 @@ void CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES i
     }
   }
 }
-namespace {
-auto GetHeapType(const BufferConfig& config, const uint32_t sub_index) {
-  if (config.need_upload && sub_index == kBufferSubIndexUpload) {
-    return D3D12_HEAP_TYPE_UPLOAD;
-  }
-  return config.heap_type;
-}
-auto GetInitialState(const BufferConfig& config, const uint32_t sub_index) {
-  if (config.need_upload) {
-    if (sub_index == kBufferSubIndexUpload) {
-      return D3D12_RESOURCE_STATE_GENERIC_READ;
-    }
-    return D3D12_RESOURCE_STATE_COMMON;
-  }
-  return ConvertToD3d12ResourceState(config.initial_state);
-}
-} // namespace anonymous
-BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const uint32_t additional_buffer_num, const D3D12_RESOURCE_DESC1& additional_buffer_desc, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator) {
+BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator) {
   BufferList buffer_list{};
   buffer_list.buffer_allocation_index = AllocateArray<uint32_t*>(allocator, buffer_config_num);
-  buffer_list.buffer_allocation_num_wo_additional_buffers = 0;
   for (uint32_t i = 0; i < buffer_config_num; i++) {
-    buffer_list.buffer_allocation_num_wo_additional_buffers += GetBufferAllocationNum(buffer_config_list[i], frame_buffer_num);
+    buffer_list.buffer_allocation_num += GetBufferAllocationNum(buffer_config_list[i], frame_buffer_num);
   }
-  buffer_list.buffer_allocation_num = buffer_list.buffer_allocation_num_wo_additional_buffers + additional_buffer_num;
   buffer_list.buffer_allocation_list = AllocateArray<D3D12MA::Allocation*>(allocator, buffer_list.buffer_allocation_num);
   buffer_list.resource_list = AllocateArray<ID3D12Resource*>(allocator, buffer_list.buffer_allocation_num);
-  buffer_list.buffer_config_index = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num_wo_additional_buffers);
+  buffer_list.buffer_config_index = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
   uint32_t buffer_allocation_index = 0;
   for (uint32_t i = 0; i < buffer_config_num; i++) {
     auto& buffer_config = buffer_config_list[i];
@@ -120,21 +101,12 @@ BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* b
       } else {
         auto resource_desc = ConvertToD3d12ResourceDesc1(buffer_config, main_buffer_size);
         auto clear_value = (resource_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER && (resource_desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)) != 0) ? &buffer_config.clear_value : nullptr;
-        CreateBuffer(GetHeapType(buffer_config, j), GetInitialState(buffer_config, j), resource_desc, clear_value, buffer_allocator,
+        CreateBuffer(buffer_config.heap_type, ConvertToD3d12ResourceState(buffer_config.initial_state), resource_desc, clear_value, buffer_allocator,
                      &buffer_list.buffer_allocation_list[buffer_allocation_index], &buffer_list.resource_list[buffer_allocation_index]);
       }
       logdebug("buffer created. config_index:{} local_index:{} alloc_index:{}", i, j, buffer_allocation_index);
       buffer_allocation_index++;
     }
-  }
-  assert(buffer_allocation_index == buffer_list.buffer_allocation_num_wo_additional_buffers);
-  buffer_list.additional_buffer_index = buffer_allocation_index;
-  logdebug("additional buffer start:{}", buffer_allocation_index);
-  for (uint32_t i = 0; i < additional_buffer_num; i++) {
-    CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, additional_buffer_desc, nullptr, buffer_allocator,
-                 &buffer_list.buffer_allocation_list[buffer_allocation_index],
-                 &buffer_list.resource_list[buffer_allocation_index]);
-    buffer_allocation_index++;
   }
   assert(buffer_allocation_index == buffer_list.buffer_allocation_num);
   return buffer_list;

@@ -45,12 +45,6 @@
       "clear_stencil": 0
     }
   ],
-  "scene_buffer_settings": {
-    "max_model_num": 1024,
-    "max_material_num": 1024,
-    "max_mesh_buffer_num": 128,
-    "per_mesh_buffer_size_in_bytes": 1048576
-  },
   "gpu_handle_num_view": 32,
   "gpu_handle_num_sampler": 8,
   "sampler": [

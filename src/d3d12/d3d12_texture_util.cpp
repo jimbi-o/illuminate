@@ -6,7 +6,34 @@
 #include "d3d12_src_common.h"
 namespace illuminate {
 namespace {
-auto GetBufferDesc(const uint32_t size_in_bytes) {
+auto ConvertToResourceDesc1(const D3D12_RESOURCE_DESC& desc) {
+  return D3D12_RESOURCE_DESC1 {
+    .Dimension = desc.Dimension,
+    .Alignment = desc.Alignment,
+    .Width = desc.Width,
+    .Height = desc.Height,
+    .DepthOrArraySize = desc.DepthOrArraySize,
+    .MipLevels = desc.MipLevels,
+    .Format = desc.Format,
+    .SampleDesc = desc.SampleDesc,
+    .Layout = desc.Layout,
+    .Flags = desc.Flags,
+    .SamplerFeedbackMipRegion = {
+      .Width = 0,
+      .Height = 0,
+      .Depth = 0,
+    },
+  };
+}
+void SetCopyCommand(const uint32_t subresource_num, const D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layout, ID3D12Resource* upload_resource, ID3D12Resource* default_resource, D3d12CommandList* command_list) {
+  for (uint32_t i = 0; i < subresource_num; i++) {
+    CD3DX12_TEXTURE_COPY_LOCATION dst(default_resource, i);
+    CD3DX12_TEXTURE_COPY_LOCATION src(upload_resource, layout[i]);
+    command_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+  }
+}
+}
+D3D12_RESOURCE_DESC1 GetBufferDesc(const uint32_t size_in_bytes) {
   return D3D12_RESOURCE_DESC1 {
     .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
     .Alignment = 0,
@@ -28,26 +55,6 @@ auto GetBufferDesc(const uint32_t size_in_bytes) {
     },
   };
 }
-auto ConvertToResourceDesc1(const D3D12_RESOURCE_DESC& desc) {
-  return D3D12_RESOURCE_DESC1 {
-    .Dimension = desc.Dimension,
-    .Alignment = desc.Alignment,
-    .Width = desc.Width,
-    .Height = desc.Height,
-    .DepthOrArraySize = desc.DepthOrArraySize,
-    .MipLevels = desc.MipLevels,
-    .Format = desc.Format,
-    .SampleDesc = desc.SampleDesc,
-    .Layout = desc.Layout,
-    .Flags = desc.Flags,
-    .SamplerFeedbackMipRegion = {
-      .Width = 0,
-      .Height = 0,
-      .Depth = 0,
-    },
-  };
-}
-}
 TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t* filepath, MemoryAllocationJanitor* allocator) {
   ID3D12Resource* committed_resource{};
   std::unique_ptr<std::uint8_t[]> dds_data;
@@ -68,6 +75,7 @@ TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t
   for (uint32_t i = 0; i < info.subresource_num; i++) {
     memcpy(&info.subresources[i], &subresources[i], sizeof(info.subresources));
   }
+  info.dds_data = std::move(dds_data);
   info.layout = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(allocator, info.subresource_num);
   info.num_rows = AllocateArray<uint32_t>(allocator, info.subresource_num);
   info.row_size_in_bytes = AllocateArray<uint64_t>(allocator, info.subresource_num);
@@ -84,13 +92,6 @@ void FillUploadResource(const TextureCreationInfo& info, ID3D12Resource* upload_
     MemcpySubresource(&DestData, &info.subresources[i], static_cast<SIZE_T>(info.row_size_in_bytes[i]), info.num_rows[i], info.layout[i].Footprint.Depth);
   }
   UnmapResource(upload_resource);
-}
-void SetCopyCommand(const uint32_t subresource_num, const D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layout, ID3D12Resource* upload_resource, ID3D12Resource* default_resource, D3d12CommandList* command_list) {
-  for (uint32_t i = 0; i < subresource_num; i++) {
-    CD3DX12_TEXTURE_COPY_LOCATION dst(default_resource, i);
-    CD3DX12_TEXTURE_COPY_LOCATION src(upload_resource, layout[i]);
-    command_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-  }
 }
 } // namespace illuminate
 #include "doctest/doctest.h"

@@ -36,8 +36,8 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_json_parser.cpp
   d3d12_barriers.h
   d3d12_barriers.cpp
-  d3d12_resource_transferer.h
-  d3d12_resource_transferer.cpp
+  d3d12_resource_transfer.h
+  d3d12_resource_transfer.cpp
   d3d12_texture_util.h
   d3d12_texture_util.cpp
 )

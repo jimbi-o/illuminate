@@ -82,7 +82,6 @@ auto GetBufferSizeRelativeness(const nlohmann::json& j, const char* const name) 
 void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
   config->pingpong = GetBool(j, "pingpong", false);
   config->frame_buffered = GetBool(j, "frame_buffered", false);
-  config->need_upload = GetBool(j, "need_upload", false);
   if (config->pingpong) {
     assert(!config->frame_buffered);
   }
@@ -96,7 +95,6 @@ void GetBufferConfig(const nlohmann::json& j, BufferConfig* config) {
     }
   }
   config->descriptor_only = GetBool(j, "descriptor_only", false);
-  config->descriptor_num = GetNum(j, "descriptor_num", 1);
   if (config->descriptor_only) { return; }
   config->heap_type = GetHeapType(j, "heap_type");
   config->dimension = GetDimension(j, "dimension");

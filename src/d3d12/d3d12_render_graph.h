@@ -27,11 +27,9 @@ struct BufferConfig {
   bool descriptor_only{false};
   bool pingpong{false};
   bool frame_buffered{false};
-  bool need_upload{false};
   uint32_t num_elements{0};
   uint32_t stride_bytes{0};
   bool raw_buffer{false};
-  uint32_t descriptor_num{1};
 };
 struct RenderPassBuffer {
   uint32_t buffer_index{~0U};
@@ -94,12 +92,11 @@ struct RenderGraph {
   uint32_t sampler_num{0};
   D3D12_SAMPLER_DESC* sampler_list{nullptr};
   uint32_t descriptor_handle_num_per_type[kDescriptorTypeNum]{};
-  uint32_t gpu_handle_num_view{0};
-  uint32_t gpu_handle_num_sampler{0};
+  uint32_t gpu_handle_num_view{1024};
+  uint32_t gpu_handle_num_sampler{16};
   uint32_t max_model_num{1024};
   uint32_t max_material_num{1024};
-  uint32_t max_mesh_buffer_num{1024};
-  uint32_t per_mesh_buffer_size_in_bytes{16384};
+  uint32_t max_mipmap_num{12};
 };
 static const uint32_t kBarrierExecutionTimingNum = 2;
 }

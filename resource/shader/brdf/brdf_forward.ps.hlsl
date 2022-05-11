@@ -17,7 +17,8 @@
                   SRV(t2, numDescriptors=1),             \
                   SRV(t3, numDescriptors=1),             \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
-  DescriptorTable(SRV(t4, numDescriptors=unbounded),     \
+  DescriptorTable(SRV(t4, numDescriptors=unbounded,      \
+                  flags = DESCRIPTORS_VOLATILE),         \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
   DescriptorTable(Sampler(s0, numDescriptors=unbounded), \
                   visibility=SHADER_VISIBILITY_PIXEL),   \

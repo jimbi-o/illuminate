@@ -9,7 +9,7 @@ StrHash CalcStrHash(const char* const str, const StrHash prime) {
   for (uint32_t i = 0; str[i] != 0; i++) {
     hash = prime * hash + static_cast<StrHash>(str[i]);
   }
-  spdlog::debug("SID {}:{}", str, hash);
+  spdlog::trace("SID {}:{}", str, hash);
   return hash;
 }
 StrHash CombineHash(const StrHash& a, const StrHash& b) {

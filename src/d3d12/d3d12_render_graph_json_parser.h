@@ -3,6 +3,7 @@
 #include "d3d12_json_parser.h"
 #include "d3d12_gpu_buffer_allocator.h"
 #include "d3d12_render_graph.h"
+#include "d3d12_scene.h"
 #include "d3d12_src_common.h"
 #include "illuminate/util/hash_map.h"
 #include <nlohmann/json.hpp>
@@ -122,6 +123,10 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
           dst_buffer.index_offset = GetNum(src_buffer, "index_offset", 0);
           dst_pass.max_buffer_index_offset = std::max(dst_buffer.index_offset, dst_pass.max_buffer_index_offset);
           auto buffer_name = GetStringView(src_buffer, "name");
+          if (IsSceneBuffer(buffer_name.data())) {
+            dst_buffer.buffer_index = EncodeSceneBufferIndex(buffer_name.data());
+            continue;
+          }
           for (uint32_t graph_buffer_index = 0; graph_buffer_index < r.buffer_num; graph_buffer_index++) {
             if (GetStringView(graph_buffer_list[graph_buffer_index], "name").compare(buffer_name) == 0) {
               dst_buffer.buffer_index = graph_buffer_index;
@@ -229,7 +234,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
     const auto rtv_index = static_cast<uint32_t>(DescriptorType::kRtv);
     const auto dsv_index = static_cast<uint32_t>(DescriptorType::kDsv);
     for (uint32_t i = 0; i < r.buffer_num; i++) {
-      const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num) * r.buffer_list[i].descriptor_num;
+      const auto add_val = GetBufferAllocationNum(r.buffer_list[i], r.frame_buffer_num);
       if (r.buffer_list[i].descriptor_type_flags & kDescriptorTypeFlagCbv) {
         r.descriptor_handle_num_per_type[cbv_index] += add_val;
       }
@@ -273,17 +278,11 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
     }
   } // command allocator num
   //
-  {
-    r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", 1024);
-    r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", 16);
-  }
-  if (j.contains("scene_buffer_settings")) {
-    const auto& scene_buffer_settings = j.at("scene_buffer_settings");
-    r.max_model_num = GetNum(scene_buffer_settings, "max_model_num", 1024);
-    r.max_material_num = GetNum(scene_buffer_settings, "max_material_num", 1024);
-    r.max_mesh_buffer_num = GetNum(scene_buffer_settings, "max_mesh_buffer_num", 1024);
-    r.per_mesh_buffer_size_in_bytes = GetNum(scene_buffer_settings, "per_mesh_buffer_size_in_bytes", 1024);
-  }
+  r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", r.gpu_handle_num_view);
+  r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", r.gpu_handle_num_sampler);
+  r.max_model_num = GetNum(j, "max_model_num", r.max_model_num);
+  r.max_material_num = GetNum(j, "max_material_num", r.max_material_num);
+  r.max_mipmap_num = GetNum(j, "max_mipmap_num", r.max_mipmap_num);
 }
 }
 #endif

@@ -1,9 +1,9 @@
 #include "d3d12_memory_allocators.h"
 namespace illuminate {
 namespace {
-static const uint32_t system_memory_buffer_size_in_bytes = 1024 * 1024;
+static const uint32_t system_memory_buffer_size_in_bytes = 32 * 1024 * 1024;
 static std::byte system_memory_buffer[system_memory_buffer_size_in_bytes];
-static const uint32_t temporal_memory_buffer_size_in_bytes = 1024 * 1024;
+static const uint32_t temporal_memory_buffer_size_in_bytes = 32 * 1024 * 1024;
 static std::byte temporal_memory_buffer[temporal_memory_buffer_size_in_bytes];
 static LinearAllocator system_memory_allocator(system_memory_buffer, system_memory_buffer_size_in_bytes);
 static StackAllocator temporal_memory_allocator(temporal_memory_buffer, temporal_memory_buffer_size_in_bytes);
