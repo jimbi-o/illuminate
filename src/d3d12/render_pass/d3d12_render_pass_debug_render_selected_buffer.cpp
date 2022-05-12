@@ -6,15 +6,15 @@ void RenderPassDebugRenderSelectedBuffer::Render(RenderPassFuncArgsRenderCommon*
   D3D12_GPU_DESCRIPTOR_HANDLE srv_list{};
   D3D12_RESOURCE_BARRIER* barrier{};
   uint32_t barrier_num = 0;
-  auto tmp_allocator = GetTemporalMemoryAllocator();
   {
+    auto tmp_allocator = GetTemporalMemoryAllocator();
     uint32_t* buffer_allocation_index_list = nullptr;
     auto buffer_allocation_index_len = GetBufferAllocationIndexList(*args_common->buffer_list, args_common->buffer_config_list, &tmp_allocator, &buffer_allocation_index_list);
-    auto descriptor_type_list = AllocateArray<DescriptorType>(&tmp_allocator, buffer_allocation_index_len);
+    auto cpu_handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, buffer_allocation_index_len);
     for (uint32_t i = 0; i < buffer_allocation_index_len; i++) {
-      descriptor_type_list[i] = DescriptorType::kSrv;
+      cpu_handles[i].ptr = args_common->descriptor_cpu->GetHandle(buffer_allocation_index_list[i], DescriptorType::kSrv).ptr;
     }
-    srv_list = args_common->descriptor_gpu->CopyViewDescriptors(args_common->device, buffer_allocation_index_len, buffer_allocation_index_list, descriptor_type_list, nullptr, *args_common->descriptor_cpu);
+    srv_list = args_common->descriptor_gpu->WriteToTransientViewHandleRange(buffer_allocation_index_len, cpu_handles, args_common->device);
     barrier = AllocateArray<D3D12_RESOURCE_BARRIER>(&tmp_allocator, buffer_allocation_index_len);
     for (uint32_t i = 0; i < buffer_allocation_index_len; i++) {
       const auto& buffer_allocation_index = buffer_allocation_index_list[i];

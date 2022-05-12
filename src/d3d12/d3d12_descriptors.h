@@ -6,7 +6,6 @@
 #include "illuminate/util/hash_map.h"
 namespace illuminate {
 class MemoryAllocationJanitor;
-ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags);
 class DescriptorCpu {
  public:
   bool Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator);
@@ -44,26 +43,31 @@ class DescriptorGpu {
  public:
   bool Init(D3d12Device* device, const uint32_t handle_num_view, const uint32_t handle_num_sampler);
   void Term();
-  D3D12_GPU_DESCRIPTOR_HANDLE CopyViewDescriptors(D3d12Device* device, const uint32_t buffer_num, const uint32_t* buffer_id_list, const DescriptorType* descriptor_type_list, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, const DescriptorCpu& descriptor_cpu);
-  D3D12_GPU_DESCRIPTOR_HANDLE CopySamplerDescriptors(D3d12Device* device, const uint32_t sampler_num, const uint32_t* sampler_index_list, const DescriptorCpu& descriptor_cpu);
-  auto GetViewHandleCount() const { return descriptor_cbv_srv_uav_.current_handle_num; }
-  auto GetViewHandleTotal() const { return descriptor_cbv_srv_uav_.total_handle_num; }
-  auto GetSamplerHandleCount() const { return descriptor_sampler_.current_handle_num; }
-  auto GetSamplerHandleTotal() const { return descriptor_sampler_.total_handle_num; }
   void SetDescriptorHeapsToCommandList(const uint32_t command_list_num, D3d12CommandList** command_list);
+  D3D12_GPU_DESCRIPTOR_HANDLE WriteToTransientViewHandleRange(const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, D3d12Device* device);
+  D3D12_GPU_DESCRIPTOR_HANDLE WriteToTransientSamplerHandleRange(const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, D3d12Device* device);
+  void SetPersistentViewHandleNum(const uint32_t handle_num);
+  void SetPersistentSamplerHandleNum(const uint32_t handle_num);
+  D3D12_GPU_DESCRIPTOR_HANDLE WriteToPersistentViewHandleRange(const uint32_t start, const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE handle, D3d12Device* device);
+  D3D12_GPU_DESCRIPTOR_HANDLE WriteToPersistentSamplerHandleRange(const uint32_t start, const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE handle, D3d12Device* device);
+  bool IsNextHandle(const D3D12_GPU_DESCRIPTOR_HANDLE& current_handle, const D3D12_GPU_DESCRIPTOR_HANDLE& next_handle, const DescriptorType& type) const;
  private:
   struct DescriptorHeapSetGpu {
     uint32_t handle_increment_size{};
     uint32_t total_handle_num{0};
     uint32_t current_handle_num{0};
+    uint32_t reserved_num{0};
     ID3D12DescriptorHeap* descriptor_heap{nullptr};
     uint64_t heap_start_cpu{};
     uint64_t heap_start_gpu{};
   };
   static DescriptorHeapSetGpu InitDescriptorHeapSetGpu(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t handle_num);
   static D3D12_GPU_DESCRIPTOR_HANDLE CopyToGpuDescriptor(const uint32_t src_descriptor_num, const uint32_t handle_list_len, const uint32_t* handle_num_list, const D3D12_CPU_DESCRIPTOR_HANDLE* handle_list, const D3D12_DESCRIPTOR_HEAP_TYPE heap_type, D3d12Device* device, DescriptorHeapSetGpu* descriptor);
+  static D3D12_GPU_DESCRIPTOR_HANDLE WriteToTransientHandleRange(const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, const D3D12_DESCRIPTOR_HEAP_TYPE heap_type, DescriptorHeapSetGpu* descriptor, D3d12Device* device);
   DescriptorHeapSetGpu descriptor_cbv_srv_uav_;
   DescriptorHeapSetGpu descriptor_sampler_;
 };
+ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags);
+bool IsGpuHandleAvailableType(const ResourceStateType& type);
 }
 #endif

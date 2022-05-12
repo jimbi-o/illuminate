@@ -547,6 +547,7 @@ static const char* scene_buffer_names[] = {
   "alpha_cutoffs",
   "textures",
   "meshes",
+  "scene_sampler",
 };
 }
 bool IsSceneBuffer(const char* const name) {
@@ -571,9 +572,8 @@ uint32_t EncodeSceneBufferIndex(const char* const name) {
 bool IsSceneBuffer(const uint32_t buffer_index) {
   return (0xFFFF0000 & buffer_index) == 0xFFFF0000;
 }
-const D3D12_CPU_DESCRIPTOR_HANDLE& GetSceneBufferHandle(const uint32_t buffer_index, const SceneData& scene_data) {
-  const auto index = (~0xFFFF0000) & buffer_index;
-  return scene_data.cpu_handles[index];
+uint32_t GetDecodedSceneBufferIndex(const uint32_t buffer_index) {
+  return (~0xFFFF0000) & buffer_index;
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
