@@ -16,7 +16,8 @@
   DescriptorTable(SRV(t1, numDescriptors=1),             \
                   SRV(t2, numDescriptors=1),             \
                   SRV(t3, numDescriptors=1),             \
-                  SRV(t4, numDescriptors=unbounded,      \
+                  visibility=SHADER_VISIBILITY_PIXEL),   \
+  DescriptorTable(SRV(t4, numDescriptors=unbounded,      \
                   flags = DESCRIPTORS_VOLATILE),         \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
   DescriptorTable(Sampler(s0, numDescriptors=unbounded), \
@@ -30,6 +31,8 @@ sampler            samplers[]          : register(s0);
 [RootSignature(BrdfForwardRootsig)]
 float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
 #if 1
+  return float4(0.0f, 1.0f, 1.0f, 1.0f);
+#if 0
   MaterialIndexList material_indices = material_index_list.Load<MaterialIndexList>(model_info.material_offset);
   Texture2D<float4> albedo_tex = textures[material_indices.albedo_tex];
   float4 albedo_color = albedo_tex.Load(int3(0, 0, 0)); // TODO use sampler
@@ -38,6 +41,7 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   float4 albedo = albedo_color * albedo_factor;
   if (albedo.a < alpha_cutoff) { discard; }
   return albedo;
+#endif
 #else
   MaterialIndexList  material_indices = material_index_list.Load<MaterialIndexList>(model_info.material_offset);
   Texture2D<float4>  albedo_tex       = textures[material_indices.albedo_tex];

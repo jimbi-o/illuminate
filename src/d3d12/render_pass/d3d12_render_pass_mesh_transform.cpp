@@ -60,6 +60,7 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
   command_list->OMSetStencilRef(pass_vars->stencil_val);
   for (uint32_t i = 0; i < pass_vars->gpu_handle_num; i++) {
     command_list->SetGraphicsRootDescriptorTable(1 + i, args_per_pass->gpu_handles[i]);
+    logtrace("mesh transform gpu handle. i:{}/{} ptr:{:x}", i, pass_vars->gpu_handle_num, args_per_pass->gpu_handles[i].ptr);
   }
   const auto scene_data = args_common->scene_data;
   uint32_t prev_material_index = ~0U;
@@ -71,6 +72,8 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
       const auto submesh_index = scene_data->model_submesh_index[i][j];
       if (const auto material_index = scene_data->submesh_material_index[submesh_index]; material_index != prev_material_index && pass_vars->use_material) {
         command_list->SetGraphicsRoot32BitConstant(0, material_index * sizeof(shader::MaterialIndexList), 1);
+        logtrace("mesh transform material.mesh:{}-{} material:{}->{}", i, j, prev_material_index, material_index);
+        prev_material_index = material_index;
       }
       auto variation_index = FindMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index]);
       if (variation_index == MaterialList::kInvalidIndex) {
@@ -79,6 +82,7 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
       }
       if (prev_variation_index != variation_index) {
         command_list->SetPipelineState(GetMaterialPso(*args_common->material_list, material_id, variation_index));
+        logtrace("mesh transform material variation.mesh:{}-{} variation:{}->{}", i, j, prev_variation_index, variation_index);
         prev_variation_index = variation_index;
       }
       command_list->IASetIndexBuffer(&scene_data->submesh_index_buffer_view[submesh_index]);

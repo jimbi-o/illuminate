@@ -86,6 +86,7 @@ void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const
   if (node.mesh != -1) {
     const auto index = transform_offset[node.mesh] + transform_offset_index[node.mesh];
     memcpy(&(transform_buffer[index]), &parent_transform, sizeof(transform_buffer[index]));
+    logtrace("transform index{} node{} mesh{} val{}", transform_offset_index[node.mesh], node_index, index, transform_buffer[index][0][0]);
     transform_offset_index[node.mesh]++;
   }
   matrix transform{};
@@ -121,6 +122,7 @@ void CreateUploadAndDefaultBuffers(const uint32_t buffer_size, D3D12MA::Allocato
   CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, desc, nullptr, buffer_allocator, allocation_default, resource_default);
   SetD3d12Name(*resource_upload, name_upload);
   SetD3d12Name(*resource_default, name_default);
+  logtrace("buffer created size:{} {}:{:x} {}:{:x}", buffer_size, name_upload, reinterpret_cast<std::uintptr_t>(resource_upload), name_default, reinterpret_cast<std::uintptr_t>(resource_default));
 }
 auto PrepareSingleBufferTransfer(const uint32_t size_in_bytes, const SceneBufferType scene_buffer_type, const char* const name_u, const char* const name_d, const uint32_t frame_index, SceneData* scene_data, MemoryAllocationJanitor* allocator, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   ID3D12Resource* resource_upload{nullptr};
@@ -185,6 +187,7 @@ void SetSubmeshMaterials(const tinygltf::Model& model, SceneData* scene_data) {
       if (primitive.material >= 0 && primitive.material < model.materials.size()) {
         scene_data->submesh_material_variation_hash[mesh_index] = GetModelMaterialVariationHash(model.materials[primitive.material]);
         scene_data->submesh_material_index[mesh_index] = primitive.material;
+        logtrace("submesh:{}-{}({}), variation:{:x} primitive.material:{}=submesh_material_index:{}", i, j, mesh_index, scene_data->submesh_material_variation_hash[mesh_index], primitive.material, scene_data->submesh_material_index[mesh_index]);
       } else {
         logwarn("invalid material i:{} j:{} mesh_index:{} m:{} msize:{}", i, j, mesh_index, primitive.material, model.materials.size());
         scene_data->submesh_material_variation_hash[mesh_index] = MaterialList::kInvalidIndex;
@@ -304,8 +307,10 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
         SetColor(src_material.pbrMetallicRoughness.baseColorFactor.data(), material_colors[next_color_index].data());
         albedo_factor_index = next_color_index;
         next_color_index++;
+        logtrace("material:{} albedo index:{} color:[{},{},{}]", i, albedo_factor_index, material_colors[next_color_index][0], material_colors[next_color_index][1], material_colors[next_color_index][2]);
       }
       material_index.albedo_factor = albedo_factor_index;
+      logtrace("material:{} albedo:{}", i, albedo_factor_index);
     }
     {
       // albedo tex, sampler
@@ -313,10 +318,12 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
       if (texture_index == -1) {
         material_index.albedo_tex = white_texture_index;
         material_index.albedo_sampler = bilinear_sampler_index;
+        logwarn("material:{} no texture", i);
       } else {
         const auto& texture_info = model.textures[texture_index];
         material_index.albedo_tex = texture_info.source;
         material_index.albedo_sampler = texture_info.sampler;
+        logtrace("material:{} texture:{} sampler:{}", i, texture_info.source, texture_info.sampler);
       }
     }
     {
@@ -324,9 +331,12 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
       auto alpha_cutoff_index = FindFloat(alpha_cutoffs, next_alpha_cutoff_index, src_material.alphaCutoff);
       if (alpha_cutoff_index > next_alpha_cutoff_index) {
         alpha_cutoffs[next_alpha_cutoff_index] = static_cast<float>(src_material.alphaCutoff);
+        alpha_cutoff_index = next_alpha_cutoff_index;
         next_alpha_cutoff_index++;
       }
+      assert(src_material.alphaMode.compare("MASK") != 0 || alpha_cutoff_index < material_num);
       material_index.alpha_cutoff = alpha_cutoff_index;
+      logtrace("material:{} alpha_cutoff:{}", i, alpha_cutoff_index);
     }
   }
   auto handle_index = *used_handle_num;
@@ -338,6 +348,7 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
     device->CreateShaderResourceView(scene_data->resources[kSceneBufferMaterialIndices][0], &resource_desc, handle);
     scene_data->cpu_handles[kSceneBufferMaterialIndices].ptr = handle.ptr;
+    logtrace("material index handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferMaterialIndices][0]), scene_data->cpu_handles[kSceneBufferMaterialIndices].ptr);
     handle_index++;
   }
   {
@@ -353,6 +364,7 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
     device->CreateShaderResourceView(scene_data->resources[kSceneBufferColors][0], &resource_desc, handle);
     scene_data->cpu_handles[kSceneBufferColors].ptr = handle.ptr;
+    logtrace("color handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferColors][0]), scene_data->cpu_handles[kSceneBufferColors].ptr);
     handle_index++;
   }
   {
@@ -366,6 +378,7 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
     device->CreateShaderResourceView(scene_data->resources[kSceneBufferAlphaCutoff][0], &resource_desc, handle);
     scene_data->cpu_handles[kSceneBufferAlphaCutoff].ptr = handle.ptr;
+    logtrace("alpha cutoff handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferColors][0]), scene_data->cpu_handles[kSceneBufferColors].ptr);
     handle_index++;
   }
   *used_handle_num = handle_index;
@@ -423,6 +436,7 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
     const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
     auto view_desc = GetSrvDescTexture2D(texture_creation_info.resource_desc);
     device->CreateShaderResourceView(scene_data->resources[kSceneBufferTextures][i], &view_desc, handle);
+    logtrace("texture index:{} {} handle_index:{} resource:{:x} ptr:{:x}", i, model.images[i].uri, handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferTextures][i]), handle.ptr);
     handle_index++;
   }
   scene_data->cpu_handles[kSceneBufferTextures].ptr = descriptor_cpu->GetHandle(*used_handle_num, DescriptorType::kSrv).ptr;
@@ -450,6 +464,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   scene_data.allocations[kSceneBufferMesh] = AllocateArray<D3D12MA::Allocation*>(allocator, scene_data.resource_num[kSceneBufferMesh]);
   scene_data.submesh_index_buffer_len = AllocateArray<uint32_t>(allocator, mesh_num);
   scene_data.submesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
+  uint32_t resource_num = 0;
   {
     const auto num = SetMeshBuffers<kIndiceMode>(model, "", scene_data, frame_index,
                                                  &scene_data.resources[kSceneBufferMesh][0], &scene_data.allocations[kSceneBufferMesh][0],
@@ -465,8 +480,10 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
                                                      .SizeInBytes    = size,
                                                      .Format         = GetIndexBufferDxgiFormat(tinygltf_type, tinygltf_component_type),
                                                    };
+                                                   logtrace("index buffer index:{} len:{} addr:{:x} size:{} format:{}", index, submesh_index_buffer_len[index], addr, size, GetIndexBufferDxgiFormat(tinygltf_type, tinygltf_component_type));
                                                  });
     assert(num == mesh_num);
+    resource_num = num;
   }
   const std::string attributes[] = {"POSITION", "NORMAL", "TANGENT",};
   static_assert(std::size(attributes) == kVertexBufferTypeNum);
@@ -486,8 +503,15 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
                                                      .SizeInBytes    = size,
                                                      .StrideInBytes  = GetVertexBufferStrideInBytes(tinygltf_type, tinygltf_component_type),
                                                    };
+                                                   logtrace("vertex buffer index:{} addr:{:x} size:{} strid:{}", index, addr, size, submesh_vertex_buffer_view[index].StrideInBytes);
                                                  });
     assert(num <= mesh_num);
+    resource_num += num;
+  }
+  assert(resource_num <= scene_data.resource_num[kSceneBufferMesh]);
+  if (scene_data.resource_num[kSceneBufferMesh] != resource_num) {
+    logwarn("missing mesh data found/total={}/{} missing{}", resource_num, scene_data.resource_num[kSceneBufferMesh], scene_data.resource_num[kSceneBufferMesh] - resource_num);
+    scene_data.resource_num[kSceneBufferMesh] = resource_num;
   }
   scene_data.submesh_material_variation_hash = AllocateArray<StrHash>(allocator, mesh_num);
   scene_data.submesh_material_index = AllocateArray<uint32_t>(allocator, mesh_num);

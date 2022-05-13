@@ -238,6 +238,8 @@ auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, co
         if (copy_src_cpu_handle_num[buffer.index_offset] == 0) {
           gpu_handle_list[buffer.index_offset].ptr = scene_gpu_handles[decoded_index].ptr;
         } else {
+          // scene buffer list must occupy a single root descriptor index by itself to avoid lots of descriptors being copied.
+          // (or just to make implementation simple)
           assert(last_scene_handle_num[buffer.index_offset] <= 1);
           assert(scene_handle_num[decoded_index] == 1);
           gpu_handle_list[buffer.index_offset].ptr = 0UL;
