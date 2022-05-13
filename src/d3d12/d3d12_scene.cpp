@@ -240,14 +240,14 @@ auto FindFloat(const float* list, const uint32_t num, const double finding_value
   }
   return ~0U;
 }
-auto GetRawBufferDesc(const uint32_t num) {
+auto GetRawBufferDesc(const uint32_t num, const uint32_t stride) {
   return D3D12_SHADER_RESOURCE_VIEW_DESC {
     .Format = DXGI_FORMAT_R32_TYPELESS,
     .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
     .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
     .Buffer = {
       .FirstElement = 0,
-      .NumElements = num,
+      .NumElements = num * stride / 4, // 4=R32
       .StructureByteStride = 0,
       .Flags = D3D12_BUFFER_SRV_FLAG_RAW,
     }
@@ -341,10 +341,11 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
   }
   auto handle_index = *used_handle_num;
   {
-    const auto indice_copy_size = GetUint32(sizeof(shader::MaterialIndexList)) * material_num;
+    const auto stride = GetUint32(sizeof(shader::MaterialIndexList));
+    const auto indice_copy_size = stride * material_num;
     memcpy(MapResource(resource_upload_material_index, indice_copy_size), material_indices, indice_copy_size);
     UnmapResource(resource_upload_material_index);
-    const auto resource_desc = GetRawBufferDesc(material_num);
+    const auto resource_desc = GetRawBufferDesc(material_num, stride);
     const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
     device->CreateShaderResourceView(scene_data->resources[kSceneBufferMaterialIndices][0], &resource_desc, handle);
     scene_data->cpu_handles[kSceneBufferMaterialIndices].ptr = handle.ptr;
