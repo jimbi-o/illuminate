@@ -1,4 +1,7 @@
 #include "d3d12_shader_compiler.h"
+#include <iostream>
+#include <filesystem>
+#include <fstream>
 #include "d3d12_json_parser.h"
 #include "d3d12_src_common.h"
 #include "illuminate/util/util_functions.h"
@@ -66,9 +69,23 @@ BlobType* GetDxcOutput(IDxcResult* result, const DXC_OUT_KIND kind) {
   if (SUCCEEDED(hr)) {
     return blob;
   }
-  if (result) { result->Release(); }
+  if (blob) { blob->Release(); }
   logwarn("GetDxcOutput failed. {} {}", kind, hr);
   return nullptr;
+}
+template <typename BlobType, typename BlobTypeExtra>
+std::pair<BlobType*, BlobTypeExtra*> GetDxcOutput(IDxcResult* result, const DXC_OUT_KIND kind) {
+  if (!result->HasOutput(kind)) { return {}; }
+  BlobType* blob{};
+  BlobTypeExtra* extra{};
+  auto hr = result->GetOutput(kind, IID_PPV_ARGS(&blob), &extra);
+  if (SUCCEEDED(hr)) {
+    return {blob, extra};
+  }
+  if (blob)  { blob->Release(); }
+  if (extra) { extra->Release(); }
+  logwarn("GetDxcOutput failed. {} {}", kind, hr);
+  return {};
 }
 bool IsCompileSuccessful(IDxcResult* result) {
   auto hr = result->HasOutput(DXC_OUT_ERRORS);
@@ -138,6 +155,21 @@ IDxcResult* CompileShaderFile(IDxcUtils* utils, IDxcCompiler3* compiler, IDxcInc
     if (result) { result->Release(); }
     return nullptr;
   }
+#ifdef SHADER_DEBUG_INFO_PATH
+  // https://simoncoenen.com/blog/programming/graphics/DxcCompiling
+  // https://devblogs.microsoft.com/pix/using-automatic-shader-pdb-resolution-in-pix/
+  auto [pdb, pdb_filename_blob] = GetDxcOutput<IDxcBlob, IDxcBlobUtf16>(result, DXC_OUT_PDB);
+  if (pdb && pdb_filename_blob) {
+    auto pdb_filename = reinterpret_cast<const wchar_t*>(pdb_filename_blob->GetBufferPointer());
+    std::filesystem::path path(SHADER_DEBUG_INFO_PATH);
+    path.replace_filename(pdb_filename);
+    std::ofstream ofs(path, std::ios::out | std::ios::binary);
+    ofs.write(reinterpret_cast<const char*>(pdb->GetBufferPointer()), pdb->GetBufferSize());
+    ofs.close();
+  }
+  if (pdb) { pdb->Release(); }
+  if (pdb_filename_blob) { pdb_filename_blob->Release(); }
+#endif
   return result;
 }
 auto CountParamCombinationNum(const nlohmann::json& variation) {
