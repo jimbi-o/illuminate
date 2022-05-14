@@ -227,11 +227,11 @@ void SetColor(const double* src, float* dst) {
     dst[i] = static_cast<float>(src[i]);
   }
 }
-auto FindAlbedoFactorIndex(const std::array<float, 4>* colors, const uint32_t num, const std::vector<double>& finding_color, const uint32_t default_color_index) {
+auto FindAlbedoFactorIndex(const std::array<float, 4>* colors, const uint32_t num, const std::vector<double>& finding_color) {
   for (uint32_t i = 0; i < num; i++) {
     if (IsColorSame(colors[i].data(), finding_color.data())) { return i; }
   }
-  return default_color_index;
+  return ~0U;
 }
 auto FindFloat(const float* list, const uint32_t num, const double finding_value) {
   const auto epsilon = static_cast<double>(std::numeric_limits<float>::epsilon());
@@ -302,8 +302,8 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     auto& material_index = material_indices[i];
     {
       // albedo factor
-      auto albedo_factor_index = FindAlbedoFactorIndex(material_colors, next_color_index, src_material.pbrMetallicRoughness.baseColorFactor, default_color_index);
-      if (albedo_factor_index > next_color_index) {
+      auto albedo_factor_index = FindAlbedoFactorIndex(material_colors, next_color_index, src_material.pbrMetallicRoughness.baseColorFactor);
+      if (albedo_factor_index == ~0U) {
         SetColor(src_material.pbrMetallicRoughness.baseColorFactor.data(), material_colors[next_color_index].data());
         albedo_factor_index = next_color_index;
         next_color_index++;
