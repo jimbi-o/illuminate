@@ -58,15 +58,26 @@ IDxcResult* CompileShader(IDxcCompiler3* compiler, const uint32_t len, const voi
   }
   return nullptr;
 }
+template <typename BlobType>
+BlobType* GetDxcOutput(IDxcResult* result, const DXC_OUT_KIND kind) {
+  if (!result->HasOutput(kind)) { return nullptr; }
+  BlobType* blob{};
+  auto hr = result->GetOutput(kind, IID_PPV_ARGS(&blob), nullptr);
+  if (SUCCEEDED(hr)) {
+    return blob;
+  }
+  if (result) { result->Release(); }
+  logwarn("GetDxcOutput failed. {} {}", kind, hr);
+  return nullptr;
+}
 bool IsCompileSuccessful(IDxcResult* result) {
   auto hr = result->HasOutput(DXC_OUT_ERRORS);
   if (SUCCEEDED(hr)) {
-    IDxcBlobUtf8* error_text = nullptr;
-    hr = result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error_text), nullptr);
-    if (SUCCEEDED(hr) && error_text && error_text->GetStringLength() > 0) {
-      loginfo("{}", error_text->GetStringPointer());
-    }
+    auto error_text = GetDxcOutput<IDxcBlobUtf8>(result, DXC_OUT_ERRORS);
     if (error_text) {
+      if (error_text->GetStringLength() > 0) {
+        loginfo("{}", error_text->GetStringPointer());
+      }
       error_text->Release();
     }
   }
@@ -76,18 +87,13 @@ bool IsCompileSuccessful(IDxcResult* result) {
   return result->HasOutput(DXC_OUT_OBJECT);
 }
 ID3D12RootSignature* CreateRootSignatureLocal(D3d12Device* device, IDxcResult* result) {
-  assert(result->HasOutput(DXC_OUT_ROOT_SIGNATURE));
-  IDxcBlob* root_signature_blob = nullptr;
-  auto hr = result->GetOutput(DXC_OUT_ROOT_SIGNATURE, IID_PPV_ARGS(&root_signature_blob), nullptr);
-  if (FAILED(hr)) {
-    logwarn("failed to extract root signature. {}", hr);
-    if (root_signature_blob) {
-      root_signature_blob->Release();
-    }
+  auto root_signature_blob = GetDxcOutput<IDxcBlob>(result, DXC_OUT_ROOT_SIGNATURE);
+  if (!root_signature_blob) {
+    logwarn("failed to extract root signature.");
     return nullptr;
   }
   ID3D12RootSignature* root_signature = nullptr;
-  hr = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(&root_signature));
+  const auto hr = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(&root_signature));
   root_signature_blob->Release();
   if (SUCCEEDED(hr)) { return root_signature; }
   logwarn("failed to create root signature. {}", hr);
@@ -120,7 +126,7 @@ ID3D12PipelineState* CreatePipelineState(D3d12Device* device, const std::size_t&
 IDxcResult* CompileShader(IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, const char* shader_code, const uint32_t compile_args_num, LPCWSTR* compile_args) {
   auto result = CompileShader(compiler, GetUint32(strlen(shader_code)), shader_code, compile_args_num, compile_args, include_handler);
   if (IsCompileSuccessful(result)) { return result; }
-  result->Release();
+  if (result) { result->Release(); }
   return nullptr;
 }
 IDxcResult* CompileShaderFile(IDxcUtils* utils, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, LPCWSTR filename, const uint32_t compile_args_num, LPCWSTR* compile_args) {
@@ -128,9 +134,11 @@ IDxcResult* CompileShaderFile(IDxcUtils* utils, IDxcCompiler3* compiler, IDxcInc
   if (blob == nullptr) { return nullptr; }
   auto result = CompileShader(compiler, static_cast<uint32_t>(blob->GetBufferSize()), blob->GetBufferPointer(), compile_args_num, compile_args, include_handler);
   blob->Release();
-  if (IsCompileSuccessful(result)) { return result; }
-  if (result) { result->Release(); }
-  return nullptr;
+  if (!IsCompileSuccessful(result)) {
+    if (result) { result->Release(); }
+    return nullptr;
+  }
+  return result;
 }
 auto CountParamCombinationNum(const nlohmann::json& variation) {
   if (!variation.contains("params")) {
@@ -541,7 +549,7 @@ bool ShaderCompiler::Init() {
   if (library_ == nullptr) { return false; }
   compiler_ = CreateDxcShaderCompiler(library_);
   if (compiler_ == nullptr) { return false; }
-   utils_ = CreateDxcUtils(library_);
+  utils_ = CreateDxcUtils(library_);
   if (compiler_ == nullptr) { return false; }
   include_handler_ = CreateDxcIncludeHandler(utils_);
   if (include_handler_ == nullptr) { return false; }
