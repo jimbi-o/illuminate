@@ -290,12 +290,6 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
   uint32_t next_color_index = 0;
   uint32_t next_alpha_cutoff_index = 0;
   const auto white_texture_index = GetUint32(model.images.size()); // TODO
-  const auto default_color_index = 0;
-  {
-    double c[4]{1.0, 1.0, 1.0, 1.0,};
-    SetColor(&c[0], material_colors[default_color_index].data());
-    next_color_index = default_color_index + 1;
-  }
   const auto bilinear_sampler_index = GetUint32(model.samplers.size()); // TODO
   for (uint32_t i = 0; i < material_num; i++) {
     const auto& src_material = model.materials[i];
