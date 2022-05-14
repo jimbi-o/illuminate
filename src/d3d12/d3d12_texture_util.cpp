@@ -56,10 +56,10 @@ D3D12_RESOURCE_DESC1 GetBufferDesc(const uint32_t size_in_bytes) {
   };
 }
 TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t* filepath, MemoryAllocationJanitor* allocator) {
+  TextureCreationInfo info{};
   ID3D12Resource* committed_resource{};
-  std::unique_ptr<std::uint8_t[]> dds_data;
   std::vector<D3D12_SUBRESOURCE_DATA> subresources;
-  auto hr = DirectX::LoadDDSTextureFromFile(device, filepath, &committed_resource, dds_data, subresources);
+  auto hr = DirectX::LoadDDSTextureFromFile(device, filepath, &committed_resource, info.dds_data, subresources);
   if (FAILED(hr)) {
     if (committed_resource) {
       committed_resource->Release();
@@ -68,14 +68,12 @@ TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t
   }
   const auto resource_desc_src = committed_resource->GetDesc();
   committed_resource->Release();
-  TextureCreationInfo info{};
   info.resource_desc = ConvertToResourceDesc1(resource_desc_src);
   info.subresource_num = GetUint32(subresources.size());
   info.subresources = AllocateArray<D3D12_SUBRESOURCE_DATA>(allocator, info.subresource_num);
   for (uint32_t i = 0; i < info.subresource_num; i++) {
-    memcpy(&info.subresources[i], &subresources[i], sizeof(info.subresources));
+    info.subresources[i] = subresources[i];
   }
-  info.dds_data = std::move(dds_data);
   info.layout = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(allocator, info.subresource_num);
   info.num_rows = AllocateArray<uint32_t>(allocator, info.subresource_num);
   info.row_size_in_bytes = AllocateArray<uint64_t>(allocator, info.subresource_num);
