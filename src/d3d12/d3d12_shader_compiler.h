@@ -15,6 +15,7 @@ struct MaterialList {
   uint32_t pso_num{0};
   ID3D12PipelineState** pso_list{nullptr};
   uint32_t* material_pso_offset{nullptr};
+  uint32_t* vertex_buffer_type_flags{nullptr}; // aligned with pso_list
 };
 class ShaderCompiler {
  public:

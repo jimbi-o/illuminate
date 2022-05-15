@@ -37,7 +37,7 @@
         "instance_data_step_rate": 0
       },
       {
-        "name": "TEXCOORD0",
+        "name": "TEXCOORD_0",
         "plain_name": "TEXCOORD",
         "index": 0,
         "format": "R32G32_FLOAT",
@@ -158,7 +158,7 @@
           ]
         },
         {
-          "input_element": ["POSITION", "TEXCOORD0"],
+          "input_element": ["POSITION", "TEXCOORD_0"],
           "params": [
             {
               "name": "MESH_DEFORM_TYPE",
@@ -214,7 +214,7 @@
       },
       "variations": [
         {
-          "input_element": ["POSITION", "NORMAL", "TANGENT", "TEXCOORD0"],
+          "input_element": ["POSITION", "NORMAL", "TANGENT", "TEXCOORD_0"],
           "params": [
             {
               "name": "MESH_DEFORM_TYPE",

@@ -460,9 +460,30 @@ auto CreateRootsigNameList(const uint32_t num, const nlohmann::json& json, Memor
   assert(next_index == num);
   return hash_list;
 }
+uint32_t GetVertexBufferTypeFlags(const nlohmann::json& variation) {
+  if (!variation.contains("input_element")) { return 0; }
+  const char* const names[] = {
+    "POSITION",
+    "NORMAL",
+    "TANGENT",
+    "TEXCOORD_0",
+  };
+  static_assert(std::size(names) == kVertexBufferTypeNum);
+  const auto& input_element = variation.at("input_element");
+  uint32_t flags = 0;
+  for (const auto& name : input_element) {
+    for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
+      if (name == names[i]) {
+        flags |= GetVertexBufferTypeFlag(static_cast<VertexBufferType>(i));
+        break;
+      }
+    }
+  }
+  return flags;
+}
 void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
                uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
-               uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** material_pso_offset,
+               uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** material_pso_offset, uint32_t** vertex_buffer_type_flags,
                MemoryAllocationJanitor* allocator) {
   const auto& common_settings = json.at("common_settings");
   const auto& material_json_list = json.at("materials");
@@ -476,6 +497,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
   const auto& input_element_list = common_settings.at("input_elements");
   const auto material_num = GetUint32(material_json_list.size());
   *material_pso_offset = AllocateArray<uint32_t>(allocator, material_num);
+  *vertex_buffer_type_flags = AllocateArray<uint32_t>(allocator, *pso_num);
   auto tmp_allocator = GetTemporalMemoryAllocator();
   auto rootsig_name_list = CreateRootsigNameList(*rootsig_num, material_json_list, &tmp_allocator);
   uint32_t pso_index = 0;
@@ -488,7 +510,8 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
       const auto& shader_json = variation.at("shaders");
       const auto shader_num = GetUint32(shader_json.size());
       auto variation_allocator = GetTemporalMemoryAllocator();
-      auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list, &variation_allocator);
+      const auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list, &variation_allocator);
+      const auto variation_vertex_buffer_type_flags = GetVertexBufferTypeFlags(variation);
       const auto& params_json = variation.contains("params") ? &variation.at("params") : nullptr;
       const auto params_num = params_json ? GetUint32(params_json->size()) : 1;
       auto [compile_args_num, compile_args, entry_index, target_index, params_index] = PrepareCompileArgsFromCommonSettings(common_settings, params_num, &variation_allocator);
@@ -520,6 +543,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
         auto [pso_desc_size, pso_desc] = CreatePsoDesc(rootsig, shader_json, shader_num, shader_object_list, pso_desc_graphics, &shader_list_allocator);
         (*pso_list)[pso_index] = CreatePipelineState(device, pso_desc_size, pso_desc);
         SetD3d12Name((*pso_list)[pso_index], GetPsoName(material.at("name"), params_json, params_num, param_index_list));
+        (*vertex_buffer_type_flags)[pso_index] = variation_vertex_buffer_type_flags;
         pso_index++;
         for (uint32_t j = 0; j < shader_num; j++) {
           shader_object_list[j]->Release();
@@ -603,7 +627,9 @@ void ShaderCompiler::Term() {
 }
 MaterialList ShaderCompiler::BuildMaterials(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator) {
   MaterialList list{};
-  ParseJson(material_json, compiler_, include_handler_, utils_, device, &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, allocator);
+  ParseJson(material_json, compiler_, include_handler_, utils_, device,
+            &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, &list.vertex_buffer_type_flags,
+            allocator);
   SetMaterialVariationValues(material_json, allocator, &list.material_num, &list.material_hash_list, &list.variation_hash_list_len, &list.variation_hash_list);
   return list;
 }

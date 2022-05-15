@@ -459,6 +459,10 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   scene_data.allocations[kSceneBufferMesh] = AllocateArray<D3D12MA::Allocation*>(allocator, scene_data.resource_num[kSceneBufferMesh]);
   scene_data.submesh_index_buffer_len = AllocateArray<uint32_t>(allocator, mesh_num);
   scene_data.submesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
+  scene_data.submesh_vertex_buffer_view = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num * kVertexBufferTypeNum);
+  for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
+    scene_data.submesh_vertex_buffer_view_index[i] = AllocateArray<uint32_t>(allocator, mesh_num);
+  }
   uint32_t resource_num = 0;
   {
     const auto num = SetMeshBuffers<kIndiceMode>(model, "", scene_data, frame_index,
@@ -480,20 +484,21 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
     assert(num == mesh_num);
     resource_num = num;
   }
-  const std::string attributes[] = {"POSITION", "NORMAL", "TANGENT",};
+  const std::string attributes[] = {"POSITION", "NORMAL", "TANGENT", "TEXCOORD_0"};
   static_assert(std::size(attributes) == kVertexBufferTypeNum);
-  const std::string vbname[] = {"pos", "normal", "tangent",};
-  static_assert(std::size(vbname) == kVertexBufferTypeNum);
+  uint32_t vertex_buffer_index_offset = 0;
   for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
-    scene_data.submesh_vertex_buffer_view[i] = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num);
     const auto num = SetMeshBuffers<kVertexMode>(model, attributes[i], scene_data, frame_index,
-                                                 &scene_data.resources[kSceneBufferMesh][(i + 1) * mesh_num], &scene_data.allocations[kSceneBufferMesh][(i + 1) * mesh_num],
-                                                 vbname[i], buffer_allocator, resource_transfer,
-                                                 [submesh_vertex_buffer_view = scene_data.submesh_vertex_buffer_view[i]]
+                                                 &scene_data.resources[kSceneBufferMesh][resource_num], &scene_data.allocations[kSceneBufferMesh][resource_num],
+                                                 attributes[i], buffer_allocator, resource_transfer,
+                                                 [submesh_vertex_buffer_view_index = scene_data.submesh_vertex_buffer_view_index[i],
+                                                  submesh_vertex_buffer_view = scene_data.submesh_vertex_buffer_view,
+                                                  vertex_buffer_index_offset = vertex_buffer_index_offset]
                                                  (const uint64_t& addr, const uint32_t size,
                                                   const uint32_t tinygltf_type, const uint32_t tinygltf_component_type, [[maybe_unused]]const uint64_t& accessor_count,
                                                   const uint32_t index) {
-                                                   submesh_vertex_buffer_view[index] = {
+                                                   submesh_vertex_buffer_view_index[index] = index + vertex_buffer_index_offset;
+                                                   submesh_vertex_buffer_view[index + vertex_buffer_index_offset] = {
                                                      .BufferLocation = addr,
                                                      .SizeInBytes    = size,
                                                      .StrideInBytes  = GetVertexBufferStrideInBytes(tinygltf_type, tinygltf_component_type),
@@ -502,8 +507,10 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
                                                  });
     assert(num <= mesh_num);
     resource_num += num;
+    vertex_buffer_index_offset += num;
   }
   assert(resource_num <= scene_data.resource_num[kSceneBufferMesh]);
+  assert(vertex_buffer_index_offset <= kSceneBufferMesh * mesh_num);
   if (scene_data.resource_num[kSceneBufferMesh] != resource_num) {
     logwarn("missing mesh data found/total={}/{} missing{}", resource_num, scene_data.resource_num[kSceneBufferMesh], scene_data.resource_num[kSceneBufferMesh] - resource_num);
     scene_data.resource_num[kSceneBufferMesh] = resource_num;

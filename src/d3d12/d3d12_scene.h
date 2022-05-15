@@ -7,12 +7,6 @@
 namespace illuminate {
 class MemoryAllocationJanitor;
 struct ResourceTransfer;
-enum VertexBufferType : uint8_t {
-  kVertexBufferTypePosition = 0,
-  kVertexBufferTypeNormal,
-  kVertexBufferTypeTangent,
-  kVertexBufferTypeNum,
-};
 enum SceneBufferType {
   kSceneBufferTransform = 0,
   kSceneBufferMaterialIndices,
@@ -33,7 +27,8 @@ struct SceneData {
   // per submesh data
   uint32_t* submesh_index_buffer_len{nullptr};
   D3D12_INDEX_BUFFER_VIEW*  submesh_index_buffer_view{nullptr};
-  D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view[kVertexBufferTypeNum]{};
+  uint32_t* submesh_vertex_buffer_view_index[kVertexBufferTypeNum]{nullptr};
+  D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view{nullptr};
   StrHash* submesh_material_variation_hash{nullptr};
   uint32_t* submesh_material_index{nullptr};
   // scene resources

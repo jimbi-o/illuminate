@@ -65,12 +65,16 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
   const auto scene_data = args_common->scene_data;
   uint32_t prev_material_index = ~0U;
   auto prev_variation_index = MaterialList::kInvalidIndex;
+  uint32_t vertex_buffer_type_num = 0;
+  uint32_t vertex_buffer_type_index[kVertexBufferTypeNum]{};
+  D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[kVertexBufferTypeNum]{};
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     if (scene_data->model_instance_num[i] == 0) { continue; }
     command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i], 0);
     for (uint32_t j = 0; j < scene_data->model_submesh_num[i]; j++) {
       const auto submesh_index = scene_data->model_submesh_index[i][j];
-      if (const auto material_index = scene_data->submesh_material_index[submesh_index]; material_index != prev_material_index && pass_vars->use_material) {
+      const auto material_index = scene_data->submesh_material_index[submesh_index];
+      if (material_index != prev_material_index && pass_vars->use_material) {
         command_list->SetGraphicsRoot32BitConstant(0, material_index * sizeof(shader::MaterialIndexList), 1);
         logtrace("mesh transform material.mesh:{}-{} material:{}->{}", i, j, prev_material_index, material_index);
         prev_material_index = material_index;
@@ -81,15 +85,22 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
         variation_index = 0;
       }
       if (prev_variation_index != variation_index) {
-        command_list->SetPipelineState(GetMaterialPso(*args_common->material_list, material_id, variation_index));
         logtrace("mesh transform material variation.mesh:{}-{} variation:{}->{}", i, j, prev_variation_index, variation_index);
         prev_variation_index = variation_index;
+        const auto pso_index = GetMaterialPsoIndex(*args_common->material_list, material_id, variation_index);
+        command_list->SetPipelineState(args_common->material_list->pso_list[pso_index]);
+        const auto vertex_buffer_type_flags = args_common->material_list->vertex_buffer_type_flags[pso_index];
+        vertex_buffer_type_num = GetVertexBufferTypeNum(vertex_buffer_type_flags);
+        for (uint32_t k = 0; k < vertex_buffer_type_num; k++) {
+          vertex_buffer_type_index[k] = GetVertexBufferTypeAtIndex(vertex_buffer_type_flags, k);
+        }
       }
       command_list->IASetIndexBuffer(&scene_data->submesh_index_buffer_view[submesh_index]);
-      D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[] = {
-        scene_data->submesh_vertex_buffer_view[kVertexBufferTypePosition][submesh_index],
-      };
-      command_list->IASetVertexBuffers(0, 1, vertex_buffer_view);
+      for (uint32_t k = 0; k < vertex_buffer_type_num; k++) {
+        const auto vertex_buffer_view_index = scene_data->submesh_vertex_buffer_view_index[vertex_buffer_type_index[k]][submesh_index];
+        vertex_buffer_view[k] = scene_data->submesh_vertex_buffer_view[vertex_buffer_view_index];
+      }
+      command_list->IASetVertexBuffers(0, vertex_buffer_type_num, vertex_buffer_view);
       command_list->DrawIndexedInstanced(scene_data->submesh_index_buffer_len[submesh_index], scene_data->model_instance_num[i], 0, 0, 0);
     }
   }

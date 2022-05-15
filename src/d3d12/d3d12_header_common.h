@@ -118,5 +118,15 @@ uint32_t GetPhysicalWidth(const MainBufferSize& buffer_size, const BufferSizeRel
 uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRelativeness& relativeness, const float scale);
 uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT);
 enum class PingPongBufferType : uint8_t { kMain = 0, kSub, };
+enum VertexBufferType : uint8_t {
+  kVertexBufferTypePosition = 0,
+  kVertexBufferTypeNormal,
+  kVertexBufferTypeTangent,
+  kVertexBufferTypeTexCoord0,
+  kVertexBufferTypeNum,
+};
+uint32_t GetVertexBufferTypeFlag(const VertexBufferType vertex_buffer_type);
+uint32_t GetVertexBufferTypeNum(const uint32_t vertex_buffer_type_flags);
+VertexBufferType GetVertexBufferTypeAtIndex(const uint32_t vertex_buffer_type_flags, const uint32_t index);
 }
 #endif
