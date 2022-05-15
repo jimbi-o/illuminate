@@ -14,7 +14,6 @@ enum SceneBufferType {
   kSceneBufferAlphaCutoff,
   kSceneBufferTextures,
   kSceneBufferMesh,
-  kSceneBufferSampler,
   kSceneBufferNum,
 };
 struct SceneData {
@@ -37,6 +36,9 @@ struct SceneData {
   D3D12MA::Allocation** allocations[kSceneBufferNum]{};
   D3D12_CPU_DESCRIPTOR_HANDLE cpu_handles[kSceneBufferNum]{};
   ID3D12DescriptorHeap* descriptor_heap{nullptr};
+  uint32_t sampler_num{};
+  D3D12_CPU_DESCRIPTOR_HANDLE samplers{};
+  ID3D12DescriptorHeap* sampler_descriptor_heap{nullptr};
 };
 static const uint32_t kTextureNumPerMaterial = 4;
 SceneData GetSceneFromTinyGltf(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator, ResourceTransfer* resource_transfer);

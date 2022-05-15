@@ -17,11 +17,11 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D1
   }
   return descriptor_heap;
 }
-bool DescriptorCpu::Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator) {
+bool DescriptorCpu::Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator) {
   buffer_allocation_num_ = buffer_allocation_num;
-  sampler_num_ = sampler_num;
+  sampler_num_ = descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)];
   for (uint32_t i = 0; i < kDescriptorTypeNum; i++) {
-    const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num : buffer_allocation_num;
+    const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num_ : buffer_allocation_num_;
     handles_[i] = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, num);
     for (uint32_t j = 0; j < num; j++) {
       handles_[i][j].ptr = 0;
@@ -143,7 +143,7 @@ void DescriptorGpu::SetDescriptorHeapsToCommandList(const uint32_t command_list_
   }
 }
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::CopyToGpuDescriptor(const uint32_t src_descriptor_num, const uint32_t handle_list_len, const uint32_t* handle_num_list, const D3D12_CPU_DESCRIPTOR_HANDLE* handle_list, const D3D12_DESCRIPTOR_HEAP_TYPE heap_type, D3d12Device* device, DescriptorHeapSetGpu* descriptor) {
-  // assert(descriptor->reserved_num > 0 && descriptor->current_handle_num >= descriptor->reserved_num); // TODO comment-in after scene sampler load implemented
+  assert(descriptor->reserved_num > 0 && descriptor->current_handle_num >= descriptor->reserved_num);
   if (descriptor->current_handle_num + src_descriptor_num > descriptor->total_handle_num) {
     descriptor->current_handle_num = descriptor->reserved_num;
   }

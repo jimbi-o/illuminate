@@ -456,6 +456,134 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
   scene_data->cpu_handles[kSceneBufferTextures].ptr = descriptor_cpu->GetHandle(*used_handle_num, DescriptorType::kSrv).ptr;
   *used_handle_num = handle_index;
 }
+auto ConvertToD3d12Filter(const int32_t minFilter, const int32_t magFilter) {
+  // https://www.khronos.org/opengl/wiki/Sampler_Object
+  switch (minFilter) {
+    case -1: {
+      switch (magFilter) {
+        case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+          return D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+        }
+        default:
+        case -1:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+          return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+        }
+      }
+      break;
+    }
+    case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+      switch (magFilter) {
+        case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+          return D3D12_FILTER_MIN_MAG_MIP_POINT;
+        }
+        default:
+        case -1:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+          return D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+        }
+      }
+      break;
+    }
+    case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+      switch (magFilter) {
+        case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+          return D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+        }
+        default:
+        case -1:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+          return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+        }
+      }
+      break;
+    }
+    case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST: {
+      switch (magFilter) {
+        case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+          return D3D12_FILTER_MIN_MAG_MIP_POINT;
+        }
+        default:
+        case -1:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+          return D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+        }
+      }
+      break;
+    }
+    case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST: {
+      switch (magFilter) {
+        case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+          return D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+        }
+        default:
+        case -1:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+          return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+        }
+      }
+      break;
+    }
+    case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR: {
+      switch (magFilter) {
+        default:
+        case -1:
+        case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+          return D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+        }
+        case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+          logwarn("invalid sampler filter type combination. {} {}", minFilter, magFilter);
+          return D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+        }
+      }
+      break;
+    }
+    case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR: {
+      switch (magFilter) {
+        case TINYGLTF_TEXTURE_FILTER_NEAREST: {
+          return D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+        }
+        default:
+        case -1:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR: {
+          return D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        }
+      }
+      break;
+    }
+    default: {
+      logwarn("no filter selected {} {}", minFilter, magFilter);
+      return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+    }
+  }
+}
+auto ConvertToD3d12TextureAddressMode(const int32_t wrap) {
+  switch (wrap) {
+    case TINYGLTF_TEXTURE_WRAP_REPEAT:          return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    case TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE:   return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    case TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+  }
+  return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+}
+auto CreateSamplers(const std::vector<tinygltf::Sampler>& samplers, D3d12Device* device, DescriptorCpu* descriptor_cpu) {
+  const auto sampler_num = GetUint32(samplers.size());
+  // not very precise conversion from gltf.
+  D3D12_SAMPLER_DESC sampler_desc{};
+  sampler_desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+  sampler_desc.MipLODBias = 0.0f;
+  sampler_desc.MaxAnisotropy = 16; // there is no anisotropy in standard gltf yet.
+  sampler_desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+  sampler_desc.MinLOD = 0.0f;
+  sampler_desc.MaxLOD = 65535.0f;
+  for (uint32_t i = 0; i < sampler_num; i++) {
+    sampler_desc.Filter   = ConvertToD3d12Filter(samplers[i].minFilter, samplers[i].magFilter);
+    sampler_desc.AddressU = ConvertToD3d12TextureAddressMode(samplers[i].wrapS);
+    sampler_desc.AddressV = ConvertToD3d12TextureAddressMode(samplers[i].wrapT);
+    auto& handle = descriptor_cpu->CreateHandle(i, DescriptorType::kSampler);
+    device->CreateSampler(&sampler_desc, handle);
+  }
+  return std::make_pair(sampler_num, descriptor_cpu->GetHandle(0, DescriptorType::kSampler));
+}
 auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_path, MemoryAllocationJanitor* allocator, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   SceneData scene_data{};
   scene_data.model_num = GetUint32(model.meshes.size());
@@ -542,9 +670,9 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   }
   uint32_t used_handle_num = 0;
   DescriptorCpu descriptor_cpu;
-  const uint32_t descriptor_handle_num_per_type[] = {0, kSceneBufferTextures + GetTextureNum(model), 0, 0, 0, 0,};
+  const uint32_t descriptor_handle_num_per_type[] = {0, kSceneBufferTextures + GetTextureNum(model), 0, GetUint32(model.samplers.size()), 0, 0,};
   static_assert(std::size(descriptor_handle_num_per_type) == kDescriptorTypeNum);
-  descriptor_cpu.Init(device, descriptor_handle_num_per_type[1], 0, descriptor_handle_num_per_type, allocator);
+  descriptor_cpu.Init(device, descriptor_handle_num_per_type[1], descriptor_handle_num_per_type, allocator);
   {
     const auto stride_size = GetUint32(sizeof(matrix));
     auto resource_upload = PrepareSingleBufferTransfer(stride_size * mesh_num, kSceneBufferTransform,
@@ -560,6 +688,9 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   PrepareSceneTextureUpload(model, gltf_path, frame_index, &scene_data, device, &descriptor_cpu, &used_handle_num, resource_transfer, buffer_allocator, allocator);
   scene_data.descriptor_heap = descriptor_cpu.RetainDescriptorHeap(DescriptorType::kSrv);
   SetD3d12Name(scene_data.descriptor_heap, "scene_descriptor_heap");
+  std::tie(scene_data.sampler_num, scene_data.samplers) = CreateSamplers(model.samplers, device, &descriptor_cpu);
+  scene_data.sampler_descriptor_heap = descriptor_cpu.RetainDescriptorHeap(DescriptorType::kSampler);
+  SetD3d12Name(scene_data.sampler_descriptor_heap, "scene_sampler_descriptor_heap");
   descriptor_cpu.Term();
   return scene_data;
 }
@@ -583,6 +714,7 @@ void ReleaseSceneData(SceneData* scene_data) {
     }
   }
   scene_data->descriptor_heap->Release();
+  scene_data->sampler_descriptor_heap->Release();
 }
 namespace {
 static const char* scene_buffer_names[] = {
@@ -592,7 +724,6 @@ static const char* scene_buffer_names[] = {
   "alpha_cutoffs",
   "textures",
   "meshes",
-  "scene_sampler",
 };
 }
 bool IsSceneBuffer(const char* const name) {

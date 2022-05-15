@@ -8,7 +8,7 @@ namespace illuminate {
 class MemoryAllocationJanitor;
 class DescriptorCpu {
  public:
-  bool Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t sampler_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator);
+  bool Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator);
   void Term();
   const D3D12_CPU_DESCRIPTOR_HANDLE& CreateHandle(const uint32_t index, const DescriptorType type);
   const D3D12_CPU_DESCRIPTOR_HANDLE& GetHandle(const uint32_t index, const DescriptorType type) const {
