@@ -50,7 +50,8 @@ struct RenderPassFuncArgsRenderCommon {
 struct RenderPassFuncArgsRenderPerPass {
   D3d12CommandList* command_list{nullptr};
   void* pass_vars_ptr{nullptr};
-  const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles{nullptr};
+  const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles_view{nullptr};
+  const D3D12_GPU_DESCRIPTOR_HANDLE* gpu_handles_sampler{nullptr};
   const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles{nullptr};
   ID3D12Resource** resources{nullptr};
   uint32_t render_pass_index{};

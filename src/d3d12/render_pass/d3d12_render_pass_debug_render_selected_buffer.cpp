@@ -49,7 +49,7 @@ void RenderPassDebugRenderSelectedBuffer::Render(RenderPassFuncArgsRenderCommon*
   command_list->OMSetRenderTargets(1, args_per_pass->cpu_handles, true, nullptr);
   command_list->SetGraphicsRoot32BitConstant(0, args_common->dynamic_data->debug_render_selected_buffer_allocation_index, 0);
   command_list->SetGraphicsRootDescriptorTable(1, srv_list);
-  command_list->SetGraphicsRootDescriptorTable(2, args_per_pass->gpu_handles[1]);
+  command_list->SetGraphicsRootDescriptorTable(2, args_per_pass->gpu_handles_sampler[0]);
   command_list->DrawInstanced(3, 1, 0, 0);
   if (barrier_num > 0) {
     for (uint32_t i = 0; i < barrier_num; i++) {

@@ -59,8 +59,11 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
   command_list->OMSetRenderTargets(pass_vars->rtv_num, rtv_handle, true, dsv_handle);
   command_list->OMSetStencilRef(pass_vars->stencil_val);
   for (uint32_t i = 0; i < pass_vars->gpu_handle_num; i++) {
-    command_list->SetGraphicsRootDescriptorTable(1 + i, args_per_pass->gpu_handles[i]);
-    logtrace("mesh transform gpu handle. i:{}/{} ptr:{:x}", i, pass_vars->gpu_handle_num, args_per_pass->gpu_handles[i].ptr);
+    command_list->SetGraphicsRootDescriptorTable(1 + i, args_per_pass->gpu_handles_view[i]);
+    logtrace("mesh transform gpu handle. i:{}/{} ptr:{:x}", i, pass_vars->gpu_handle_num, args_per_pass->gpu_handles_view[i].ptr);
+  }
+  if (args_per_pass->gpu_handles_sampler) {
+    command_list->SetGraphicsRootDescriptorTable(1 + pass_vars->gpu_handle_num, args_per_pass->gpu_handles_sampler[0]);
   }
   const auto scene_data = args_common->scene_data;
   uint32_t prev_material_index = ~0U;

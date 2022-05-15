@@ -179,8 +179,8 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
   return funcs;
 }
 auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool** write_to_sub, const BufferConfig* buffer_config_list, const uint32_t frame_index, const D3D12_CPU_DESCRIPTOR_HANDLE* scene_cpu_handles, MemoryAllocationJanitor* allocator) {
-  auto resource_list = AllocateArray<ID3D12Resource*>(allocator, render_pass.buffer_num + render_pass.sampler_num);
-  auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, render_pass.buffer_num + render_pass.sampler_num);
+  auto resource_list = AllocateArray<ID3D12Resource*>(allocator, render_pass.buffer_num);
+  auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, render_pass.buffer_num);
   for (uint32_t b = 0; b < render_pass.buffer_num; b++) {
     const auto& buffer = render_pass.buffer_list[b];
     if (IsSceneBuffer(buffer.buffer_index)) {
@@ -202,62 +202,64 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
     }
     logtrace("cpu handle/pass:{} b:{} config:{} local:{} alloc:{} desc:{} ptr:{:x}", render_pass.index, b, buffer.buffer_index, local_index, buffer_allocation_index, descriptor_type, cpu_handle_list[b].ptr);
   }
-  for (uint32_t s = 0; s < render_pass.sampler_num; s++) {
-    cpu_handle_list[s + render_pass.buffer_num].ptr = descriptor_cpu->GetHandle(render_pass.sampler_index_list[s], DescriptorType::kSampler).ptr;
-  }
   return std::make_tuple(resource_list, cpu_handle_list);
 }
-auto PrepareGpuHandleList(D3d12Device* device, const RenderPass& render_pass, const uint32_t* scene_handle_num, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list, DescriptorGpu* const descriptor_gpu, const D3D12_GPU_DESCRIPTOR_HANDLE* scene_gpu_handles, MemoryAllocationJanitor* allocator) {
-  const auto view_list_num = render_pass.buffer_num > 0 ? render_pass.max_buffer_index_offset + 1 : 0;
-  const auto list_num = view_list_num + (render_pass.sampler_num > 0 ? 1 : 0);
-  if (list_num == 0) { return (D3D12_GPU_DESCRIPTOR_HANDLE*)nullptr; }
-  auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, list_num);
-  std::fill(gpu_handle_list, gpu_handle_list + list_num, D3D12_GPU_DESCRIPTOR_HANDLE{});
-  if (render_pass.buffer_num > 0) {
-    auto tmp_allocator = GetTemporalMemoryAllocator();
-    auto desc_num_list = AllocateArray<uint32_t>(&tmp_allocator, view_list_num);
-    std::fill(desc_num_list, desc_num_list + view_list_num, 0);
-    for (uint32_t i = 0; i < render_pass.buffer_num; i++) {
-      if (!IsGpuHandleAvailableType(render_pass.buffer_list[i].state)) { continue; }
-      const auto offset = render_pass.buffer_list[i].index_offset;
-      desc_num_list[offset]++;
-    }
-    auto copy_src_cpu_handle_num = AllocateArray<uint32_t>(&tmp_allocator, view_list_num);
-    std::fill(copy_src_cpu_handle_num, copy_src_cpu_handle_num + view_list_num, 0);
-    auto copy_src_cpu_handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE*>(&tmp_allocator, view_list_num);
-    for (uint32_t i = 0; i < view_list_num; i++) {
-      copy_src_cpu_handles[i] = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, desc_num_list[i]);
-    }
-    auto last_scene_handle_num = AllocateArray<uint32_t>(&tmp_allocator, view_list_num);
-    std::fill(last_scene_handle_num, last_scene_handle_num + view_list_num, 0);
-    for (uint32_t i = 0; i < render_pass.buffer_num; i++) {
-      const auto& buffer = render_pass.buffer_list[i];
-      if (!IsGpuHandleAvailableType(buffer.state)) { continue; }
-      if (IsSceneBuffer(buffer.buffer_index)) {
-        const auto decoded_index = GetDecodedSceneBufferIndex(buffer.buffer_index);
-        if (copy_src_cpu_handle_num[buffer.index_offset] == 0) {
-          gpu_handle_list[buffer.index_offset].ptr = scene_gpu_handles[decoded_index].ptr;
-        } else {
-          // scene buffer list must occupy a single root descriptor index by itself to avoid lots of descriptors being copied.
-          // (or just to make implementation simple)
-          assert(last_scene_handle_num[buffer.index_offset] <= 1);
-          assert(scene_handle_num[decoded_index] == 1);
-          gpu_handle_list[buffer.index_offset].ptr = 0UL;
-        }
-        last_scene_handle_num[buffer.index_offset] = scene_handle_num[decoded_index];
+auto PrepareGpuHandlesViewList(D3d12Device* device, const RenderPass& render_pass, const uint32_t* scene_handle_num, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list, DescriptorGpu* const descriptor_gpu, const D3D12_GPU_DESCRIPTOR_HANDLE* scene_gpu_handles, MemoryAllocationJanitor* allocator) {
+  if (render_pass.buffer_num == 0) { return (D3D12_GPU_DESCRIPTOR_HANDLE*)nullptr; }
+  const auto view_list_num = render_pass.max_buffer_index_offset + 1;
+  auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, view_list_num);
+  std::fill(gpu_handle_list, gpu_handle_list + view_list_num, D3D12_GPU_DESCRIPTOR_HANDLE{});
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto desc_num_list = AllocateArray<uint32_t>(&tmp_allocator, view_list_num);
+  std::fill(desc_num_list, desc_num_list + view_list_num, 0);
+  for (uint32_t i = 0; i < render_pass.buffer_num; i++) {
+    if (!IsGpuHandleAvailableType(render_pass.buffer_list[i].state)) { continue; }
+    desc_num_list[render_pass.buffer_list[i].index_offset]++;
+  }
+  auto copy_src_cpu_handle_num = AllocateArray<uint32_t>(&tmp_allocator, view_list_num);
+  std::fill(copy_src_cpu_handle_num, copy_src_cpu_handle_num + view_list_num, 0);
+  auto copy_src_cpu_handles = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE*>(&tmp_allocator, view_list_num);
+  for (uint32_t i = 0; i < view_list_num; i++) {
+    copy_src_cpu_handles[i] = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, desc_num_list[i]);
+  }
+  auto last_scene_handle_num = AllocateArray<uint32_t>(&tmp_allocator, view_list_num);
+  std::fill(last_scene_handle_num, last_scene_handle_num + view_list_num, 0);
+  for (uint32_t i = 0; i < render_pass.buffer_num; i++) {
+    const auto& buffer = render_pass.buffer_list[i];
+    if (!IsGpuHandleAvailableType(buffer.state)) { continue; }
+    if (IsSceneBuffer(buffer.buffer_index)) {
+      const auto decoded_index = GetDecodedSceneBufferIndex(buffer.buffer_index);
+      if (copy_src_cpu_handle_num[buffer.index_offset] == 0) {
+        gpu_handle_list[buffer.index_offset].ptr = scene_gpu_handles[decoded_index].ptr;
+      } else {
+        // scene buffer list must occupy a single root descriptor index by itself to avoid lots of descriptors being copied.
+        // (or just to make implementation simple)
+        assert(last_scene_handle_num[buffer.index_offset] <= 1);
+        assert(scene_handle_num[decoded_index] == 1);
+        gpu_handle_list[buffer.index_offset].ptr = 0UL;
       }
-      copy_src_cpu_handles[buffer.index_offset][copy_src_cpu_handle_num[buffer.index_offset]].ptr = cpu_handle_list[i].ptr;
-      copy_src_cpu_handle_num[buffer.index_offset]++;
+      last_scene_handle_num[buffer.index_offset] = scene_handle_num[decoded_index];
     }
-    for (uint32_t i = 0; i < view_list_num; i++) {
-      assert(copy_src_cpu_handle_num[i] == desc_num_list[i]);
-      if (gpu_handle_list[i].ptr != 0UL) { continue; }
-      gpu_handle_list[i].ptr = descriptor_gpu->WriteToTransientViewHandleRange(copy_src_cpu_handle_num[i], copy_src_cpu_handles[i], device).ptr;
-    }
+    copy_src_cpu_handles[buffer.index_offset][copy_src_cpu_handle_num[buffer.index_offset]].ptr = cpu_handle_list[i].ptr;
+    copy_src_cpu_handle_num[buffer.index_offset]++;
   }
-  if (render_pass.sampler_num > 0) {
-    gpu_handle_list[view_list_num] = descriptor_gpu->WriteToTransientSamplerHandleRange(render_pass.sampler_num, &cpu_handle_list[render_pass.buffer_num], device);
+  for (uint32_t i = 0; i < view_list_num; i++) {
+    assert(copy_src_cpu_handle_num[i] == desc_num_list[i]);
+    if (gpu_handle_list[i].ptr != 0UL) { continue; }
+    gpu_handle_list[i].ptr = descriptor_gpu->WriteToTransientViewHandleRange(copy_src_cpu_handle_num[i], copy_src_cpu_handles[i], device).ptr;
   }
+  return gpu_handle_list;
+}
+auto PrepareGpuHandlesSamplerList(D3d12Device* device, const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, DescriptorGpu* descriptor_gpu, MemoryAllocationJanitor* allocator) {
+  if (render_pass.sampler_num == 0) { return (D3D12_GPU_DESCRIPTOR_HANDLE*)nullptr; }
+  const auto sampler_list_num = 1;
+  auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, sampler_list_num);
+  for (uint32_t s = 0; s < render_pass.sampler_num; s++) {
+    cpu_handle_list[s].ptr = descriptor_cpu->GetHandle(render_pass.sampler_index_list[s], DescriptorType::kSampler).ptr;
+  }
+  auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, sampler_list_num);
+  std::fill(gpu_handle_list, gpu_handle_list + sampler_list_num, D3D12_GPU_DESCRIPTOR_HANDLE{});
+  gpu_handle_list[0] = descriptor_gpu->WriteToTransientSamplerHandleRange(render_pass.sampler_num, cpu_handle_list, device);
   return gpu_handle_list;
 }
 auto CreateCpuHandleWithViewImpl(const BufferConfig& buffer_config, const uint32_t buffer_id, const DescriptorType& descriptor_type, ID3D12Resource* resource, DescriptorCpu* descriptor_cpu, D3d12Device* device) {
@@ -607,7 +609,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
       args_per_pass[k].render_pass_index = k;
       std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, frame_index, &scene_data.cpu_handles[0], &single_frame_allocator);
-      args_per_pass[k].gpu_handles = PrepareGpuHandleList(device.Get(), render_pass, scene_data.resource_num, args_per_pass[k].cpu_handles, &descriptor_gpu, scene_gpu_handles, &single_frame_allocator);
+      args_per_pass[k].gpu_handles_view = PrepareGpuHandlesViewList(device.Get(), render_pass, scene_data.resource_num, args_per_pass[k].cpu_handles, &descriptor_gpu, scene_gpu_handles, &single_frame_allocator);
+      args_per_pass[k].gpu_handles_sampler = PrepareGpuHandlesSamplerList(device.Get(), render_pass, &descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
     }
     // update
     RenderPassFuncArgsRenderCommon args_common {

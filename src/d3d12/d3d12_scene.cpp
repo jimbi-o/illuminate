@@ -148,7 +148,26 @@ auto SetMeshBuffers(const tinygltf::Model& model, const std::string& attribute_n
       const auto& primitive = primitives[j];
       if constexpr(mode == kVertexMode) {
         if (!primitive.attributes.contains(attribute_name)) {
-          logwarn("missing {}. {} {} {}", attribute_name, i, j, scene_data.model_submesh_index[i][j]);
+          if (!primitive.attributes.empty()) {
+            const auto accessor_index = primitive.attributes.begin()->second;
+            const auto& accessor = model.accessors[accessor_index];
+            const auto buffer_size = GetBufferSize(accessor.count, accessor.componentType, accessor.type);
+            ID3D12Resource* resource_upload{nullptr};
+            D3D12MA::Allocation* allocation_upload{nullptr};
+            CreateUploadAndDefaultBuffers(buffer_size, buffer_allocator,
+                                          (buffer_name_prefix + "U" + std::to_string(i) + "_" + std::to_string(j)).c_str(), &resource_upload, &allocation_upload,
+                                          (buffer_name_prefix + std::to_string(i) + "_" + std::to_string(j)).c_str(), &resource_default[resource_index], &allocation_default[resource_index]);
+            auto dst = MapResource(resource_upload, buffer_size);
+            auto addr = resource_default[resource_index]->GetGPUVirtualAddress();
+            memset(dst, 0, buffer_size);
+            set_mesh_info(addr, buffer_size, accessor.type, accessor.componentType, accessor.count, scene_data.model_submesh_index[i][j]);
+            UnmapResource(resource_upload);
+            ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, resource_default[resource_index], resource_transfer);
+            logwarn("missing {}. {} {} {} {}. default buffer assigned", attribute_name, i, j, scene_data.model_submesh_index[i][j], resource_index);
+            resource_index++;
+          } else {
+            logwarn("missing {}. {} {} {} {}. no attributes found", attribute_name, i, j, scene_data.model_submesh_index[i][j], resource_index);
+          }
           continue;
         }
       }
