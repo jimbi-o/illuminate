@@ -250,16 +250,33 @@ auto PrepareGpuHandlesViewList(D3d12Device* device, const RenderPass& render_pas
   }
   return gpu_handle_list;
 }
-auto PrepareGpuHandlesSamplerList(D3d12Device* device, const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, DescriptorGpu* descriptor_gpu, MemoryAllocationJanitor* allocator) {
+auto PrepareGpuHandlesSamplerList(D3d12Device* device, const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, DescriptorGpu* descriptor_gpu, const D3D12_GPU_DESCRIPTOR_HANDLE& scene_sampler, MemoryAllocationJanitor* allocator) {
   if (render_pass.sampler_num == 0) { return (D3D12_GPU_DESCRIPTOR_HANDLE*)nullptr; }
-  const auto sampler_list_num = 1;
-  auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, sampler_list_num);
+  bool need_scene_sampler = false;
   for (uint32_t s = 0; s < render_pass.sampler_num; s++) {
-    cpu_handle_list[s].ptr = descriptor_cpu->GetHandle(render_pass.sampler_index_list[s], DescriptorType::kSampler).ptr;
+    if (render_pass.sampler_index_list[s] == kSceneSamplerId) {
+      need_scene_sampler = true;
+      break;
+    }
   }
+  const uint32_t sampler_list_num = (need_scene_sampler && render_pass.sampler_num > 1) ? 2 : 1;
   auto gpu_handle_list = AllocateArray<D3D12_GPU_DESCRIPTOR_HANDLE>(allocator, sampler_list_num);
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  auto cpu_handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, render_pass.sampler_num);
+  uint32_t sampler_index = 0;
+  for (uint32_t s = 0; s < render_pass.sampler_num; s++) {
+    if (render_pass.sampler_index_list[s] == kSceneSamplerId) { continue; }
+    cpu_handle_list[sampler_index].ptr = descriptor_cpu->GetHandle(render_pass.sampler_index_list[s], DescriptorType::kSampler).ptr;
+    sampler_index++;
+  }
   std::fill(gpu_handle_list, gpu_handle_list + sampler_list_num, D3D12_GPU_DESCRIPTOR_HANDLE{});
-  gpu_handle_list[0] = descriptor_gpu->WriteToTransientSamplerHandleRange(render_pass.sampler_num, cpu_handle_list, device);
+  if (sampler_index > 0) {
+    gpu_handle_list[0] = descriptor_gpu->WriteToTransientSamplerHandleRange(render_pass.sampler_num, cpu_handle_list, device);
+  }
+  if (need_scene_sampler) {
+    const uint32_t index = render_pass.sampler_num > 1 ? 1 : 0;
+    gpu_handle_list[index].ptr = scene_sampler.ptr;
+  }
   return gpu_handle_list;
 }
 auto CreateCpuHandleWithViewImpl(const BufferConfig& buffer_config, const uint32_t buffer_id, const DescriptorType& descriptor_type, ID3D12Resource* resource, DescriptorCpu* descriptor_cpu, D3d12Device* device) {
@@ -602,7 +619,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       args_per_pass[k].render_pass_index = k;
       std::tie(args_per_pass[k].resources, args_per_pass[k].cpu_handles) = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, (const bool**)dynamic_data.write_to_sub, render_graph.buffer_list, frame_index, &scene_data.cpu_handles[0], &single_frame_allocator);
       args_per_pass[k].gpu_handles_view = PrepareGpuHandlesViewList(device.Get(), render_pass, scene_data.resource_num, args_per_pass[k].cpu_handles, &descriptor_gpu, scene_gpu_handles_view, &single_frame_allocator);
-      args_per_pass[k].gpu_handles_sampler = PrepareGpuHandlesSamplerList(device.Get(), render_pass, &descriptor_cpu, &descriptor_gpu, &single_frame_allocator);
+      args_per_pass[k].gpu_handles_sampler = PrepareGpuHandlesSamplerList(device.Get(), render_pass, &descriptor_cpu, &descriptor_gpu, scene_gpu_handles_sampler, &single_frame_allocator);
     }
     // update
     RenderPassFuncArgsRenderCommon args_common {

@@ -41,6 +41,8 @@ struct SceneData {
   ID3D12DescriptorHeap* sampler_descriptor_heap{nullptr};
 };
 static const uint32_t kTextureNumPerMaterial = 4;
+static const char kSceneSamplerName[] = "scene";
+static const uint32_t kSceneSamplerId = 0xFFFF0000;
 SceneData GetSceneFromTinyGltf(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator, ResourceTransfer* resource_transfer);
 void ReleaseSceneData(SceneData* scene_data);
 bool IsSceneBuffer(const char* const name);

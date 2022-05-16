@@ -1,6 +1,8 @@
 #include "shader/mesh_transform/mesh_transform.hlsli"
 struct VsInput {
   float3 position : POSITION;
+  float3 normal   : NORMAL;
+  float3 tangent  : TANGENT;
   float2 uv0      : TEXCOORD0;
 };
 MeshTransformVsOutput main(const VsInput input, const uint instance_id : SV_InstanceID) {

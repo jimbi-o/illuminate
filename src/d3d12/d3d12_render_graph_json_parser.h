@@ -143,6 +143,10 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
         const auto& graph_sampler_list = j.at("sampler");
         for (uint32_t s = 0; s < dst_pass.sampler_num; s++) {
           auto sampler_name = GetStringView(sampler[s]).data();
+          if (strcmp(sampler_name, kSceneSamplerName) == 0) {
+            dst_pass.sampler_index_list[s] = kSceneSamplerId;
+            continue;
+          }
           for (uint32_t graph_s = 0; graph_s < r.sampler_num; graph_s++) {
             if (GetStringView(graph_sampler_list[graph_s], "name").compare(sampler_name) == 0) {
               dst_pass.sampler_index_list[s] = graph_s;
