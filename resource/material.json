@@ -14,7 +14,6 @@
     "input_elements": [
       {
         "name": "POSITION",
-        "index": 0,
         "format": "R32G32B32_FLOAT",
         "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
         "slot_class": "PER_VERTEX_DATA",
@@ -22,7 +21,6 @@
       },
       {
         "name": "NORMAL",
-        "index": 0,
         "format": "R32G32B32_FLOAT",
         "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
         "slot_class": "PER_VERTEX_DATA",
@@ -30,7 +28,6 @@
       },
       {
         "name": "TANGENT",
-        "index": 0,
         "format": "R32G32B32A32_FLOAT",
         "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
         "slot_class": "PER_VERTEX_DATA",
@@ -39,7 +36,6 @@
       {
         "name": "TEXCOORD_0",
         "plain_name": "TEXCOORD",
-        "index": 0,
         "format": "R32G32_FLOAT",
         "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
         "slot_class": "PER_VERTEX_DATA",

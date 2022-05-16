@@ -280,7 +280,7 @@ auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json
       input_element[i].SemanticName = input_element_json.contains("plain_name") ? GetStringView(input_element_json, "plain_name").data() : shader_input_element_name.data();
       input_element[i].SemanticIndex = GetNum(input_element_json, "index", 0);
       input_element[i].Format = GetDxgiFormat(input_element_json, "format");
-      input_element[i].InputSlot = GetNum(input_element_json, "slot", 0);
+      input_element[i].InputSlot = i;
       if (input_element_json.contains("aligned_byte_offset")) {
         auto& aligned_byte_offset = input_element_json.at("aligned_byte_offset");
         if (aligned_byte_offset.is_string()) {
