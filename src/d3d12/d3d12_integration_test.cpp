@@ -1,5 +1,6 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include "SimpleMath.h"
 #include "tiny_gltf.h"
 #include "d3d12_barriers.h"
 #include "d3d12_command_list.h"
@@ -385,13 +386,12 @@ auto PrepareSceneCbvBuffer(BufferList* buffer_list, const uint32_t frame_buffer_
   return ptr_list;
 }
 void UpdateSceneCbv(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_cbv_ptr) {
-  matrix view_matrix{}, projection_matrix{};
-  GetLookAtLH(dynamic_data.camera_pos, dynamic_data.camera_focus, {0.0f, 1.0f, 0.0f,}, view_matrix);
+  using namespace DirectX::SimpleMath;
+  const auto lookat_matrix = Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
   const auto aspect_ratio = static_cast<float>(buffer_size.width) / buffer_size.height;
-  GetPerspectiveProjectionMatirxLH(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z, projection_matrix);
+  auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
   shader::SceneCbvData scene_cbv{};
-  MultiplyMatrix(view_matrix, projection_matrix, scene_cbv.view_projection_matrix);
-  TransposeMatrix(scene_cbv.view_projection_matrix);
+  CopyMatrix((lookat_matrix * projection_matrix).m, scene_cbv.view_projection_matrix);
   memcpy(scene_cbv_ptr, &scene_cbv, sizeof(scene_cbv));
 }
 auto GetSceneGpuHandlesView(const uint32_t* descriptor_num, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handles, DescriptorGpu* descriptor_gpu, D3d12Device* device, MemoryAllocationJanitor* allocator) {
@@ -461,7 +461,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
-      frame_loop_num = 300;
+      frame_loop_num = 100000;
     }
     AddSystemBuffers(&json);
     AddSystemBarriers(&json);
@@ -585,6 +585,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   auto scene_gpu_handles_view = GetSceneGpuHandlesView(&scene_data.resource_num[0], &scene_data.cpu_handles[0], &descriptor_gpu, device.Get(), &allocator);
   auto scene_gpu_handles_sampler = GetSceneGpuHandlesSampler(scene_data.sampler_num, scene_data.samplers, &descriptor_gpu, device.Get());
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
+  InitCamera(dynamic_data.camera_pos, dynamic_data.camera_rotation);
   auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_allocation_index, static_cast<uint32_t>(render_graph.buffer_list[scene_cbv_buffer_allocation_index].width), &allocator);
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {

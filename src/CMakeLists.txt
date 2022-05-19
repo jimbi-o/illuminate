@@ -2,7 +2,6 @@ add_subdirectory(core)
 add_subdirectory(util)
 add_subdirectory(d3d12)
 add_subdirectory(external)
-add_subdirectory(math)
 target_sources(${CMAKE_PROJECT_NAME}
   PRIVATE
   header_common.h

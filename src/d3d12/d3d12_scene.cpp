@@ -1,5 +1,6 @@
 #include "d3d12_scene.h"
 #include <filesystem>
+#include "SimpleMath.h"
 #include "illuminate/math/math.h"
 #include "illuminate/util/util_functions.h"
 #include "d3d12_descriptors.h"
@@ -82,23 +83,45 @@ void CountModelInstanceNum(const tinygltf::Model& model, const uint32_t node_ind
   }
 }
 void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const matrix& parent_transform, const uint32_t* transform_offset, uint32_t* transform_offset_index, matrix* transform_buffer) {
+  using namespace DirectX::SimpleMath;
+  Matrix parent;
+  CopyMatrix(parent_transform, parent.m);
+  Matrix transform{};
   const auto& node = model.nodes[node_index];
+  if (!node.matrix.empty()) {
+    FillMatrix(node.matrix.data(), transform.m);
+  } else {
+    if (!node.translation.empty()) {
+      float translation[3]{};
+      for (uint32_t i = 0; i < 3; i++) {
+        translation[i] = static_cast<float>(node.translation[i]);
+      }
+      transform = Matrix::CreateTranslation(translation[0], translation[1], translation[2]);
+    }
+    if (!node.rotation.empty()) {
+      float quat[4]{};
+      for (uint32_t i = 0; i < 4; i++) {
+        quat[i] = static_cast<float>(node.rotation[i]);
+      }
+      transform *= Matrix::CreateFromQuaternion(Quaternion(quat[0], quat[1], quat[2], quat[3]));
+    }
+    if (!node.scale.empty()) {
+      float scale[3]{};
+      for (uint32_t i = 0; i < 3; i++) {
+        scale[i] = static_cast<float>(node.scale[i]);
+      }
+      transform *= Matrix::CreateScale(scale[0], scale[1], scale[2]);
+    }
+    transform = parent * transform;
+  }
   if (node.mesh != -1) {
     const auto index = transform_offset[node.mesh] + transform_offset_index[node.mesh];
-    memcpy(&(transform_buffer[index]), &parent_transform, sizeof(transform_buffer[index]));
+    memcpy(&(transform_buffer[index]), &transform.m[0][0], sizeof(transform_buffer[index]));
     logtrace("transform index{} node{} mesh{} val{}", transform_offset_index[node.mesh], node_index, index, transform_buffer[index][0][0]);
     transform_offset_index[node.mesh]++;
   }
-  matrix transform{};
-  if (!node.matrix.empty()) {
-    matrix t{};
-    FillMatrix(node.matrix.data(), t);
-    MultiplyMatrix(parent_transform, t, transform);
-  } else {
-    CopyMatrix(parent_transform, transform);
-  }
   for (auto& child : node.children) {
-    SetTransform(model, child, transform, transform_offset, transform_offset_index, transform_buffer);
+    SetTransform(model, child, transform.m, transform_offset, transform_offset_index, transform_buffer);
   }
 }
 auto GetModelMaterialVariationHash(const tinygltf::Material& material) {
@@ -228,9 +251,7 @@ void SetTransformValues(const tinygltf::Model& model, SceneData* scene_data, con
   }
   auto transform_buffer = MapResource(resource, sizeof(matrix) * mesh_num);
   for (const auto& node : model.scenes[0].nodes) {
-    matrix m{};
-    GetIdentityMatrix(m);
-    SetTransform(model, node, m, scene_data->transform_offset, transform_offset_index, static_cast<matrix*>(transform_buffer));
+    SetTransform(model, node, DirectX::SimpleMath::Matrix::Identity.m, scene_data->transform_offset, transform_offset_index, static_cast<matrix*>(transform_buffer));
   }
   UnmapResource(resource);
 }
@@ -308,8 +329,8 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
   auto alpha_cutoffs = AllocateArray<float>(&tmp_allocator, material_num);
   uint32_t next_color_index = 0;
   uint32_t next_alpha_cutoff_index = 0;
-  const auto white_texture_index = GetUint32(model.images.size()); // TODO
-  const auto bilinear_sampler_index = GetUint32(model.samplers.size()); // TODO
+  const uint32_t texture_offset = 1; // white texture at texture array head
+  const uint32_t sampler_offset = 1; // trilinear texture at sampler array head
   for (uint32_t i = 0; i < material_num; i++) {
     const auto& src_material = model.materials[i];
     auto& material_index = material_indices[i];
@@ -327,15 +348,17 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     }
     {
       // albedo tex, sampler
+      material_index.albedo_tex = 0;
+      material_index.albedo_sampler = 0;
       const auto& texture_index = src_material.pbrMetallicRoughness.baseColorTexture.index;
-      if (texture_index == -1) {
-        material_index.albedo_tex = white_texture_index;
-        material_index.albedo_sampler = bilinear_sampler_index;
-        logwarn("material:{} no texture", i);
-      } else {
+      if (texture_index != -1) {
         const auto& texture_info = model.textures[texture_index];
-        material_index.albedo_tex = texture_info.source;
-        material_index.albedo_sampler = texture_info.sampler;
+        if (texture_info.source != -1) {
+          material_index.albedo_tex = texture_info.source + texture_offset;
+        }
+        if (texture_info.sampler != -1) {
+          material_index.albedo_sampler = texture_info.sampler + sampler_offset;
+        }
         logtrace("material:{} texture:{} sampler:{}", i, texture_info.source, texture_info.sampler);
       }
     }
@@ -398,7 +421,7 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
   *used_handle_num = handle_index;
 }
 auto GetTextureNum(const tinygltf::Model& model) {
-  return GetUint32(model.images.size());
+  return GetUint32(model.images.size()) + 1;
 }
 D3D12_SHADER_RESOURCE_VIEW_DESC GetSrvDescTexture2D(const D3D12_RESOURCE_DESC1& desc) {
   assert(desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
@@ -419,13 +442,23 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
   scene_data->resource_num[kSceneBufferTextures] = texture_num;
   scene_data->resources[kSceneBufferTextures] = AllocateArray<ID3D12Resource*>(allocator, texture_num);
   scene_data->allocations[kSceneBufferTextures] = AllocateArray<D3D12MA::Allocation*>(allocator, texture_num);
-  std::filesystem::path path(gltf_path);
   uint32_t handle_index = *used_handle_num;
   for (uint32_t i = 0; i < texture_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
-    path.replace_filename(model.images[i].uri);
-    path.replace_extension(".dds");
+    std::filesystem::path path;
+    if (i == 0) {
+      // default texture
+      path = "textures/white.dds";
+    } else {
+      path = gltf_path;
+      path.replace_filename(model.images[i-1].uri);
+      path.replace_extension(".dds");
+    }
     auto texture_creation_info = GatherTextureCreationInfo(device, path.wstring().c_str(), &tmp_allocator);
+    if (texture_creation_info.resource_desc.Width == 0) {
+      logwarn("invalid texture {}", path.string());
+      continue;
+    }
     if (texture_creation_info.resource_desc.Flags) {
       logwarn("texture flag:{}", texture_creation_info.resource_desc.Flags);
     }
@@ -439,18 +472,18 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
                  texture_creation_info.resource_desc,
                  nullptr, buffer_allocator,
                  &scene_data->allocations[kSceneBufferTextures][i], &scene_data->resources[kSceneBufferTextures][i]);
-    SetD3d12Name(resource_upload, model.images[i].uri + "U");
-    SetD3d12Name(scene_data->resources[kSceneBufferTextures][i], model.images[i].uri);
+    SetD3d12Name(resource_upload, path.string() + "U");
+    SetD3d12Name(scene_data->resources[kSceneBufferTextures][i], path.string());
     FillUploadResource(texture_creation_info, resource_upload);
     if (!ReserveResourceTransfer(frame_index, texture_creation_info.subresource_num, texture_creation_info.layout,
                                  resource_upload, allocation_upload,
                                  scene_data->resources[kSceneBufferTextures][i], resource_transfer)) {
-      logwarn("texture ReserveResourceTransfer failed. {} {}", model.images[i].uri, i);
+      logwarn("texture ReserveResourceTransfer failed. {} {}", path.string(), i);
     }
     const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
     auto view_desc = GetSrvDescTexture2D(texture_creation_info.resource_desc);
     device->CreateShaderResourceView(scene_data->resources[kSceneBufferTextures][i], &view_desc, handle);
-    logtrace("texture index:{} {} handle_index:{} resource:{:x} ptr:{:x}", i, model.images[i].uri, handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferTextures][i]), handle.ptr);
+    logtrace("texture index:{} {} handle_index:{} resource:{:x} ptr:{:x}", i, path.string(), handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferTextures][i]), handle.ptr);
     handle_index++;
   }
   scene_data->cpu_handles[kSceneBufferTextures].ptr = descriptor_cpu->GetHandle(*used_handle_num, DescriptorType::kSrv).ptr;
@@ -566,7 +599,7 @@ auto ConvertToD3d12TextureAddressMode(const int32_t wrap) {
   return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 }
 auto CreateSamplers(const std::vector<tinygltf::Sampler>& samplers, D3d12Device* device, DescriptorCpu* descriptor_cpu) {
-  const auto sampler_num = GetUint32(samplers.size());
+  const auto sampler_num = GetUint32(samplers.size()) + 1;
   // not very precise conversion from gltf.
   D3D12_SAMPLER_DESC sampler_desc{};
   sampler_desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -576,9 +609,16 @@ auto CreateSamplers(const std::vector<tinygltf::Sampler>& samplers, D3d12Device*
   sampler_desc.MinLOD = 0.0f;
   sampler_desc.MaxLOD = 65535.0f;
   for (uint32_t i = 0; i < sampler_num; i++) {
-    sampler_desc.Filter   = ConvertToD3d12Filter(samplers[i].minFilter, samplers[i].magFilter);
-    sampler_desc.AddressU = ConvertToD3d12TextureAddressMode(samplers[i].wrapS);
-    sampler_desc.AddressV = ConvertToD3d12TextureAddressMode(samplers[i].wrapT);
+    if (i == 0) {
+      // default trilinear sampler
+      sampler_desc.Filter   = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+      sampler_desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+      sampler_desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    } else {
+      sampler_desc.Filter   = ConvertToD3d12Filter(samplers[i-1].minFilter, samplers[i-1].magFilter);
+      sampler_desc.AddressU = ConvertToD3d12TextureAddressMode(samplers[i-1].wrapS);
+      sampler_desc.AddressV = ConvertToD3d12TextureAddressMode(samplers[i-1].wrapT);
+    }
     auto& handle = descriptor_cpu->CreateHandle(i, DescriptorType::kSampler);
     device->CreateSampler(&sampler_desc, handle);
   }
@@ -670,7 +710,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   }
   uint32_t used_handle_num = 0;
   DescriptorCpu descriptor_cpu;
-  const uint32_t descriptor_handle_num_per_type[] = {0, kSceneBufferTextures + GetTextureNum(model), 0, GetUint32(model.samplers.size()), 0, 0,};
+  const uint32_t descriptor_handle_num_per_type[] = {0, kSceneBufferTextures + GetTextureNum(model), 0, GetUint32(model.samplers.size()) + 1, 0, 0,};
   static_assert(std::size(descriptor_handle_num_per_type) == kDescriptorTypeNum);
   descriptor_cpu.Init(device, descriptor_handle_num_per_type[1], descriptor_handle_num_per_type, allocator);
   {
@@ -678,7 +718,7 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
     auto resource_upload = PrepareSingleBufferTransfer(stride_size * mesh_num, kSceneBufferTransform,
                                                        "transform_U", "transform", frame_index, &scene_data, allocator, buffer_allocator, resource_transfer);
     SetTransformValues(model, &scene_data, mesh_num, resource_upload);
-    const auto resource_desc = GetArrayBufferDesc(mesh_num, stride_size);
+    const auto resource_desc = GetRawBufferDesc(mesh_num, stride_size);
     const auto& handle = descriptor_cpu.CreateHandle(used_handle_num, DescriptorType::kSrv);
     device->CreateShaderResourceView(scene_data.resources[kSceneBufferTransform][0], &resource_desc, handle);
     scene_data.cpu_handles[kSceneBufferTransform].ptr = handle.ptr;

@@ -61,6 +61,7 @@ TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t
   std::vector<D3D12_SUBRESOURCE_DATA> subresources;
   auto hr = DirectX::LoadDDSTextureFromFile(device, filepath, &committed_resource, info.dds_data, subresources);
   if (FAILED(hr)) {
+    logwarn(L"load texture failed. {}", filepath);
     if (committed_resource) {
       committed_resource->Release();
     }

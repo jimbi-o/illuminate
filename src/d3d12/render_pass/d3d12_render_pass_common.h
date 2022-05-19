@@ -28,9 +28,10 @@ struct RenderPassConfigDynamicData {
   bool* render_pass_enable_flag{nullptr};
   uint32_t debug_render_selected_buffer_allocation_index{0};
   bool** write_to_sub{nullptr};
-  float camera_pos[3]{0.0f, 1.2f, -5.0f};
+  float camera_pos[3]{};
   float camera_focus[3]{};
-  float fov_vertical{30.0f}, near_z{0.001f}, far_z{1000.0f};
+  float fov_vertical{40.0f}, near_z{0.001f}, far_z{1000.0f};
+  float camera_rotation[3]{};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
