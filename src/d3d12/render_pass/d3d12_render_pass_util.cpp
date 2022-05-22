@@ -19,7 +19,9 @@ DirectX::SimpleMath::Vector3 GetArcPos(const float width, const float height, co
   return xyz;
 }
 void RotateCameraImpl(const float width, const float height, float camera_pos[3], float camera_focus[3]) {
-  // arcball camera http://orion.lcg.ufrj.br/roma/WebGL/extras/doc/Arcball.pdf
+  // arcball camera
+  // http://orion.lcg.ufrj.br/roma/WebGL/extras/doc/Arcball.pdf
+  // https://en.wikibooks.org/wiki/OpenGL_Programming/Modern_OpenGL_Tutorial_Arcball
   using namespace DirectX::SimpleMath;
   const auto& io = ImGui::GetIO();
   const auto& prev_mouse_pos = io.MousePosPrev;
@@ -29,13 +31,12 @@ void RotateCameraImpl(const float width, const float height, float camera_pos[3]
   if (prev_mouse_pos.x == current_mouse_pos.x && prev_mouse_pos.y == current_mouse_pos.y) { return; }
   auto prev_arc_pos = GetArcPos(width, height, prev_mouse_pos);
   auto current_arc_pos = GetArcPos(width, height, current_mouse_pos);
-  const auto rcp = 1.0f / (prev_arc_pos.Length() * current_arc_pos.Length());
-  const auto dot = prev_arc_pos.Dot(current_arc_pos);
-  const auto theta = abs(dot) == 1.0f ? 0.0f : acosf(dot) * rcp;
-  const auto axis = prev_arc_pos.Cross(current_arc_pos) * rcp;
+  const auto theta = acosf(std::min(prev_arc_pos.Dot(current_arc_pos), 1.0f));
+  const auto axis_view_space = prev_arc_pos.Cross(current_arc_pos);
+  const auto view_to_world_matrix = Matrix::CreateLookAt(Vector3(&camera_pos[0]), Vector3(&camera_focus[0]), Vector3::Up).Invert();
+  const auto axis_world_space = Vector3::TransformNormal(axis_view_space, view_to_world_matrix);
   Vector3 position(camera_pos[0] - camera_focus[0], camera_pos[1] - camera_focus[1], camera_pos[2] - camera_focus[2]);
-  position = Vector3::Transform(position, Quaternion::CreateFromAxisAngle(axis, theta));
-  assert(!std::isnan(position.x));
+  position = Vector3::Transform(position, Quaternion::CreateFromAxisAngle(axis_world_space, theta));
   camera_pos[0] = position.x + camera_focus[0];
   camera_pos[1] = position.y + camera_focus[1];
   camera_pos[2] = position.z + camera_focus[2];
