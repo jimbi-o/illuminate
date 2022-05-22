@@ -8,10 +8,10 @@ using uint = uint32_t;
 struct SceneCbvData {
   matrix view_projection_matrix;
 };
-struct MaterialIndexList {
-  uint albedo_factor;
-  uint albedo_tex;
-  uint albedo_sampler;
+struct AlbedoIndexList {
+  uint factor;
+  uint tex;
+  uint sampler;
   uint alpha_cutoff;
 };
 #ifdef __cplusplus

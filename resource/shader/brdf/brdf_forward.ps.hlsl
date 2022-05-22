@@ -24,20 +24,20 @@
                   flags = DESCRIPTORS_VOLATILE),         \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
 "
-ByteAddressBuffer  material_index_list : register(t1);
-Buffer<float4>     colors              : register(t2);
-Buffer<float>      alpha_cutoffs       : register(t3);
-Texture2D<float4>  textures[]          : register(t4);
-sampler            samplers[]          : register(s0);
+ByteAddressBuffer  albedo_index_list : register(t1);
+Buffer<float4>     colors            : register(t2);
+Buffer<float>      alpha_cutoffs     : register(t3);
+Texture2D<float4>  textures[]        : register(t4);
+sampler            samplers[]        : register(s0);
 [RootSignature(BrdfForwardRootsig)]
 float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
-  MaterialIndexList material_indices = material_index_list.Load<MaterialIndexList>(model_info.material_offset);
-  Texture2D<float4> albedo_tex = textures[material_indices.albedo_tex];
-  sampler albedo_sampler = samplers[material_indices.albedo_sampler];
-  float4 albedo_color = albedo_tex.Sample(albedo_sampler, input.uv0);
-  float4 albedo_factor = colors.Load(material_indices.albedo_factor);
-  float alpha_cutoff = alpha_cutoffs.Load(material_indices.alpha_cutoff);
-  float4 albedo = albedo_color * albedo_factor;
+  AlbedoIndexList albedo_indices = albedo_index_list.Load<AlbedoIndexList>(model_info.material_offset);
+  Texture2D<float4> tex = textures[albedo_indices.tex];
+  sampler sampler = samplers[albedo_indices.sampler];
+  float4 color = tex.Sample(sampler, input.uv0);
+  float4 factor = colors.Load(albedo_indices.factor);
+  float alpha_cutoff = alpha_cutoffs.Load(albedo_indices.alpha_cutoff);
+  float4 albedo = color * factor;
 #if OPACITY_TYPE == OPACITY_TYPE_ALPHA_MASK
   if (albedo.a < alpha_cutoff) { discard; }
 #endif

@@ -84,7 +84,7 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
       const auto submesh_index = scene_data->model_submesh_index[i][j];
       const auto material_index = scene_data->submesh_material_index[submesh_index];
       if (material_index != prev_material_index && pass_vars->use_material) {
-        command_list->SetGraphicsRoot32BitConstant(0, material_index * sizeof(shader::MaterialIndexList), 1);
+        command_list->SetGraphicsRoot32BitConstant(0, material_index * sizeof(shader::AlbedoIndexList), 1);
         logtrace("mesh transform material.mesh:{}-{} material:{}->{}", i, j, prev_material_index, material_index);
         prev_material_index = material_index;
       }
