@@ -91,20 +91,6 @@ void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const
   if (!node.matrix.empty()) {
     FillMatrix(node.matrix.data(), transform.m);
   } else {
-    if (!node.translation.empty()) {
-      float translation[3]{};
-      for (uint32_t i = 0; i < 3; i++) {
-        translation[i] = static_cast<float>(node.translation[i]);
-      }
-      transform = Matrix::CreateTranslation(translation[0], translation[1], translation[2]);
-    }
-    if (!node.rotation.empty()) {
-      float quat[4]{};
-      for (uint32_t i = 0; i < 4; i++) {
-        quat[i] = static_cast<float>(node.rotation[i]);
-      }
-      transform *= Matrix::CreateFromQuaternion(Quaternion(quat[0], quat[1], quat[2], quat[3]));
-    }
     if (!node.scale.empty()) {
       float scale[3]{};
       for (uint32_t i = 0; i < 3; i++) {
@@ -112,7 +98,21 @@ void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const
       }
       transform *= Matrix::CreateScale(scale[0], scale[1], scale[2]);
     }
-    transform = parent * transform;
+    if (!node.rotation.empty()) {
+      float quat[4]{};
+      for (uint32_t i = 0; i < 4; i++) {
+        quat[i] = static_cast<float>(node.rotation[i]);
+      }
+      transform *= Matrix::CreateFromQuaternion(Quaternion(&quat[0]));
+    }
+    if (!node.translation.empty()) {
+      float translation[3]{};
+      for (uint32_t i = 0; i < 3; i++) {
+        translation[i] = static_cast<float>(node.translation[i]);
+      }
+      transform *= Matrix::CreateTranslation(translation[0], translation[1], translation[2]);
+    }
+    transform = transform * parent;
   }
   if (node.mesh != -1) {
     const auto index = transform_offset[node.mesh] + transform_offset_index[node.mesh];

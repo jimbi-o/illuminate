@@ -31,10 +31,11 @@ void RotateCameraImpl(const float width, const float height, float camera_pos[3]
   auto current_arc_pos = GetArcPos(width, height, current_mouse_pos);
   const auto rcp = 1.0f / (prev_arc_pos.Length() * current_arc_pos.Length());
   const auto dot = prev_arc_pos.Dot(current_arc_pos);
-  const auto theta = dot == 1.0f ? 0.0f :  acosf(dot) * rcp;
+  const auto theta = abs(dot) == 1.0f ? 0.0f : acosf(dot) * rcp;
   const auto axis = prev_arc_pos.Cross(current_arc_pos) * rcp;
   Vector3 position(camera_pos[0] - camera_focus[0], camera_pos[1] - camera_focus[1], camera_pos[2] - camera_focus[2]);
   position = Vector3::Transform(position, Quaternion::CreateFromAxisAngle(axis, theta));
+  assert(!std::isnan(position.x));
   camera_pos[0] = position.x + camera_focus[0];
   camera_pos[1] = position.y + camera_focus[1];
   camera_pos[2] = position.z + camera_focus[2];
