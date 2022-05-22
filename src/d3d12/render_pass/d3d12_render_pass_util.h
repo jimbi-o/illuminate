@@ -47,7 +47,6 @@ constexpr inline auto GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_comm
   return GetMaterialPso(*args_common->material_list, GetRenderPassMaterial(args_common, args_per_pass), variation_index);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator);
-void InitCamera(float camera_pos[3], float camera_rotation[3]);
-void UpdateCamera(float camera_pos[3], float camera_focus[3], float camera_rotation[3], float* fov_vertical);
+void UpdateCamera(const float width, const float height, float camera_pos[3], float camera_focus[3], float* fov_vertical_axis);
 }
 #endif

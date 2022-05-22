@@ -100,7 +100,8 @@ void RenderPassImgui::Update(RenderPassFuncArgsRenderCommon* args_common, Render
   ImGui_ImplDX12_NewFrame();
   ImGui_ImplWin32_NewFrame();
   if (!ImGui::GetIO().WantCaptureMouse) {
-    UpdateCamera(args_common->dynamic_data->camera_pos, args_common->dynamic_data->camera_focus, args_common->dynamic_data->camera_rotation, &args_common->dynamic_data->fov_vertical);
+    UpdateCamera(static_cast<float>(args_common->main_buffer_size->swapchain.width), static_cast<float>(args_common->main_buffer_size->swapchain.height),
+                 args_common->dynamic_data->camera_pos, args_common->dynamic_data->camera_focus, &args_common->dynamic_data->fov_vertical);
   }
   ImGui::GetIO().Fonts->SetTexID((ImTextureID)args_per_pass->gpu_handles_view[0].ptr);
   ImGui::NewFrame();
