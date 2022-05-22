@@ -39,6 +39,18 @@ void RotateCameraImpl(const float width, const float height, float camera_pos[3]
   camera_pos[1] = position.y + camera_focus[1];
   camera_pos[2] = position.z + camera_focus[2];
 }
+void MoveCameraForward(float camera_pos[3], float camera_focus[3], const float move_amount) {
+  using namespace DirectX::SimpleMath;
+  Vector3 direction(camera_focus[0] - camera_pos[0], camera_focus[1] - camera_pos[1], camera_focus[2] - camera_pos[2]);
+  direction.Normalize();
+  direction *= move_amount * 0.01f;
+  camera_focus[0] += direction.x;
+  camera_pos[0] += direction.x;
+  camera_focus[1] += direction.y;
+  camera_pos[1] += direction.y;
+  camera_focus[2] += direction.z;
+  camera_pos[2] += direction.z;
+}
 } // namespace
 
 RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator) {
@@ -57,6 +69,9 @@ RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass
 void UpdateCamera(const float width, const float height, float camera_pos[3], float camera_focus[3], float* fov_vertical_axis) {
   if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
     RotateCameraImpl(width, height, camera_pos, camera_focus);
+  }
+  if (const auto move_amount = ImGui::GetIO().MouseWheel) {
+    MoveCameraForward(camera_pos, camera_focus, move_amount);
   }
 }
 }
