@@ -10,6 +10,7 @@ struct ResourceTransfer;
 enum SceneBufferType {
   kSceneBufferTransform = 0,
   kSceneBufferMaterialIndices,
+  kSceneBufferMaterialCommonSettings,
   kSceneBufferColors,
   kSceneBufferAlphaCutoff,
   kSceneBufferTextures,
