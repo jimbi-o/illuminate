@@ -51,7 +51,9 @@ void DescriptorCpu::Term() {
   for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
     if (descriptor_heap_[i]) {
       const auto refval = descriptor_heap_[i]->Release();
-      logtrace("DescriptorCpu refval:{}", refval);
+      if (refval != 0) {
+        logwarn("DescriptorCpu refval:{}", refval);
+      }
     }
   }
 }
@@ -72,11 +74,6 @@ void DescriptorCpu::RegisterExternalHandle(const uint32_t index, const Descripto
   auto descriptor_type_index = static_cast<uint32_t>(type);
   handles_[descriptor_type_index][index].ptr = handle.ptr;
   logtrace("handle registered. alloc:{} desc:{} ptr:{}", index, type, handles_[descriptor_type_index][index].ptr);
-}
-ID3D12DescriptorHeap* DescriptorCpu::RetainDescriptorHeap(const DescriptorType type) {
-  auto heap = descriptor_heap_[GetDescriptorTypeIndex(type)];
-  heap->AddRef();
-  return heap;
 }
 namespace {
 uint32_t GetViewNum(const uint32_t buffer_num, const DescriptorType* descriptor_type_list) {
@@ -233,6 +230,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::WriteToPersistentSamplerHandleRange(c
   device->CopyDescriptorsSimple(num, dst_handle, handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
   D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle{descriptor_sampler_.heap_start_gpu + start * descriptor_sampler_.handle_increment_size};
   return gpu_handle;
+}
+D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle(const D3D12_CPU_DESCRIPTOR_HANDLE heap_head, const uint32_t increment_size, const uint32_t index) {
+  return {heap_head.ptr + increment_size * index};
 }
 bool IsGpuHandleAvailableType(const ResourceStateType& type) {
   switch (type) {

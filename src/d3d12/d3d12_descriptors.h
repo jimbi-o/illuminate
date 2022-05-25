@@ -16,7 +16,6 @@ class DescriptorCpu {
     return handles_[descriptor_type_index][index];
   }
   void RegisterExternalHandle(const uint32_t index, const DescriptorType type, const D3D12_CPU_DESCRIPTOR_HANDLE& handle);
-  ID3D12DescriptorHeap* RetainDescriptorHeap(const DescriptorType type);
  private:
   static constexpr D3D12_DESCRIPTOR_HEAP_TYPE GetDescriptorTypeIndex(const DescriptorType& type) {
     switch (type) {
@@ -67,7 +66,8 @@ class DescriptorGpu {
   DescriptorHeapSetGpu descriptor_cbv_srv_uav_;
   DescriptorHeapSetGpu descriptor_sampler_;
 };
-ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags);
+ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle(const D3D12_CPU_DESCRIPTOR_HANDLE heap_head, const uint32_t increment_size, const uint32_t index);
 bool IsGpuHandleAvailableType(const ResourceStateType& type);
 }
 #endif

@@ -5,8 +5,11 @@
 #include <memory>
 namespace illuminate {
 template <typename T>
-constexpr auto SucceedPtrWithStructSize(void* src) {
+constexpr auto SucceedPtrWithStructSize(const void* src) {
   return reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(src) + sizeof(T));
+}
+inline auto SucceedPtr(const void* src, const uint32_t size_in_byte) {
+  return reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(src) + size_in_byte);
 }
 static const size_t kDefaultAlignmentSize = 8;
 constexpr inline auto AlignAddress(const std::uintptr_t addr, const size_t align/*power of 2*/) {

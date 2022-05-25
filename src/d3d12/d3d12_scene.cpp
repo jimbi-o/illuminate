@@ -147,19 +147,18 @@ void CreateUploadAndDefaultBuffers(const uint32_t buffer_size, D3D12MA::Allocato
   SetD3d12Name(*resource_default, name_default);
   logtrace("buffer created size:{} {}:{:x} {}:{:x}", buffer_size, name_upload, reinterpret_cast<std::uintptr_t>(resource_upload), name_default, reinterpret_cast<std::uintptr_t>(resource_default));
 }
-auto PrepareSingleBufferTransfer(const uint32_t size_in_bytes, const SceneBufferType scene_buffer_type, const char* const name_u, const char* const name_d, const uint32_t frame_index, SceneData* scene_data, MemoryAllocationJanitor* allocator, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+auto PrepareSingleBufferTransfer(const uint32_t size_in_bytes, const char* const name_u, const char* const name_d, const uint32_t frame_index, SceneData* scene_data, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   ID3D12Resource* resource_upload{nullptr};
   D3D12MA::Allocation* allocation_upload{nullptr};
-  scene_data->resource_num[scene_buffer_type] = 1;
-  scene_data->resources[scene_buffer_type] = AllocateArray<ID3D12Resource*>(allocator, 1);
-  scene_data->allocations[scene_buffer_type] = AllocateArray<D3D12MA::Allocation*>(allocator, 1);
+  const auto index = scene_data->resource_num;
+  scene_data->resource_num++;
   CreateUploadAndDefaultBuffers(size_in_bytes, buffer_allocator,
                                 name_u, &resource_upload, &allocation_upload,
-                                name_d, &scene_data->resources[scene_buffer_type][0], &scene_data->allocations[scene_buffer_type][0]);
-  if (!ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, scene_data->resources[scene_buffer_type][0], resource_transfer)) {
+                                name_d, &scene_data->resources[index], &scene_data->allocations[index]);
+  if (!ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, scene_data->resources[index], resource_transfer)) {
     logwarn("ReserveResourceTransfer failed. {}", name_d);
   }
-  return resource_upload;
+  return std::make_pair(resource_upload, scene_data->resources[index]);
 }
 enum { kIndiceMode, kVertexMode, };
 template <uint32_t mode, typename F>
@@ -315,24 +314,9 @@ auto GetConstantBufferDesc(const D3D12_GPU_VIRTUAL_ADDRESS&  addr, const uint32_
 auto GetMaterialNum(const tinygltf::Model& model) {
   return GetUint32(model.materials.size());
 }
-void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index, SceneData* scene_data, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator, DescriptorCpu* descriptor_cpu, uint32_t* used_handle_num, ResourceTransfer* resource_transfer) {
+auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index, SceneData* scene_data, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, const D3D12_CPU_DESCRIPTOR_HANDLE descriptor_heap_head_addr, const uint32_t descriptor_handle_increment_size, const uint32_t descriptor_index_offset, ResourceTransfer* resource_transfer) {
   shader::MaterialCommonSettings material_common_settings{}; // TODO fill
   const auto material_num = GetMaterialNum(model);
-  const auto size_of_material_common_settings = AlignAddress(GetUint32(sizeof(material_common_settings)), 256); // cbv size must be multiple of 256
-  auto resource_upload_material_common_settings = PrepareSingleBufferTransfer(size_of_material_common_settings, kSceneBufferMaterialCommonSettings,
-                                                                              "material_common_settings_U", "material_common_settings",
-                                                                              frame_index, scene_data, allocator, buffer_allocator, resource_transfer);
-  const auto albedo_index_stride = GetUint32(sizeof(shader::AlbedoIndexList));
-  auto resource_upload_material_index = PrepareSingleBufferTransfer(albedo_index_stride * material_num, kSceneBufferMaterialIndices, "material_index_list_U", "material_index_list",
-                                                                    frame_index, scene_data, allocator, buffer_allocator, resource_transfer);
-  const auto color_stride_size = GetUint32(sizeof(float)) * 4;
-  auto resource_upload_color = PrepareSingleBufferTransfer(color_stride_size * material_num, kSceneBufferColors, "color_U", "color",
-                                                           frame_index, scene_data, allocator, buffer_allocator, resource_transfer);
-  const auto alpha_cutoff_stride_size = GetUint32(sizeof(float));
-  auto resource_upload_alpha_cutoff = PrepareSingleBufferTransfer(alpha_cutoff_stride_size * material_num,
-                                                                  kSceneBufferAlphaCutoff,
-                                                                  "alpha_cutoffs_U", "alpha_cutoffs",
-                                                                  frame_index, scene_data, allocator, buffer_allocator, resource_transfer);
   auto tmp_allocator = GetTemporalMemoryAllocator();
   auto albedo_indices = AllocateArray<shader::AlbedoIndexList>(&tmp_allocator, material_num);
   auto material_colors = AllocateArray<std::array<float, 4>>(&tmp_allocator, material_num);
@@ -385,57 +369,69 @@ void SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
       logtrace("material:{} alpha_cutoff:{}", i, alpha_cutoff_index);
     }
   }
-  auto handle_index = *used_handle_num;
+  auto handle_index = descriptor_index_offset;
   {
-    memcpy(MapResource(resource_upload_material_common_settings, size_of_material_common_settings), &material_common_settings, size_of_material_common_settings);
-    UnmapResource(resource_upload_material_common_settings);
-    const auto resource_desc = GetConstantBufferDesc(scene_data->resources[kSceneBufferMaterialCommonSettings][0]->GetGPUVirtualAddress(), size_of_material_common_settings);
-    const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kCbv);
+    const auto size_of_material_common_settings = GetUint32(sizeof(material_common_settings));
+    const auto size_of_material_common_settings_aligned = AlignAddress(size_of_material_common_settings, 256); // cbv size must be multiple of 256
+    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(size_of_material_common_settings_aligned,
+                                                                           "material_common_settings_U", "material_common_settings",
+                                                                           frame_index, scene_data, buffer_allocator, resource_transfer);
+    memcpy(MapResource(resource_upload, size_of_material_common_settings), &material_common_settings, size_of_material_common_settings);
+    UnmapResource(resource_upload);
+    const auto resource_desc = GetConstantBufferDesc(resource_default->GetGPUVirtualAddress(), size_of_material_common_settings_aligned);
+    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
     device->CreateConstantBufferView(&resource_desc, handle);
-    scene_data->cpu_handles[kSceneBufferMaterialCommonSettings].ptr = handle.ptr;
-    logtrace("material common settings handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferMaterialCommonSettings][0]), scene_data->cpu_handles[kSceneBufferMaterialCommonSettings].ptr);
+    scene_data->cpu_handles[kSceneDescriptorMaterialCommonSettings].ptr = handle.ptr;
+    logtrace("material common settings handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(resource_default), scene_data->cpu_handles[kSceneDescriptorMaterialCommonSettings].ptr);
     handle_index++;
   }
   {
+    const auto albedo_index_stride = GetUint32(sizeof(shader::AlbedoIndexList));
     const auto size = albedo_index_stride * material_num;
-    memcpy(MapResource(resource_upload_material_index, size), albedo_indices, size);
-    UnmapResource(resource_upload_material_index);
+    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(size, "material_index_list_U", "material_index_list",
+                                                                           frame_index, scene_data, buffer_allocator, resource_transfer);
+    memcpy(MapResource(resource_upload, size), albedo_indices, size);
+    UnmapResource(resource_upload);
     const auto resource_desc = GetRawBufferDesc(material_num, albedo_index_stride);
-    const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
-    device->CreateShaderResourceView(scene_data->resources[kSceneBufferMaterialIndices][0], &resource_desc, handle);
-    scene_data->cpu_handles[kSceneBufferMaterialIndices].ptr = handle.ptr;
-    logtrace("material index handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferMaterialIndices][0]), scene_data->cpu_handles[kSceneBufferMaterialIndices].ptr);
+    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
+    device->CreateShaderResourceView(resource_default, &resource_desc, handle);
+    scene_data->cpu_handles[kSceneDescriptorMaterialIndices].ptr = handle.ptr;
+    logtrace("material index handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(resource_default), scene_data->cpu_handles[kSceneDescriptorMaterialIndices].ptr);
     handle_index++;
   }
   {
+    const auto color_stride_size = GetUint32(sizeof(float)) * 4;
     const auto size = color_stride_size * next_color_index;
-    auto color_dst = MapResource(resource_upload_color, size);
+    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(size, "color_U", "color", frame_index, scene_data, buffer_allocator, resource_transfer);
+    auto color_dst = MapResource(resource_upload, size);
     for (uint32_t i = 0; i < next_color_index; i++) {
       memcpy(color_dst, material_colors[i].data(), sizeof(float) * 4);
-      color_dst = SucceedPtrWithStructSize<float[4]>(color_dst);
+      color_dst = SucceedPtr(color_dst, color_stride_size);
     }
-    UnmapResource(resource_upload_color);
+    UnmapResource(resource_upload);
     const auto resource_desc = GetArrayBufferDesc(next_color_index, color_stride_size);
-    const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
-    device->CreateShaderResourceView(scene_data->resources[kSceneBufferColors][0], &resource_desc, handle);
-    scene_data->cpu_handles[kSceneBufferColors].ptr = handle.ptr;
-    logtrace("color handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferColors][0]), scene_data->cpu_handles[kSceneBufferColors].ptr);
+    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
+    device->CreateShaderResourceView(resource_default, &resource_desc, handle);
+    scene_data->cpu_handles[kSceneDescriptorColors].ptr = handle.ptr;
+    logtrace("color handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(resource_default), scene_data->cpu_handles[kSceneDescriptorColors].ptr);
     handle_index++;
   }
   {
+    const auto alpha_cutoff_stride_size = GetUint32(sizeof(float));
+    const auto size = alpha_cutoff_stride_size * std::max(next_alpha_cutoff_index, 1U);
+    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(size, "alpha_cutoffs_U", "alpha_cutoffs", frame_index, scene_data, buffer_allocator, resource_transfer);
     if (next_alpha_cutoff_index > 0) {
-      const auto copy_size = alpha_cutoff_stride_size * next_alpha_cutoff_index;
-      memcpy(MapResource(resource_upload_alpha_cutoff, copy_size), alpha_cutoffs, copy_size);
-      UnmapResource(resource_upload_alpha_cutoff);
+      memcpy(MapResource(resource_upload, size), alpha_cutoffs, size);
+      UnmapResource(resource_upload);
     }
     const auto resource_desc = GetArrayBufferDesc(std::max(next_alpha_cutoff_index, 1U), alpha_cutoff_stride_size);
-    const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
-    device->CreateShaderResourceView(scene_data->resources[kSceneBufferAlphaCutoff][0], &resource_desc, handle);
-    scene_data->cpu_handles[kSceneBufferAlphaCutoff].ptr = handle.ptr;
-    logtrace("alpha cutoff handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferAlphaCutoff][0]), scene_data->cpu_handles[kSceneBufferAlphaCutoff].ptr);
+    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
+    device->CreateShaderResourceView(resource_default, &resource_desc, handle);
+    scene_data->cpu_handles[kSceneDescriptorAlphaCutoff].ptr = handle.ptr;
+    logtrace("alpha cutoff handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(resource_default), scene_data->cpu_handles[kSceneDescriptorAlphaCutoff].ptr);
     handle_index++;
   }
-  *used_handle_num = handle_index;
+  return handle_index - descriptor_index_offset;
 }
 auto GetTextureNum(const tinygltf::Model& model) {
   return GetUint32(model.images.size()) + 1;
@@ -454,12 +450,9 @@ D3D12_SHADER_RESOURCE_VIEW_DESC GetSrvDescTexture2D(const D3D12_RESOURCE_DESC1& 
     },
   };
 }
-auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const gltf_path, const uint32_t frame_index, SceneData* scene_data, D3d12Device* device, DescriptorCpu* descriptor_cpu, uint32_t* used_handle_num, ResourceTransfer* resource_transfer, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator) {
-  const auto texture_num = GetTextureNum(model);
-  scene_data->resource_num[kSceneBufferTextures] = texture_num;
-  scene_data->resources[kSceneBufferTextures] = AllocateArray<ID3D12Resource*>(allocator, texture_num);
-  scene_data->allocations[kSceneBufferTextures] = AllocateArray<D3D12MA::Allocation*>(allocator, texture_num);
-  uint32_t handle_index = *used_handle_num;
+auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const gltf_path, const uint32_t frame_index, SceneData* scene_data, D3d12Device* device, const D3D12_CPU_DESCRIPTOR_HANDLE descriptor_heap_head_addr, const uint32_t descriptor_handle_increment_size, const uint32_t descriptor_index_offset, ResourceTransfer* resource_transfer, D3D12MA::Allocator* buffer_allocator) {
+  const auto texture_num = scene_data->texture_num;
+  auto handle_index = descriptor_index_offset;
   for (uint32_t i = 0; i < texture_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
     std::filesystem::path path;
@@ -485,26 +478,26 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
                  GetBufferDesc(texture_creation_info.total_size_in_bytes),
                  nullptr, buffer_allocator,
                  &allocation_upload, &resource_upload);
+    const auto default_buffer_index = scene_data->resource_num;
+    scene_data->resource_num++;
     CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON,
                  texture_creation_info.resource_desc,
                  nullptr, buffer_allocator,
-                 &scene_data->allocations[kSceneBufferTextures][i], &scene_data->resources[kSceneBufferTextures][i]);
+                 &scene_data->allocations[default_buffer_index], &scene_data->resources[default_buffer_index]);
     SetD3d12Name(resource_upload, path.string() + "U");
-    SetD3d12Name(scene_data->resources[kSceneBufferTextures][i], path.string());
+    SetD3d12Name(scene_data->resources[default_buffer_index], path.string());
     FillUploadResource(texture_creation_info, resource_upload);
     if (!ReserveResourceTransfer(frame_index, texture_creation_info.subresource_num, texture_creation_info.layout,
                                  resource_upload, allocation_upload,
-                                 scene_data->resources[kSceneBufferTextures][i], resource_transfer)) {
+                                 scene_data->resources[default_buffer_index], resource_transfer)) {
       logwarn("texture ReserveResourceTransfer failed. {} {}", path.string(), i);
     }
-    const auto& handle = descriptor_cpu->CreateHandle(handle_index, DescriptorType::kSrv);
+    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
     auto view_desc = GetSrvDescTexture2D(texture_creation_info.resource_desc);
-    device->CreateShaderResourceView(scene_data->resources[kSceneBufferTextures][i], &view_desc, handle);
-    logtrace("texture index:{} {} handle_index:{} resource:{:x} ptr:{:x}", i, path.string(), handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[kSceneBufferTextures][i]), handle.ptr);
+    device->CreateShaderResourceView(scene_data->resources[default_buffer_index], &view_desc, handle);
+    logtrace("texture index:{} {} handle_index:{} resource:{:x} ptr:{:x}", i, path.string(), handle_index, reinterpret_cast<std::uintptr_t>(scene_data->resources[default_buffer_index]), handle.ptr);
     handle_index++;
   }
-  scene_data->cpu_handles[kSceneBufferTextures].ptr = descriptor_cpu->GetHandle(*used_handle_num, DescriptorType::kSrv).ptr;
-  *used_handle_num = handle_index;
 }
 auto ConvertToD3d12Filter(const int32_t minFilter, const int32_t magFilter) {
   // https://www.khronos.org/opengl/wiki/Sampler_Object
@@ -615,7 +608,7 @@ auto ConvertToD3d12TextureAddressMode(const int32_t wrap) {
   }
   return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 }
-auto CreateSamplers(const std::vector<tinygltf::Sampler>& samplers, D3d12Device* device, DescriptorCpu* descriptor_cpu) {
+auto CreateSamplers(const std::vector<tinygltf::Sampler>& samplers, D3d12Device* device, const D3D12_CPU_DESCRIPTOR_HANDLE descriptor_heap_head_addr, const uint32_t descriptor_handle_increment_size) {
   const auto sampler_num = GetUint32(samplers.size()) + 1;
   // not very precise conversion from gltf.
   D3D12_SAMPLER_DESC sampler_desc{};
@@ -636,10 +629,9 @@ auto CreateSamplers(const std::vector<tinygltf::Sampler>& samplers, D3d12Device*
       sampler_desc.AddressU = ConvertToD3d12TextureAddressMode(samplers[i-1].wrapS);
       sampler_desc.AddressV = ConvertToD3d12TextureAddressMode(samplers[i-1].wrapT);
     }
-    auto& handle = descriptor_cpu->CreateHandle(i, DescriptorType::kSampler);
+    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, i);
     device->CreateSampler(&sampler_desc, handle);
   }
-  return std::make_pair(sampler_num, descriptor_cpu->GetHandle(0, DescriptorType::kSampler));
 }
 auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_path, MemoryAllocationJanitor* allocator, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   SceneData scene_data{};
@@ -658,19 +650,21 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
       mesh_num++;
     }
   }
-  scene_data.resource_num[kSceneBufferMesh] = mesh_num * (kVertexBufferTypeNum + 1/*index buffer*/);
-  scene_data.resources[kSceneBufferMesh] = AllocateArray<ID3D12Resource*>(allocator, scene_data.resource_num[kSceneBufferMesh]);
-  scene_data.allocations[kSceneBufferMesh] = AllocateArray<D3D12MA::Allocation*>(allocator, scene_data.resource_num[kSceneBufferMesh]);
+  scene_data.texture_num = GetTextureNum(model);
+  const auto resource_num = mesh_num * (kVertexBufferTypeNum + 1/*index buffer*/) + scene_data.texture_num + kSceneDescriptorHandleTypeNum - 2/*texture,sampler*/;
+  scene_data.resource_num = 0;
+  scene_data.resources = AllocateArray<ID3D12Resource*>(allocator, resource_num);
+  scene_data.allocations = AllocateArray<D3D12MA::Allocation*>(allocator, resource_num);
   scene_data.submesh_index_buffer_len = AllocateArray<uint32_t>(allocator, mesh_num);
   scene_data.submesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
   scene_data.submesh_vertex_buffer_view = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num * kVertexBufferTypeNum);
   for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
     scene_data.submesh_vertex_buffer_view_index[i] = AllocateArray<uint32_t>(allocator, mesh_num);
   }
-  uint32_t resource_num = 0;
   {
+    const auto default_buffer_index = scene_data.resource_num;
     const auto num = SetMeshBuffers<kIndiceMode>(model, "", scene_data, frame_index,
-                                                 &scene_data.resources[kSceneBufferMesh][0], &scene_data.allocations[kSceneBufferMesh][0],
+                                                 &scene_data.resources[default_buffer_index], &scene_data.allocations[default_buffer_index],
                                                  "idx", buffer_allocator, resource_transfer,
                                                  [submesh_index_buffer_len = scene_data.submesh_index_buffer_len,
                                                   submesh_index_buffer_view = scene_data.submesh_index_buffer_view]
@@ -686,14 +680,15 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
                                                    logtrace("index buffer index:{} len:{} addr:{:x} size:{} format:{}", index, submesh_index_buffer_len[index], addr, size, GetIndexBufferDxgiFormat(tinygltf_type, tinygltf_component_type));
                                                  });
     assert(num == mesh_num);
-    resource_num = num;
+    scene_data.resource_num += num;
   }
   const std::string attributes[] = {"POSITION", "NORMAL", "TANGENT", "TEXCOORD_0"};
   static_assert(std::size(attributes) == kVertexBufferTypeNum);
   uint32_t vertex_buffer_index_offset = 0;
   for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
+    const auto default_buffer_index = scene_data.resource_num;
     const auto num = SetMeshBuffers<kVertexMode>(model, attributes[i], scene_data, frame_index,
-                                                 &scene_data.resources[kSceneBufferMesh][resource_num], &scene_data.allocations[kSceneBufferMesh][resource_num],
+                                                 &scene_data.resources[default_buffer_index], &scene_data.allocations[default_buffer_index],
                                                  attributes[i], buffer_allocator, resource_transfer,
                                                  [submesh_vertex_buffer_view_index = scene_data.submesh_vertex_buffer_view_index[i],
                                                   submesh_vertex_buffer_view = scene_data.submesh_vertex_buffer_view,
@@ -710,14 +705,8 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
                                                    logtrace("vertex buffer index:{} addr:{:x} size:{} strid:{}", index, addr, size, submesh_vertex_buffer_view[index].StrideInBytes);
                                                  });
     assert(num <= mesh_num);
-    resource_num += num;
+    scene_data.resource_num += num;
     vertex_buffer_index_offset += num;
-  }
-  assert(resource_num <= scene_data.resource_num[kSceneBufferMesh]);
-  assert(vertex_buffer_index_offset <= kSceneBufferMesh * mesh_num);
-  if (scene_data.resource_num[kSceneBufferMesh] != resource_num) {
-    logwarn("missing mesh data found/total={}/{} missing{}", resource_num, scene_data.resource_num[kSceneBufferMesh], scene_data.resource_num[kSceneBufferMesh] - resource_num);
-    scene_data.resource_num[kSceneBufferMesh] = resource_num;
   }
   scene_data.submesh_material_variation_hash = AllocateArray<StrHash>(allocator, mesh_num);
   scene_data.submesh_material_index = AllocateArray<uint32_t>(allocator, mesh_num);
@@ -725,41 +714,35 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   for (const auto& node : model.scenes[0].nodes) {
     CountModelInstanceNum(model, node, scene_data.model_instance_num);
   }
-  uint32_t used_handle_num = 0;
-  DescriptorCpu descriptor_cpu;
-  const uint32_t descriptor_handle_num_per_type[] = {
-    /* cbv */ 1, // kSceneBufferMaterialCommonSettings
-    /* srv */ kSceneBufferTextures + GetTextureNum(model) - 1, // -1=kSceneBufferMaterialCommonSettings
-    /* uav */ 0,
-    /* sampler */ GetUint32(model.samplers.size()) + 1,
-    /* rtv */ 0,
-    /* dsv */ 0,
-  };
-  uint32_t buffer_allocation_num = 0;
-  for (uint32_t i = 0; i < static_cast<uint32_t>(DescriptorType::kSampler); i++) {
-    buffer_allocation_num += descriptor_handle_num_per_type[i];
-  }
-  static_assert(std::size(descriptor_handle_num_per_type) == kDescriptorTypeNum);
-  descriptor_cpu.Init(device, buffer_allocation_num, descriptor_handle_num_per_type, allocator);
+  const auto cbv_srv_uav_num = kSceneDescriptorHandleTypeNum - 2/*texture,sampler*/ + scene_data.texture_num;
+  const auto handle_increment_size_cbv_srv_uav = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+  scene_data.descriptor_heap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, cbv_srv_uav_num);
+  SetD3d12Name(scene_data.descriptor_heap, "scene_descriptor_heap");
+  const auto descriptor_heap_head_addr = scene_data.descriptor_heap->GetCPUDescriptorHandleForHeapStart();
+  uint32_t used_descriptor_num = 0;
   {
     const auto stride_size = GetUint32(sizeof(matrix));
-    auto resource_upload = PrepareSingleBufferTransfer(stride_size * mesh_num, kSceneBufferTransform,
-                                                       "transform_U", "transform", frame_index, &scene_data, allocator, buffer_allocator, resource_transfer);
+    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(stride_size * mesh_num, "transform_U", "transform", frame_index, &scene_data, buffer_allocator, resource_transfer);
     SetTransformValues(model, &scene_data, mesh_num, resource_upload);
     const auto resource_desc = GetRawBufferDesc(mesh_num, stride_size);
-    const auto& handle = descriptor_cpu.CreateHandle(used_handle_num, DescriptorType::kSrv);
-    device->CreateShaderResourceView(scene_data.resources[kSceneBufferTransform][0], &resource_desc, handle);
-    scene_data.cpu_handles[kSceneBufferTransform].ptr = handle.ptr;
-    used_handle_num++;
+    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, handle_increment_size_cbv_srv_uav, used_descriptor_num);
+    device->CreateShaderResourceView(resource_default, &resource_desc, handle);
+    scene_data.cpu_handles[kSceneDescriptorTransform].ptr = handle.ptr;
+    used_descriptor_num++;
   }
-  SetMaterialValues(model, frame_index, &scene_data, device, buffer_allocator, allocator, &descriptor_cpu, &used_handle_num, resource_transfer);
-  PrepareSceneTextureUpload(model, gltf_path, frame_index, &scene_data, device, &descriptor_cpu, &used_handle_num, resource_transfer, buffer_allocator, allocator);
-  scene_data.descriptor_heap = descriptor_cpu.RetainDescriptorHeap(DescriptorType::kSrv);
-  SetD3d12Name(scene_data.descriptor_heap, "scene_descriptor_heap");
-  std::tie(scene_data.sampler_num, scene_data.samplers) = CreateSamplers(model.samplers, device, &descriptor_cpu);
-  scene_data.sampler_descriptor_heap = descriptor_cpu.RetainDescriptorHeap(DescriptorType::kSampler);
-  SetD3d12Name(scene_data.sampler_descriptor_heap, "scene_sampler_descriptor_heap");
-  descriptor_cpu.Term();
+  {
+    used_descriptor_num += SetMaterialValues(model, frame_index, &scene_data, device, buffer_allocator, descriptor_heap_head_addr, handle_increment_size_cbv_srv_uav, used_descriptor_num, resource_transfer);
+    scene_data.cpu_handles[kSceneDescriptorTexture].ptr = GetDescriptorHandle(descriptor_heap_head_addr, handle_increment_size_cbv_srv_uav, used_descriptor_num).ptr;
+    PrepareSceneTextureUpload(model, gltf_path, frame_index, &scene_data, device, descriptor_heap_head_addr, handle_increment_size_cbv_srv_uav, used_descriptor_num, resource_transfer, buffer_allocator);
+  }
+  {
+    scene_data.sampler_num = GetUint32(model.samplers.size()) + 1;
+    scene_data.sampler_descriptor_heap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, scene_data.sampler_num);
+    SetD3d12Name(scene_data.sampler_descriptor_heap, "scene_sampler_descriptor_heap");
+    scene_data.cpu_handles[kSceneDescriptorSampler].ptr = scene_data.sampler_descriptor_heap->GetCPUDescriptorHandleForHeapStart().ptr;
+    const auto handle_increment_size_sampler = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+    CreateSamplers(model.samplers, device, scene_data.cpu_handles[kSceneDescriptorSampler], handle_increment_size_sampler);
+  }
   return scene_data;
 }
 } // namespace anonymous
@@ -773,13 +756,9 @@ SceneData GetSceneFromTinyGltf(const char* const filename, const uint32_t frame_
   return ParseTinyGltfScene(model, filename, allocator, frame_index, device, buffer_allocator, resource_transfer);
 }
 void ReleaseSceneData(SceneData* scene_data) {
-  for (uint32_t i = 0; i < kSceneBufferNum; i++) {
-    for (uint32_t j = 0; j < scene_data->resource_num[i]; j++) {
-      if (scene_data->resources[i][j]) {
-        scene_data->resources[i][j]->Release();
-        scene_data->allocations[i][j]->Release();
-      }
-    }
+  for (uint32_t i = 0; i < scene_data->resource_num; i++) {
+    scene_data->resources[i]->Release();
+    scene_data->allocations[i]->Release();
   }
   scene_data->descriptor_heap->Release();
   scene_data->sampler_descriptor_heap->Release();
@@ -792,12 +771,12 @@ static const char* scene_buffer_names[] = {
   "colors",
   "alpha_cutoffs",
   "textures",
-  "meshes",
+  "samplers",
 };
 }
 bool IsSceneBuffer(const char* const name) {
-  static_assert(std::size(scene_buffer_names) == kSceneBufferNum);
-  for (uint32_t i = 0; i < kSceneBufferNum; i++) {
+  static_assert(std::size(scene_buffer_names) == kSceneDescriptorHandleTypeNum);
+  for (uint32_t i = 0; i < kSceneDescriptorHandleTypeNum; i++) {
     if (strcmp(name, scene_buffer_names[i]) == 0) {
       return true;
     }
@@ -806,7 +785,7 @@ bool IsSceneBuffer(const char* const name) {
 }
 uint32_t EncodeSceneBufferIndex(const char* const name) {
   uint32_t index = 0;
-  for (uint32_t i = 0; i < kSceneBufferNum; i++) {
+  for (uint32_t i = 0; i < kSceneDescriptorHandleTypeNum; i++) {
     if (strcmp(name, scene_buffer_names[i]) == 0) {
       index = i;
       break;

@@ -7,15 +7,15 @@
 namespace illuminate {
 class MemoryAllocationJanitor;
 struct ResourceTransfer;
-enum SceneBufferType {
-  kSceneBufferTransform = 0,
-  kSceneBufferMaterialIndices,
-  kSceneBufferMaterialCommonSettings,
-  kSceneBufferColors,
-  kSceneBufferAlphaCutoff,
-  kSceneBufferTextures,
-  kSceneBufferMesh,
-  kSceneBufferNum,
+enum SceneDescriptorHandle {
+  kSceneDescriptorTransform = 0,
+  kSceneDescriptorMaterialIndices,
+  kSceneDescriptorMaterialCommonSettings,
+  kSceneDescriptorColors,
+  kSceneDescriptorAlphaCutoff,
+  kSceneDescriptorTexture,
+  kSceneDescriptorSampler,
+  kSceneDescriptorHandleTypeNum,
 };
 struct SceneData {
   uint32_t model_num{0};
@@ -26,19 +26,19 @@ struct SceneData {
   uint32_t* transform_offset{nullptr};
   // per submesh data
   uint32_t* submesh_index_buffer_len{nullptr};
-  D3D12_INDEX_BUFFER_VIEW*  submesh_index_buffer_view{nullptr};
+  D3D12_INDEX_BUFFER_VIEW* submesh_index_buffer_view{nullptr};
   uint32_t* submesh_vertex_buffer_view_index[kVertexBufferTypeNum]{nullptr};
   D3D12_VERTEX_BUFFER_VIEW* submesh_vertex_buffer_view{nullptr};
   StrHash* submesh_material_variation_hash{nullptr};
   uint32_t* submesh_material_index{nullptr};
   // scene resources
-  uint32_t resource_num[kSceneBufferNum]{};
-  ID3D12Resource** resources[kSceneBufferNum]{};
-  D3D12MA::Allocation** allocations[kSceneBufferNum]{};
-  D3D12_CPU_DESCRIPTOR_HANDLE cpu_handles[kSceneBufferNum]{};
-  ID3D12DescriptorHeap* descriptor_heap{nullptr};
+  D3D12_CPU_DESCRIPTOR_HANDLE cpu_handles[kSceneDescriptorHandleTypeNum]{};
+  uint32_t texture_num{};
   uint32_t sampler_num{};
-  D3D12_CPU_DESCRIPTOR_HANDLE samplers{};
+  uint32_t resource_num{};
+  ID3D12Resource** resources{};
+  D3D12MA::Allocation** allocations{};
+  ID3D12DescriptorHeap* descriptor_heap{nullptr};
   ID3D12DescriptorHeap* sampler_descriptor_heap{nullptr};
 };
 static const uint32_t kTextureNumPerMaterial = 4;

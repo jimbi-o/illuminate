@@ -68,7 +68,7 @@ RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass
   dynamic_data.camera_pos[2] = 0.15f;
   return dynamic_data;
 }
-void UpdateCamera(const float width, const float height, float camera_pos[3], float camera_focus[3], float* fov_vertical_axis) {
+void UpdateCamera(const float width, const float height, float camera_pos[3], float camera_focus[3]) {
   if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
     RotateCameraImpl(width, height, camera_pos, camera_focus);
   }
