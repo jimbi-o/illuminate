@@ -72,21 +72,23 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
     command_list->SetGraphicsRootDescriptorTable(1 + pass_vars->gpu_handle_num, args_per_pass->gpu_handles_sampler[0]);
   }
   const auto scene_data = args_common->scene_data;
-  uint32_t prev_material_index = ~0U;
   auto prev_variation_index = MaterialList::kInvalidIndex;
   uint32_t vertex_buffer_type_num = 0;
   uint32_t vertex_buffer_type_index[kVertexBufferTypeNum]{};
   D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[kVertexBufferTypeNum]{};
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     if (scene_data->model_instance_num[i] == 0) { continue; }
-    command_list->SetGraphicsRoot32BitConstant(0, scene_data->transform_offset[i], 0);
     for (uint32_t j = 0; j < scene_data->model_submesh_num[i]; j++) {
       const auto submesh_index = scene_data->model_submesh_index[i][j];
-      const auto material_index = scene_data->submesh_material_index[submesh_index];
-      if (material_index != prev_material_index && pass_vars->use_material) {
-        command_list->SetGraphicsRoot32BitConstant(0, material_index * sizeof(shader::AlbedoIndexList), 1);
-        logtrace("mesh transform material.mesh:{}-{} material:{}->{}", i, j, prev_material_index, material_index);
-        prev_material_index = material_index;
+      {
+        uint32_t val_num = 1;
+        uint32_t val[] = {scene_data->transform_offset[i], 0};
+        if (pass_vars->use_material) {
+          const auto material_index = scene_data->submesh_material_index[submesh_index];
+          val[1] = material_index * sizeof(shader::AlbedoIndexList);
+          val_num++;
+        }
+        command_list->SetGraphicsRoot32BitConstants(0, val_num, &val[0], 0);
       }
       auto variation_index = FindMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index]);
       if (variation_index == MaterialList::kInvalidIndex) {
