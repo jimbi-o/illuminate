@@ -9,10 +9,8 @@ class MemoryAllocationJanitor;
 struct ResourceTransfer;
 enum SceneDescriptorHandle {
   kSceneDescriptorTransform = 0,
-  kSceneDescriptorMaterialIndices,
   kSceneDescriptorMaterialCommonSettings,
-  kSceneDescriptorColors,
-  kSceneDescriptorAlphaCutoff,
+  kSceneDescriptorMaterialIndices,
   kSceneDescriptorTexture,
   kSceneDescriptorSampler,
   kSceneDescriptorHandleTypeNum,

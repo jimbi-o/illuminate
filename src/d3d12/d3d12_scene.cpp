@@ -254,31 +254,6 @@ void SetTransformValues(const tinygltf::Model& model, SceneData* scene_data, con
   }
   UnmapResource(resource);
 }
-auto IsColorSame(const float* a, const double* b) {
-  const auto epsilon = static_cast<double>(std::numeric_limits<float>::epsilon());
-  for (uint32_t i = 0; i < 4; i++) {
-    if (std::abs(a[i] - b[i]) > epsilon) { return false; }
-  }
-  return true;
-}
-void SetColor(const double* src, float* dst) {
-  for (uint32_t i = 0; i < 4; i++) {
-    dst[i] = static_cast<float>(src[i]);
-  }
-}
-auto FindAlbedoFactorIndex(const std::array<float, 4>* colors, const uint32_t num, const std::vector<double>& finding_color) {
-  for (uint32_t i = 0; i < num; i++) {
-    if (IsColorSame(colors[i].data(), finding_color.data())) { return i; }
-  }
-  return ~0U;
-}
-auto FindFloat(const float* list, const uint32_t num, const double finding_value) {
-  const auto epsilon = static_cast<double>(std::numeric_limits<float>::epsilon());
-  for (uint32_t i = 0; i < num; i++) {
-    if (std::abs(list[i] - finding_value <= epsilon)) { return i; }
-  }
-  return ~0U;
-}
 auto GetRawBufferDesc(const uint32_t num, const uint32_t stride) {
   return D3D12_SHADER_RESOURCE_VIEW_DESC {
     .Format = DXGI_FORMAT_R32_TYPELESS,
@@ -287,6 +262,19 @@ auto GetRawBufferDesc(const uint32_t num, const uint32_t stride) {
     .Buffer = {
       .FirstElement = 0,
       .NumElements = num * stride / 4, // 4=R32
+      .StructureByteStride = 0,
+      .Flags = D3D12_BUFFER_SRV_FLAG_RAW,
+    }
+  };
+}
+auto GetRawBufferDesc(const uint32_t size_in_bytes) {
+  return D3D12_SHADER_RESOURCE_VIEW_DESC {
+    .Format = DXGI_FORMAT_R32_TYPELESS,
+    .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+    .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+    .Buffer = {
+      .FirstElement = 0,
+      .NumElements = size_in_bytes / 4, // 4=R32
       .StructureByteStride = 0,
       .Flags = D3D12_BUFFER_SRV_FLAG_RAW,
     }
@@ -314,60 +302,48 @@ auto GetConstantBufferDesc(const D3D12_GPU_VIRTUAL_ADDRESS&  addr, const uint32_
 auto GetMaterialNum(const tinygltf::Model& model) {
   return GetUint32(model.materials.size());
 }
+auto SetTextureSamplerIndex(const std::vector<tinygltf::Texture>& textures, const uint32_t texture_index, const uint32_t tex_default, const uint32_t sampler_default, const uint32_t texture_offset, const uint32_t sampler_offset, uint32_t* tex, uint32_t* sampler) {
+  if (texture_index == -1) {
+    *tex = tex_default;
+    *sampler = sampler_default;
+    return;
+  }
+  const auto& texture_info = textures[texture_index];
+  *tex = (texture_info.source == -1) ? tex_default : texture_info.source + texture_offset;
+  *sampler = (texture_info.source == -1) ? sampler_default : texture_info.sampler + sampler_offset;
+}
 auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index, SceneData* scene_data, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, const D3D12_CPU_DESCRIPTOR_HANDLE descriptor_heap_head_addr, const uint32_t descriptor_handle_increment_size, const uint32_t descriptor_index_offset, ResourceTransfer* resource_transfer) {
-  shader::MaterialCommonSettings material_common_settings{}; // TODO fill
   const auto material_num = GetMaterialNum(model);
+  shader::MaterialCommonSettings material_common_settings{};
+  material_common_settings.misc_offset = static_cast<uint32_t>(sizeof(shader::AlbedoInfo)) * material_num;
+  const auto material_index_list_size = material_common_settings.misc_offset + static_cast<uint32_t>(sizeof(shader::MaterialMiscInfo)) * material_num;
   auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto albedo_indices = AllocateArray<shader::AlbedoIndexList>(&tmp_allocator, material_num);
-  auto material_colors = AllocateArray<std::array<float, 4>>(&tmp_allocator, material_num);
-  auto alpha_cutoffs = AllocateArray<float>(&tmp_allocator, material_num);
-  uint32_t next_color_index = 0;
-  uint32_t next_alpha_cutoff_index = 0;
+  auto material_index_list = tmp_allocator.Allocate(material_index_list_size);
+  auto albedo_infos = static_cast<shader::AlbedoInfo*>(material_index_list);
+  auto misc_infos = static_cast<shader::MaterialMiscInfo*>(SucceedPtr(material_index_list, material_common_settings.misc_offset));
   const uint32_t texture_offset = 1; // white texture at texture array head
   const uint32_t sampler_offset = 1; // trilinear texture at sampler array head
   for (uint32_t i = 0; i < material_num; i++) {
     const auto& src_material = model.materials[i];
-    auto& albedo_index = albedo_indices[i];
-    {
-      // albedo factor
-      auto albedo_factor_index = FindAlbedoFactorIndex(material_colors, next_color_index, src_material.pbrMetallicRoughness.baseColorFactor);
-      if (albedo_factor_index == ~0U) {
-        SetColor(src_material.pbrMetallicRoughness.baseColorFactor.data(), material_colors[next_color_index].data());
-        albedo_factor_index = next_color_index;
-        next_color_index++;
-        logtrace("material:{} albedo index:{} color:[{},{},{}]", i, albedo_factor_index, material_colors[next_color_index][0], material_colors[next_color_index][1], material_colors[next_color_index][2]);
-      }
-      albedo_index.factor = albedo_factor_index;
-      logtrace("material:{} albedo:{}", i, albedo_factor_index);
-    }
-    {
-      // albedo tex, sampler
-      albedo_index.tex = 0;
-      albedo_index.sampler = 0;
-      const auto& texture_index = src_material.pbrMetallicRoughness.baseColorTexture.index;
-      if (texture_index != -1) {
-        const auto& texture_info = model.textures[texture_index];
-        if (texture_info.source != -1) {
-          albedo_index.tex = texture_info.source + texture_offset;
-        }
-        if (texture_info.sampler != -1) {
-          albedo_index.sampler = texture_info.sampler + sampler_offset;
-        }
-        logtrace("material:{} texture:{} sampler:{}", i, texture_info.source, texture_info.sampler);
-      }
-    }
-    {
-      // alpha cutoff
-      auto alpha_cutoff_index = FindFloat(alpha_cutoffs, next_alpha_cutoff_index, src_material.alphaCutoff);
-      if (alpha_cutoff_index > next_alpha_cutoff_index) {
-        alpha_cutoffs[next_alpha_cutoff_index] = static_cast<float>(src_material.alphaCutoff);
-        alpha_cutoff_index = next_alpha_cutoff_index;
-        next_alpha_cutoff_index++;
-      }
-      assert(src_material.alphaMode.compare("MASK") != 0 || alpha_cutoff_index < material_num);
-      albedo_index.alpha_cutoff = alpha_cutoff_index;
-      logtrace("material:{} alpha_cutoff:{}", i, alpha_cutoff_index);
-    }
+    auto& albedo_info = albedo_infos[i];
+    albedo_info.factor.x = static_cast<float>(src_material.pbrMetallicRoughness.baseColorFactor[0]);
+    albedo_info.factor.y = static_cast<float>(src_material.pbrMetallicRoughness.baseColorFactor[1]);
+    albedo_info.factor.z = static_cast<float>(src_material.pbrMetallicRoughness.baseColorFactor[2]);
+    albedo_info.factor.w = static_cast<float>(src_material.pbrMetallicRoughness.baseColorFactor[3]);
+    SetTextureSamplerIndex(model.textures, src_material.pbrMetallicRoughness.baseColorTexture.index, 0, 0, texture_offset, sampler_offset, &albedo_info.tex, &albedo_info.sampler);
+    albedo_info.alpha_cutoff = static_cast<float>(src_material.alphaCutoff);
+    auto& misc_info = misc_infos[i];
+    misc_info.metallic_factor = static_cast<float>(src_material.pbrMetallicRoughness.metallicFactor);
+    misc_info.roughness_factor = static_cast<float>(src_material.pbrMetallicRoughness.roughnessFactor);
+    SetTextureSamplerIndex(model.textures, src_material.pbrMetallicRoughness.baseColorTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.metallic_roughness_tex, &misc_info.metallic_roughness_sampler);
+    misc_info.normal_scale = static_cast<float>(src_material.normalTexture.scale);
+    SetTextureSamplerIndex(model.textures, src_material.normalTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.normal_tex, &misc_info.normal_sampler);
+    misc_info.occlusion_strength = static_cast<float>(src_material.occlusionTexture.strength);
+    SetTextureSamplerIndex(model.textures, src_material.occlusionTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.occlusion_tex, &misc_info.occlusion_sampler);
+    SetTextureSamplerIndex(model.textures, src_material.emissiveTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.emissive_tex, &misc_info.emissive_sampler);
+    misc_info.emissive_factor.x = static_cast<float>(src_material.emissiveFactor[0]);
+    misc_info.emissive_factor.y = static_cast<float>(src_material.emissiveFactor[1]);
+    misc_info.emissive_factor.z = static_cast<float>(src_material.emissiveFactor[2]);
   }
   auto handle_index = descriptor_index_offset;
   {
@@ -386,49 +362,15 @@ auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     handle_index++;
   }
   {
-    const auto albedo_index_stride = GetUint32(sizeof(shader::AlbedoIndexList));
-    const auto size = albedo_index_stride * material_num;
-    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(size, "material_index_list_U", "material_index_list",
+    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(material_index_list_size, "material_index_list_U", "material_index_list",
                                                                            frame_index, scene_data, buffer_allocator, resource_transfer);
-    memcpy(MapResource(resource_upload, size), albedo_indices, size);
+    memcpy(MapResource(resource_upload, material_index_list_size), material_index_list, material_index_list_size);
     UnmapResource(resource_upload);
-    const auto resource_desc = GetRawBufferDesc(material_num, albedo_index_stride);
+    const auto resource_desc = GetRawBufferDesc(material_index_list_size);
     const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
     device->CreateShaderResourceView(resource_default, &resource_desc, handle);
     scene_data->cpu_handles[kSceneDescriptorMaterialIndices].ptr = handle.ptr;
     logtrace("material index handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(resource_default), scene_data->cpu_handles[kSceneDescriptorMaterialIndices].ptr);
-    handle_index++;
-  }
-  {
-    const auto color_stride_size = GetUint32(sizeof(float)) * 4;
-    const auto size = color_stride_size * next_color_index;
-    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(size, "color_U", "color", frame_index, scene_data, buffer_allocator, resource_transfer);
-    auto color_dst = MapResource(resource_upload, size);
-    for (uint32_t i = 0; i < next_color_index; i++) {
-      memcpy(color_dst, material_colors[i].data(), sizeof(float) * 4);
-      color_dst = SucceedPtr(color_dst, color_stride_size);
-    }
-    UnmapResource(resource_upload);
-    const auto resource_desc = GetArrayBufferDesc(next_color_index, color_stride_size);
-    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
-    device->CreateShaderResourceView(resource_default, &resource_desc, handle);
-    scene_data->cpu_handles[kSceneDescriptorColors].ptr = handle.ptr;
-    logtrace("color handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(resource_default), scene_data->cpu_handles[kSceneDescriptorColors].ptr);
-    handle_index++;
-  }
-  {
-    const auto alpha_cutoff_stride_size = GetUint32(sizeof(float));
-    const auto size = alpha_cutoff_stride_size * std::max(next_alpha_cutoff_index, 1U);
-    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(size, "alpha_cutoffs_U", "alpha_cutoffs", frame_index, scene_data, buffer_allocator, resource_transfer);
-    if (next_alpha_cutoff_index > 0) {
-      memcpy(MapResource(resource_upload, size), alpha_cutoffs, size);
-      UnmapResource(resource_upload);
-    }
-    const auto resource_desc = GetArrayBufferDesc(std::max(next_alpha_cutoff_index, 1U), alpha_cutoff_stride_size);
-    const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, descriptor_handle_increment_size, handle_index);
-    device->CreateShaderResourceView(resource_default, &resource_desc, handle);
-    scene_data->cpu_handles[kSceneDescriptorAlphaCutoff].ptr = handle.ptr;
-    logtrace("alpha cutoff handle index:{} resource:{:x} handle:{:x}", handle_index, reinterpret_cast<std::uintptr_t>(resource_default), scene_data->cpu_handles[kSceneDescriptorAlphaCutoff].ptr);
     handle_index++;
   }
   return handle_index - descriptor_index_offset;
@@ -766,10 +708,8 @@ void ReleaseSceneData(SceneData* scene_data) {
 namespace {
 static const char* scene_buffer_names[] = {
   "transforms",
-  "material_indices",
   "material_common_settings",
-  "colors",
-  "alpha_cutoffs",
+  "material_indices",
   "textures",
   "samplers",
 };

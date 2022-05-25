@@ -27,13 +27,11 @@
 "
 ConstantBuffer<MaterialCommonSettings> material_common_settings : register(b2);
 ByteAddressBuffer  material_index_list : register(t1);
-Buffer<float4>     colors              : register(t2);
-Buffer<float>      alpha_cutoffs       : register(t3);
 Texture2D<float4>  textures[]          : register(t4);
 sampler            samplers[]          : register(s0);
 [RootSignature(BrdfForwardRootsig)]
 float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
-  AlbedoInfo albedo_info = GetAlbedoInfo(model_info.material_offset, material_index_list, colors, alpha_cutoffs, textures, samplers);
+  Albedo albedo_info = GetAlbedoInfo(model_info.material_offset, material_index_list, textures, samplers);
   float4 color = albedo_info.tex.Sample(albedo_info.sampler, input.uv0);
   float4 albedo = color * albedo_info.factor;
 #if OPACITY_TYPE == OPACITY_TYPE_ALPHA_MASK

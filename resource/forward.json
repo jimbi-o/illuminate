@@ -109,16 +109,6 @@
           "index_offset" : 1
         },
         {
-          "name": "colors",
-          "state": "srv_ps",
-          "index_offset" : 1
-        },
-        {
-          "name": "alpha_cutoffs",
-          "state": "srv_ps",
-          "index_offset" : 1
-        },
-        {
           "name": "textures",
           "state": "srv_ps",
           "index_offset" : 2

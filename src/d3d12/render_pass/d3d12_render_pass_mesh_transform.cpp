@@ -84,8 +84,7 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
         uint32_t val_num = 1;
         uint32_t val[] = {scene_data->transform_offset[i], 0};
         if (pass_vars->use_material) {
-          const auto material_index = scene_data->submesh_material_index[submesh_index];
-          val[1] = material_index * sizeof(shader::AlbedoIndexList);
+          val[1] = scene_data->submesh_material_index[submesh_index];
           val_num++;
         }
         command_list->SetGraphicsRoot32BitConstants(0, val_num, &val[0], 0);
