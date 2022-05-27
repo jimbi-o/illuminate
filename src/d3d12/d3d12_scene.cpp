@@ -312,6 +312,10 @@ auto SetTextureSamplerIndex(const std::vector<tinygltf::Texture>& textures, cons
   *tex = (texture_info.source == -1) ? tex_default : texture_info.source + texture_offset;
   *sampler = (texture_info.source == -1) ? sampler_default : texture_info.sampler + sampler_offset;
 }
+static const uint32_t kWhiteTextureIndex = 0;
+static const uint32_t kBlackTextureIndex = 1;
+static const uint32_t kDefaultNormalTextureIndex = 2;
+static const uint32_t kDefaultTextureNum = 3;
 auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index, SceneData* scene_data, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, const D3D12_CPU_DESCRIPTOR_HANDLE descriptor_heap_head_addr, const uint32_t descriptor_handle_increment_size, const uint32_t descriptor_index_offset, ResourceTransfer* resource_transfer) {
   const auto material_num = GetMaterialNum(model);
   shader::MaterialCommonSettings material_common_settings{};
@@ -321,7 +325,7 @@ auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
   auto material_index_list = tmp_allocator.Allocate(material_index_list_size);
   auto albedo_infos = static_cast<shader::AlbedoInfo*>(material_index_list);
   auto misc_infos = static_cast<shader::MaterialMiscInfo*>(SucceedPtr(material_index_list, material_common_settings.misc_offset));
-  const uint32_t texture_offset = 1; // white texture at texture array head
+  const uint32_t texture_offset = kDefaultTextureNum; // white, black & default normal texture at texture array head
   const uint32_t sampler_offset = 1; // trilinear texture at sampler array head
   for (uint32_t i = 0; i < material_num; i++) {
     const auto& src_material = model.materials[i];
@@ -330,17 +334,17 @@ auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     albedo_info.factor.y = static_cast<float>(src_material.pbrMetallicRoughness.baseColorFactor[1]);
     albedo_info.factor.z = static_cast<float>(src_material.pbrMetallicRoughness.baseColorFactor[2]);
     albedo_info.factor.w = static_cast<float>(src_material.pbrMetallicRoughness.baseColorFactor[3]);
-    SetTextureSamplerIndex(model.textures, src_material.pbrMetallicRoughness.baseColorTexture.index, 0, 0, texture_offset, sampler_offset, &albedo_info.tex, &albedo_info.sampler);
+    SetTextureSamplerIndex(model.textures, src_material.pbrMetallicRoughness.baseColorTexture.index, kWhiteTextureIndex, 0, texture_offset, sampler_offset, &albedo_info.tex, &albedo_info.sampler);
     albedo_info.alpha_cutoff = static_cast<float>(src_material.alphaCutoff);
     auto& misc_info = misc_infos[i];
     misc_info.metallic_factor = static_cast<float>(src_material.pbrMetallicRoughness.metallicFactor);
     misc_info.roughness_factor = static_cast<float>(src_material.pbrMetallicRoughness.roughnessFactor);
-    SetTextureSamplerIndex(model.textures, src_material.pbrMetallicRoughness.baseColorTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.metallic_roughness_tex, &misc_info.metallic_roughness_sampler);
+    SetTextureSamplerIndex(model.textures, src_material.pbrMetallicRoughness.metallicRoughnessTexture.index, kWhiteTextureIndex, 0, texture_offset, sampler_offset, &misc_info.metallic_roughness_tex, &misc_info.metallic_roughness_sampler);
     misc_info.normal_scale = static_cast<float>(src_material.normalTexture.scale);
-    SetTextureSamplerIndex(model.textures, src_material.normalTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.normal_tex, &misc_info.normal_sampler);
+    SetTextureSamplerIndex(model.textures, src_material.normalTexture.index, kDefaultNormalTextureIndex, 0, texture_offset, sampler_offset, &misc_info.normal_tex, &misc_info.normal_sampler);
     misc_info.occlusion_strength = static_cast<float>(src_material.occlusionTexture.strength);
-    SetTextureSamplerIndex(model.textures, src_material.occlusionTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.occlusion_tex, &misc_info.occlusion_sampler);
-    SetTextureSamplerIndex(model.textures, src_material.emissiveTexture.index, 0, 0, texture_offset, sampler_offset, &misc_info.emissive_tex, &misc_info.emissive_sampler);
+    SetTextureSamplerIndex(model.textures, src_material.occlusionTexture.index, kBlackTextureIndex, 0, texture_offset, sampler_offset, &misc_info.occlusion_tex, &misc_info.occlusion_sampler);
+    SetTextureSamplerIndex(model.textures, src_material.emissiveTexture.index, kBlackTextureIndex, 0, texture_offset, sampler_offset, &misc_info.emissive_tex, &misc_info.emissive_sampler);
     misc_info.emissive_factor.x = static_cast<float>(src_material.emissiveFactor[0]);
     misc_info.emissive_factor.y = static_cast<float>(src_material.emissiveFactor[1]);
     misc_info.emissive_factor.z = static_cast<float>(src_material.emissiveFactor[2]);
@@ -376,7 +380,7 @@ auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
   return handle_index - descriptor_index_offset;
 }
 auto GetTextureNum(const tinygltf::Model& model) {
-  return GetUint32(model.images.size()) + 1;
+  return GetUint32(model.images.size()) + kDefaultTextureNum;
 }
 D3D12_SHADER_RESOURCE_VIEW_DESC GetSrvDescTexture2D(const D3D12_RESOURCE_DESC1& desc) {
   assert(desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
@@ -398,12 +402,15 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
   for (uint32_t i = 0; i < texture_num; i++) {
     auto tmp_allocator = GetTemporalMemoryAllocator();
     std::filesystem::path path;
-    if (i == 0) {
-      // default texture
+    if (i == kWhiteTextureIndex) {
       path = "textures/white.dds";
+    } else if (i == kBlackTextureIndex) {
+      path = "textures/black.dds";
+    } else if (i == kDefaultNormalTextureIndex) {
+      path = "textures/normal.dds";
     } else {
       path = gltf_path;
-      path.replace_filename(model.images[i-1].uri);
+      path.replace_filename(model.images[i-kDefaultTextureNum].uri);
       path.replace_extension(".dds");
     }
     auto texture_creation_info = GatherTextureCreationInfo(device, path.wstring().c_str(), &tmp_allocator);
