@@ -1,32 +1,42 @@
 #ifndef ILLUMINATE_RESOURCE_SHADER_BRDF_HLSLI
 #define ILLUMINATE_RESOURCE_SHADER_BRDF_HLSLI
-#include "shader/include/shader_defines.h"
-// https://github.com/KhronosGroup/glTF-Sample-Viewer/blob/master/source/Renderer/shaders/brdf.glsl
-struct MaterialMisc {
-  float3 normal;
-  float  occlusion;
-  float3 emissive;
-  float  metallic;
-  float  roughness;
-};
-void GetColorInfo(uint material_offset, ByteAddressBuffer material_index_list, Texture2D<float4> textures[], sampler samplers[], float2 uv, out float4 color, out float alpha_cutoff) {
-  AlbedoInfo albedo_info = material_index_list.Load<AlbedoInfo>(material_offset * sizeof(AlbedoInfo));
-  color = textures[albedo_info.tex].Sample(samplers[albedo_info.sampler], uv);
-  alpha_cutoff = albedo_info.alpha_cutoff;
-  color *= albedo_info.factor;
+#define PI 3.14159265359f
+#define RCP_PI 1.0f / PI
+//https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#acknowledgments AppendixB
+float Power5(const float f) {
+  float val = f * f; // f^2
+  val *= val; // f^4
+  return val * f;
 }
-MaterialMisc GetMaterialMisc(uint material_offset, uint misc_offset, ByteAddressBuffer material_index_list, Texture2D<float4> textures[], sampler samplers[], float2 uv) {
-  MaterialMiscInfo misc_info = material_index_list.Load<MaterialMiscInfo>(material_offset * sizeof(MaterialMiscInfo) + misc_offset);
-  MaterialMisc info;
-  float4 metallic_roughness_tex_val = textures[misc_info.metallic_roughness_tex].Sample(samplers[misc_info.metallic_roughness_sampler], uv);
-  info.normal    = textures[misc_info.normal_tex].Sample(samplers[misc_info.normal_sampler], uv).rgb;
-  info.emissive  = textures[misc_info.emissive_tex].Sample(samplers[misc_info.emissive_sampler], uv).rgb;
-  info.occlusion = textures[misc_info.occlusion_tex].Sample(samplers[misc_info.occlusion_sampler], uv).r;
-  info.normal    = normalize((info.normal * 2.0f - 1.0f) * float3(misc_info.normal_scale, misc_info.normal_scale, 1.0f));
-  info.metallic  = metallic_roughness_tex_val.b * misc_info.metallic_factor;
-  info.roughness = metallic_roughness_tex_val.g * misc_info.roughness_factor;
-  info.emissive *= misc_info.emissive_factor;
-  info.occlusion = 1.0f + misc_info.occlusion_strength * (info.occlusion - 1.0f);
-  return info;
+float3 Fresnel(float3 f0, float vh) {
+  return f0 + (1.0f - f0) * Power5(1.0f - vh);
+}
+float VisTrowbridgeReitz(float alpha_sq, float nl, float nv) { // aka GGX
+  const float one_minus_alpha_sq = 1.0f - alpha_sq;
+  const float v = nl * sqrt(nv * nv * one_minus_alpha_sq + alpha_sq);
+  const float l = nv * sqrt(nl * nl * one_minus_alpha_sq + alpha_sq);
+  const float sum = v + l;
+  if (sum > 0.0f) {
+    return 0.5f * rcp(sum);
+  }
+  return 0.0f;
+}
+float DistributionTrowbridgeReitz(const float alpha_sq, const float nh) { // aka GGX
+  float f = nh * nh * (alpha_sq - 1.0f) + 1.0f;
+  return alpha_sq * rcp(PI * f * f);
+}
+// clamp dot vectors before call
+float3 BrdfDefault(float3 material_color, float metallic, float roughness,
+                   float vh, float nl, float nv, float nh) {
+  const float3 diffuse_color = lerp(material_color, 0.0f, metallic);
+  const float3 f0 = lerp(0.04f, material_color, metallic);
+  const float  alpha = roughness * roughness;
+  const float  alpha_sq = alpha * alpha;
+  const float3 F = Fresnel(f0, vh);
+  const float  V = VisTrowbridgeReitz(alpha_sq, nl, nv);
+  const float  D = DistributionTrowbridgeReitz(alpha_sq, nh);
+  const float3 diffuse = (1.0f - F) * RCP_PI * diffuse_color;
+  const float3 specular = F * V * D;
+  return diffuse + specular;
 }
 #endif

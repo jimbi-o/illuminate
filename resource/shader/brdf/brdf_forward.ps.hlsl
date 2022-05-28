@@ -1,4 +1,7 @@
-#include "shader/brdf/brdf.hlsli"
+#include "brdf.hlsli"
+#include "shader/include/shader_defines.h"
+#include "shader/include/material_defines.hlsli"
+#include "shader/include/material_functions.hlsli"
 #include "shader/mesh_transform/mesh_transform.hlsli"
 #define BrdfForwardRootsig                               \
   "RootFlags(                                            \
