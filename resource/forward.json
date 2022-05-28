@@ -99,6 +99,11 @@
           "state": "srv_non_ps"
         },
         {
+          "name": "light",
+          "state": "cbv",
+          "index_offset" : 1
+        },
+        {
           "name": "material_common_settings",
           "state": "cbv",
           "index_offset" : 1

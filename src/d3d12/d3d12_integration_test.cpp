@@ -398,15 +398,21 @@ auto SetValue(const DirectX::SimpleMath::Vector3& src, shader::float3* dst) {
   dst->y = src.y;
   dst->z = src.z;
 }
-void UpdateSceneCameraBuffer(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_camera_ptr) {
+void UpdateSceneBuffer(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_camera_ptr, void* scene_light_ptr) {
   using namespace DirectX::SimpleMath;
-  const auto lookat_matrix = Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
+  const auto view_matrix = Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
   const auto aspect_ratio = static_cast<float>(buffer_size.width) / buffer_size.height;
   const auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
   shader::SceneCameraData scene_camera{};
-  CopyMatrix(lookat_matrix.m, scene_camera.view_matrix);
+  CopyMatrix(view_matrix.m, scene_camera.view_matrix);
   CopyMatrix(projection_matrix.m, scene_camera.projection_matrix);
   memcpy(scene_camera_ptr, &scene_camera, sizeof(scene_camera));
+  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), view_matrix);
+  light_direction.Normalize();
+  shader::SceneLightData scene_light{};
+  scene_light.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
+  scene_light.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
+  memcpy(scene_light_ptr, &scene_light, sizeof(scene_light));
 }
 auto GetSceneGpuHandlesView(const uint32_t view_num, const D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handles, DescriptorGpu* descriptor_gpu, D3d12Device* device) {
   descriptor_gpu->SetPersistentViewHandleNum(view_num);
@@ -605,7 +611,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       command_queue_frame_signal_sent[j] = true;
     }
     const auto frame_index = i % render_graph.frame_buffer_num;
-    UpdateSceneCameraBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index]);
+    UpdateSceneBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index], scene_cbv_ptr[kSystemBufferLight][frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();

@@ -16,6 +16,7 @@
   DescriptorTable(CBV(b1, numDescriptors=1),             \
                   SRV(t0, numDescriptors=1)),            \
   DescriptorTable(CBV(b2, numDescriptors=1),             \
+                  CBV(b3, numDescriptors=1),             \
                   SRV(t1, numDescriptors=1),             \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
   DescriptorTable(SRV(t2, numDescriptors=unbounded,      \
@@ -25,7 +26,8 @@
                   flags = DESCRIPTORS_VOLATILE),         \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
 "
-ConstantBuffer<MaterialCommonSettings> material_common_settings : register(b2);
+ConstantBuffer<SceneLightData> scene_light                      : register(b2);
+ConstantBuffer<MaterialCommonSettings> material_common_settings : register(b3);
 ByteAddressBuffer  material_index_list : register(t1);
 Texture2D<float4>  textures[]          : register(t2);
 sampler            samplers[]          : register(s0);
@@ -45,5 +47,6 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   normal = normalize(mul(material_misc.normal, m));
   float3 view = normalize(-input.position_vs); // camera is at origin
   float nv = dot(normal, view);
-  return float4(nv, nv, nv, 1.0f);
+  float nl = dot(normal, scene_light.light_direction_vs);
+  return float4(nl * scene_light.light_color.xyz * scene_light.light_color.w * 0.0001f, 1.0f);
 }

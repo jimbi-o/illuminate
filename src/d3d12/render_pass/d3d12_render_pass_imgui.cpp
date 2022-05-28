@@ -35,6 +35,12 @@ void RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]Re
     ImGui::SliderFloat("near_z", &args_common->dynamic_data->near_z, 0.001f, 1.0f, "%.2f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
     ImGui::SliderFloat("far_z", &args_common->dynamic_data->far_z, 1.0f, 10000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
   }
+  {
+    // directional light
+    ImGui::SliderFloat3("light direction", args_common->dynamic_data->light_direction, -1.0f, 1.0f, "%.3f");
+    ImGui::SliderFloat3("light color", args_common->dynamic_data->light_color, 0.0f, 1.0f, "%.3f");
+    ImGui::SliderFloat("light intensity", &args_common->dynamic_data->light_intensity, 0.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+  }
   auto param = static_cast<Param*>(args_per_pass->pass_vars_ptr);
   bool debug_render_selected_buffer = args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_debug_show_selected_buffer];
   ImGui::Checkbox("render selected buffer mode", &debug_render_selected_buffer);
