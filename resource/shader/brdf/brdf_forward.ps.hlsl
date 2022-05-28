@@ -42,5 +42,7 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   float3 normal    = normalize(input.normal);
   float3 tangent   = normalize(input.tangent.xyz);
   float3 bitangent = cross(normal, tangent) * input.tangent.w;
+  float3x3 m = float3x3(tangent, bitangent, normal);
+  normal = normalize(mul(material_misc.normal, m));
   return float4(normal, 1.0f);
 }
