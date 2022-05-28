@@ -24,5 +24,12 @@ constexpr inline void FillMatrix(const double* d, matrix& dst) {
     }
   }
 }
+constexpr inline void FillMatrixTransposed(const double* d, matrix& dst) {
+  for (uint32_t i = 0; i < 4; i++) {
+    for (uint32_t j = 0; j < 4; j++) {
+      dst[i][j] = static_cast<float>(d[j * 4 + i]);
+    }
+  }
+}
 }
 #endif

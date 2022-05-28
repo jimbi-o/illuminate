@@ -89,7 +89,7 @@ void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const
   Matrix transform{};
   const auto& node = model.nodes[node_index];
   if (!node.matrix.empty()) {
-    FillMatrix(node.matrix.data(), transform.m);
+    FillMatrixTransposed(node.matrix.data(), transform.m);
   } else {
     if (!node.scale.empty()) {
       float scale[3]{};

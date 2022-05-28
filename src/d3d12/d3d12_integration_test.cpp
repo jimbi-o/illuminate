@@ -382,6 +382,7 @@ void UpdateSceneCbv(const RenderPassConfigDynamicData& dynamic_data, const Size2
   const auto aspect_ratio = static_cast<float>(buffer_size.width) / buffer_size.height;
   auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
   shader::SceneCbvData scene_cbv{};
+  CopyMatrix(lookat_matrix.m, scene_cbv.view_matrix);
   CopyMatrix((lookat_matrix * projection_matrix).m, scene_cbv.view_projection_matrix);
   memcpy(scene_cbv_ptr, &scene_cbv, sizeof(scene_cbv));
 }

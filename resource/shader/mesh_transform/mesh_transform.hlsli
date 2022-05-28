@@ -2,6 +2,8 @@
 #define ILLUMINATE_RESOURCE_SHADER_MESH_TRANSFORM_HLSLI
 struct MeshTransformVsOutput {
   float4 position : SV_POSITION;
+  float3 normal   : NORMAL;
+  float4 tangent  : TANGENT;
   float2 uv0      : TEXCOORD0;
 };
 struct ModelInfo {

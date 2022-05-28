@@ -1,4 +1,4 @@
-#include "brdf.hlsli"
+#include "shader/brdf/brdf.hlsli"
 #include "shader/include/shader_defines.h"
 #include "shader/include/material_defines.hlsli"
 #include "shader/include/material_functions.hlsli"
@@ -39,5 +39,8 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   if (color.a < alpha_cutoff) { discard; }
 #endif
   MaterialMisc material_misc = GetMaterialMisc(model_info.material_offset, material_common_settings. misc_offset, material_index_list, textures, samplers, input.uv0);
-  return float4(material_misc.emissive, 1.0f);
+  float3 normal    = normalize(input.normal);
+  float3 tangent   = normalize(input.tangent.xyz);
+  float3 bitangent = cross(normal, tangent) * input.tangent.w;
+  return float4(normal, 1.0f);
 }

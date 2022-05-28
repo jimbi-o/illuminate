@@ -12,6 +12,7 @@ struct float4 {
 };
 #endif
 struct SceneCbvData {
+  matrix view_matrix;
   matrix view_projection_matrix;
 };
 struct MaterialCommonSettings {
