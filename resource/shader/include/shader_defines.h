@@ -11,9 +11,11 @@ struct float4 {
   float x, y, z, w;
 };
 #endif
-struct SceneCbvData {
+struct SceneCameraData {
   matrix view_matrix;
   matrix view_projection_matrix;
+};
+struct SceneLightData {
 };
 struct MaterialCommonSettings {
   uint  misc_offset;

@@ -149,7 +149,7 @@
       "execute": true,
       "buffer_list": [
         {
-          "name": "scene_data",
+          "name": "camera",
           "state": "cbv"
         },
         {

@@ -5,9 +5,9 @@ struct VsInput {
   float2 uv : TEXCOORD0;
 #endif
 };
-uint                          transform_offset : register(b0);
-ConstantBuffer<SceneCbvData>  scene_data       : register(b1);
-ByteAddressBuffer             transforms       : register(t0);
+uint transform_offset                      : register(b0);
+ConstantBuffer<SceneCameraData> scene_data : register(b1);
+ByteAddressBuffer transforms               : register(t0);
 [RootSignature(PrezRootsig)]
 PrezVsOutput main(const VsInput input, const uint instance_id : SV_InstanceID)  {
   PrezVsOutput output;

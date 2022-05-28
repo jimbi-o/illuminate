@@ -33,6 +33,19 @@ namespace illuminate {
 namespace {
 static const uint32_t kFrameLoopNum = 100000;
 static const uint32_t kInvalidIndex = ~0U;
+enum SystemBuffer : uint32_t {
+  kSystemBufferCamera = 0,
+  kSystemBufferLight,
+  kSystemBufferNum,
+};
+const char* kSystemBufferNames[] = {
+  "camera",
+  "light",
+};
+const uint32_t kSystemBufferSize[] = {
+  AlignAddress(GetUint32(sizeof(shader::SceneCameraData)), 256),
+  AlignAddress(GetUint32(sizeof(shader::SceneLightData)), 256),
+};
 auto GetTestJson(const char* const filename) {
   std::ifstream file(filename);
   nlohmann::json json;
@@ -60,9 +73,10 @@ auto AddSystemBuffers(nlohmann::json* json) {
     buffer_list.push_back(buffer_json);
   }
   {
+    static_assert(std::size(kSystemBufferNames) == kSystemBufferNum);
+    static_assert(std::size(kSystemBufferSize) == kSystemBufferNum);
     auto buffer_json = R"(
     {
-      "name": "scene_data",
       "frame_buffered": true,
       "format": "UNKNOWN",
       "heap_type": "upload",
@@ -71,8 +85,11 @@ auto AddSystemBuffers(nlohmann::json* json) {
       "initial_state": "generic_read"
     }
     )"_json;
-    buffer_json["width"] = AlignAddress(sizeof(shader::SceneCbvData), 256);
-    buffer_list.push_back(buffer_json);
+    for (uint32_t i = 0; i < kSystemBufferNum; i++) {
+      buffer_json["name"]  = kSystemBufferNames[i];
+      buffer_json["width"] = kSystemBufferSize[i];
+      buffer_list.push_back(buffer_json);
+    }
   }
 }
 auto GetRenderPassSwapchainState(const nlohmann::json& render_pass) {
@@ -376,15 +393,15 @@ auto PrepareSceneCbvBuffer(BufferList* buffer_list, const uint32_t frame_buffer_
   }
   return ptr_list;
 }
-void UpdateSceneCbv(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_cbv_ptr) {
+void UpdateSceneCameraBuffer(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_camera_ptr) {
   using namespace DirectX::SimpleMath;
   const auto lookat_matrix = Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
   const auto aspect_ratio = static_cast<float>(buffer_size.width) / buffer_size.height;
   auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
-  shader::SceneCbvData scene_cbv{};
-  CopyMatrix(lookat_matrix.m, scene_cbv.view_matrix);
-  CopyMatrix((lookat_matrix * projection_matrix).m, scene_cbv.view_projection_matrix);
-  memcpy(scene_cbv_ptr, &scene_cbv, sizeof(scene_cbv));
+  shader::SceneCameraData scene_camera{};
+  CopyMatrix(lookat_matrix.m, scene_camera.view_matrix);
+  CopyMatrix((lookat_matrix * projection_matrix).m, scene_camera.view_projection_matrix);
+  memcpy(scene_camera_ptr, &scene_camera, sizeof(scene_camera));
 }
 auto GetSceneGpuHandlesView(const uint32_t view_num, const D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handles, DescriptorGpu* descriptor_gpu, D3d12Device* device) {
   descriptor_gpu->SetPersistentViewHandleNum(view_num);
@@ -419,7 +436,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
-  uint32_t scene_cbv_buffer_allocation_index{kInvalidIndex};
+  uint32_t system_buffer_index_list[kSystemBufferNum]{};
+  std::fill(system_buffer_index_list, system_buffer_index_list + kSystemBufferNum, kInvalidIndex);
   MaterialList material_list{};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
   char** render_pass_name{nullptr};
@@ -510,8 +528,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (str.compare("swapchain") == 0) {
         swapchain_buffer_allocation_index = i;
       }
-      if (scene_cbv_buffer_allocation_index == kInvalidIndex && str.compare("scene_data") == 0) {
-        scene_cbv_buffer_allocation_index = buffer_config_index;
+      for (uint32_t j = 0; j < kSystemBufferNum; j++) {
+        if (system_buffer_index_list[j] != kInvalidIndex) { continue; }
+        if (str.compare(kSystemBufferNames[j]) == 0) {
+          system_buffer_index_list[j] = buffer_config_index;
+          break;
+        }
       }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
@@ -562,7 +584,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   const auto scene_gpu_handles_view = GetSceneGpuHandlesView(scene_data.texture_num, scene_data.cpu_handles[kSceneDescriptorTexture], &descriptor_gpu, device.Get());
   const auto scene_gpu_handles_sampler = GetSceneGpuHandlesSampler(scene_data.sampler_num, scene_data.cpu_handles[kSceneDescriptorSampler], &descriptor_gpu, device.Get());
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
-  auto scene_cbv_ptr = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, scene_cbv_buffer_allocation_index, static_cast<uint32_t>(render_graph.buffer_list[scene_cbv_buffer_allocation_index].width), &allocator);
+  void** scene_cbv_ptr[kSystemBufferNum]{};
+  for (uint32_t i = 0; i < kSystemBufferNum; i++) {
+    scene_cbv_ptr[i] = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, system_buffer_index_list[i], kSystemBufferSize[i], &allocator);
+  }
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
@@ -575,7 +600,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       command_queue_frame_signal_sent[j] = true;
     }
     const auto frame_index = i % render_graph.frame_buffer_num;
-    UpdateSceneCbv(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[frame_index]);
+    UpdateSceneCameraBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
     command_list_set.SucceedFrame();
