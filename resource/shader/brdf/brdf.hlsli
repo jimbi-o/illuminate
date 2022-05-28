@@ -25,9 +25,8 @@ float DistributionTrowbridgeReitz(const float alpha_sq, const float nh) { // aka
   float f = nh * nh * (alpha_sq - 1.0f) + 1.0f;
   return alpha_sq * rcp(PI * f * f);
 }
-// clamp dot vectors before call
-float3 BrdfDefault(float3 material_color, float metallic, float roughness,
-                   float vh, float nl, float nv, float nh) {
+// clamp dot values before call
+float3 BrdfDefault(float3 material_color, float metallic, float roughness, float vh, float nl, float nv, float nh) {
   const float3 diffuse_color = lerp(material_color, 0.0f, metallic);
   const float3 f0 = lerp(0.04f, material_color, metallic);
   const float  alpha = roughness * roughness;

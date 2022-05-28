@@ -14,8 +14,7 @@
   ),                                                     \
   RootConstants(num32BitConstants=2, b0),                \
   DescriptorTable(CBV(b1, numDescriptors=1),             \
-                  SRV(t0, numDescriptors=1),             \
-                  visibility=SHADER_VISIBILITY_VERTEX),  \
+                  SRV(t0, numDescriptors=1)),            \
   DescriptorTable(CBV(b2, numDescriptors=1),             \
                   SRV(t1, numDescriptors=1),             \
                   visibility=SHADER_VISIBILITY_PIXEL),   \
@@ -44,5 +43,7 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   float3 bitangent = cross(normal, tangent) * input.tangent.w;
   float3x3 m = float3x3(tangent, bitangent, normal);
   normal = normalize(mul(material_misc.normal, m));
-  return float4(normal, 1.0f);
+  float3 view = normalize(-input.position_vs); // camera is at origin
+  float nv = dot(normal, view);
+  return float4(nv, nv, nv, 1.0f);
 }

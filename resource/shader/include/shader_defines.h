@@ -13,7 +13,7 @@ struct float4 {
 #endif
 struct SceneCameraData {
   matrix view_matrix;
-  matrix view_projection_matrix;
+  matrix projection_matrix;
 };
 struct SceneLightData {
 };

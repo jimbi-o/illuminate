@@ -393,14 +393,19 @@ auto PrepareSceneCbvBuffer(BufferList* buffer_list, const uint32_t frame_buffer_
   }
   return ptr_list;
 }
+auto SetValue(const DirectX::SimpleMath::Vector3& src, shader::float3* dst) {
+  dst->x = src.x;
+  dst->y = src.y;
+  dst->z = src.z;
+}
 void UpdateSceneCameraBuffer(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_camera_ptr) {
   using namespace DirectX::SimpleMath;
   const auto lookat_matrix = Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
   const auto aspect_ratio = static_cast<float>(buffer_size.width) / buffer_size.height;
-  auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
+  const auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
   shader::SceneCameraData scene_camera{};
   CopyMatrix(lookat_matrix.m, scene_camera.view_matrix);
-  CopyMatrix((lookat_matrix * projection_matrix).m, scene_camera.view_projection_matrix);
+  CopyMatrix(projection_matrix.m, scene_camera.projection_matrix);
   memcpy(scene_camera_ptr, &scene_camera, sizeof(scene_camera));
 }
 auto GetSceneGpuHandlesView(const uint32_t view_num, const D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handles, DescriptorGpu* descriptor_gpu, D3d12Device* device) {

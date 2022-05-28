@@ -13,7 +13,8 @@ PrezVsOutput main(const VsInput input, const uint instance_id : SV_InstanceID)  
   PrezVsOutput output;
   const matrix world_matrix = transforms.Load<matrix>((transform_offset + instance_id) * sizeof(matrix));
   output.position = mul(float4(input.position, 1.0f), world_matrix);
-  output.position = mul(output.position, scene_data.view_projection_matrix);
+  output.position = mul(output.position, scene_data.view_matrix);
+  output.position = mul(output.position, scene_data.projection_matrix);
 #if OPACITY_TYPE == OPACITY_TYPE_ALPHA_MASK
   output.uv = input.uv;
 #endif
