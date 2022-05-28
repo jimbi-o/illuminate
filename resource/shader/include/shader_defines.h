@@ -18,6 +18,7 @@ struct SceneCameraData {
 struct SceneLightData {
   float4 light_color;
   float3 light_direction_vs;
+  float  exposure_rate; // to be removed later
 };
 struct MaterialCommonSettings {
   uint  misc_offset;

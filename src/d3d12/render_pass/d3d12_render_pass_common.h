@@ -34,7 +34,7 @@ struct RenderPassConfigDynamicData {
   float near_z{0.001f};
   float far_z{1000.0f};
   float light_direction[3]{1.0f,0.0f,0.0f};
-  float light_color[3]{1.0f,0.0f,0.0f};
+  float light_color[3]{1.0f,1.0f,1.0f};
   float light_intensity{10000.0f};
 };
 struct RenderPassFuncArgsRenderCommon {

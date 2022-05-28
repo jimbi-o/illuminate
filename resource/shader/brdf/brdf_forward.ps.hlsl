@@ -46,7 +46,11 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   float3x3 m = float3x3(tangent, bitangent, normal);
   normal = normalize(mul(material_misc.normal, m));
   float3 view = normalize(-input.position_vs); // camera is at origin
-  float nv = dot(normal, view);
-  float nl = dot(normal, scene_light.light_direction_vs);
-  return float4(nl * scene_light.light_color.xyz * scene_light.light_color.w * 0.0001f, 1.0f);
+  float3 h = normalize(scene_light.light_direction_vs + view); // half vector
+  float vh = clamp(dot(normal, h), 0.0f, 1.0f);
+  float nl = clamp(dot(normal, scene_light.light_direction_vs), 0.0f, 1.0f);
+  float nv = clamp(dot(normal, view), 0.0f, 1.0f);
+  float nh = clamp(dot(normal, h), 0.0f, 1.0f);
+  float3 brdf = BrdfDefault(color.rgb, material_misc.metallic, material_misc.roughness, vh, nl, nv, nh);
+  return float4((brdf * scene_light.light_color.xyz * scene_light.light_color.w) * scene_light.exposure_rate + material_misc.emissive, 1.0f);
 }
