@@ -27,7 +27,6 @@ float DistributionTrowbridgeReitz(const float alpha_sq, const float nh) { // aka
 }
 // clamp dot values before call
 float3 BrdfDefault(float3 material_color, float metallic, float roughness, float vh, float nl, float nv, float nh) {
-  roughness = max(roughness, 0.001f);
   const float3 diffuse_color = lerp(material_color, 0.0f, metallic);
   const float3 f0 = lerp(0.04f, material_color, metallic);
   const float  alpha = roughness * roughness;
