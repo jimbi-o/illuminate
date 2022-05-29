@@ -13,8 +13,8 @@ MeshTransformVsOutput main(const VsInput input, const uint instance_id : SV_Inst
   float4 position = mul(float4(input.position, 1.0f), world_view_matrix);
   output.position_vs = position.xyz * rcp(position.w);
   output.position = mul(position, camera_data.projection_matrix);
-  output.normal   = mul(float4(input.normal, 0.0f), world_view_matrix).xyz;
-  output.tangent  = float4(mul(input.tangent, world_view_matrix).xyz, input.tangent.w);
+  output.normal   = mul(input.normal, (float3x3)world_view_matrix).xyz;
+  output.tangent  = float4(mul(input.tangent.xyz, (float3x3)world_view_matrix), input.tangent.w);
   output.uv0      = input.uv0;
   return output;
 }

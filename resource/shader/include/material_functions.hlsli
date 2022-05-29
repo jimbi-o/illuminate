@@ -11,6 +11,7 @@ void GetColorInfo(uint material_offset, ByteAddressBuffer material_index_list, T
   AlbedoInfo albedo_info = material_index_list.Load<AlbedoInfo>(material_offset * sizeof(AlbedoInfo));
   color = textures[albedo_info.tex].Sample(samplers[albedo_info.sampler], uv);
   alpha_cutoff = albedo_info.alpha_cutoff;
+  color = pow(color, 2.2f);
   color *= albedo_info.factor;
 }
 MaterialMisc GetMaterialMisc(uint material_offset, uint misc_offset, ByteAddressBuffer material_index_list, Texture2D<float4> textures[], sampler samplers[], float2 uv) {
