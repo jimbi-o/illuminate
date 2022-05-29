@@ -33,9 +33,9 @@ struct RenderPassConfigDynamicData {
   float fov_vertical{40.0f};
   float near_z{0.001f};
   float far_z{1000.0f};
-  float light_direction[3]{1.0f,0.0f,0.0f};
-  float light_color[3]{1.0f,1.0f,1.0f};
-  float light_intensity{10000.0f};
+  float light_direction[3]{};
+  float light_color[3]{};
+  float light_intensity{};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};

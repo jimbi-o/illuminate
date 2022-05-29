@@ -181,7 +181,12 @@ auto SetMeshBuffers(const tinygltf::Model& model, const std::string& attribute_n
                                           (buffer_name_prefix + std::to_string(i) + "_" + std::to_string(j)).c_str(), &resource_default[resource_index], &allocation_default[resource_index]);
             auto dst = MapResource(resource_upload, buffer_size);
             auto addr = resource_default[resource_index]->GetGPUVirtualAddress();
-            memset(dst, 0, buffer_size);
+            for (uint32_t k = 0; k < accessor.count; k++) {
+              const float src[4] = {1.0f,0.0f,0.0f,1.0f,}; // assuming tangent
+              const auto stride_size = (accessor.componentType == TINYGLTF_TYPE_VEC3) ? 12U : 16U;
+              memcpy(dst, src, stride_size);
+              dst = SucceedPtr(dst, stride_size);
+            }
             set_mesh_info(addr, buffer_size, accessor.type, accessor.componentType, accessor.count, scene_data.model_submesh_index[i][j]);
             UnmapResource(resource_upload);
             ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, resource_default[resource_index], resource_transfer);

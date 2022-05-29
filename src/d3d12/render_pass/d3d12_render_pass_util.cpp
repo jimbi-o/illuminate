@@ -65,7 +65,16 @@ RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass
   for (uint32_t i = 0; i < buffer_num; i++) {
     dynamic_data.write_to_sub[i] = AllocateArray<bool>(allocator, render_pass_num);
   }
-  dynamic_data.camera_pos[2] = 3.0f;
+  dynamic_data.camera_focus[1] = 1.0f;
+  dynamic_data.camera_pos[0] = 5.0f;
+  dynamic_data.camera_pos[1] = 1.5f;
+  dynamic_data.light_direction[0] = 1.0f;
+  dynamic_data.light_direction[1] = 1.0f;
+  dynamic_data.light_direction[2] = 1.0f;
+  dynamic_data.light_color[0] = 1.0f;
+  dynamic_data.light_color[1] = 1.0f;
+  dynamic_data.light_color[2] = 1.0f;
+  dynamic_data.light_intensity = 10000.0f;
   return dynamic_data;
 }
 void UpdateCamera(const float width, const float height, float camera_pos[3], float camera_focus[3]) {
