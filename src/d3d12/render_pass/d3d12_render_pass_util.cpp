@@ -44,7 +44,6 @@ void RotateCameraImpl(const float width, const float height, float camera_pos[3]
 void MoveCameraForward(float camera_pos[3], float camera_focus[3], const float move_amount) {
   using namespace DirectX::SimpleMath;
   Vector3 direction(camera_focus[0] - camera_pos[0], camera_focus[1] - camera_pos[1], camera_focus[2] - camera_pos[2]);
-  direction.Normalize();
   direction *= move_amount * 0.01f;
   camera_focus[0] += direction.x;
   camera_pos[0] += direction.x;
