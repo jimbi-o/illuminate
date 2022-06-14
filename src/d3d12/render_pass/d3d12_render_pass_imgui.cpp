@@ -1,7 +1,9 @@
+#include "illuminate/illuminate.h"
+#include "../d3d12_descriptors.h"
+#include "../d3d12_header_common.h"
+#include "d3d12_render_pass_debug_render_selected_buffer.h"
 #include "d3d12_render_pass_imgui.h"
 #include "d3d12_render_pass_util.h"
-#include "d3d12_render_pass_debug_render_selected_buffer.h"
-#include "../d3d12_descriptors.h"
 namespace illuminate {
 namespace {
 struct Param {
@@ -27,6 +29,7 @@ void* PrepareParam(const uint32_t render_pass_num, RenderPass* render_pass_list,
 void RegisterGUI(RenderPassFuncArgsRenderCommon* args_common, [[maybe_unused]]RenderPassFuncArgsRenderPerPass* args_per_pass) {
   ImGui::SetNextWindowSize(ImVec2{});
   if (!ImGui::Begin("render pass config", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) { return; }
+  ImGui::Text("CPU:%f", args_common->dynamic_data->prev_duration_per_frame_msec_avg);
   {
     // camera settings
     ImGui::SliderFloat3("camera pos", args_common->dynamic_data->camera_pos, -10.0f, 10.0f, "%.1f");

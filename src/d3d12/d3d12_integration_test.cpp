@@ -606,6 +606,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
+    UpdateTimeDuration(dynamic_data.frame_count_reset_time_threshold_msec, &dynamic_data.frame_count, &dynamic_data.last_time_point, &dynamic_data.delta_time_msec, &dynamic_data.duration_msec_sum, &dynamic_data.prev_duration_per_frame_msec_avg);
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     auto command_queue_frame_signal_sent = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
     for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {

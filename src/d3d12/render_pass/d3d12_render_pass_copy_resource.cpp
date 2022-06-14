@@ -1,7 +1,9 @@
-#include "d3d12_render_pass_copy_resource.h"
-#include "d3d12_render_pass_util.h"
+#include "illuminate/illuminate.h"
+#include "../d3d12_header_common.h"
 #include "../d3d12_resource_transfer.h"
 #include "../d3d12_texture_util.h"
+#include "d3d12_render_pass_copy_resource.h"
+#include "d3d12_render_pass_util.h"
 namespace illuminate {
 void RenderPassCopyResource::Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   for (uint32_t i = 0; i < args_common->resource_transfer->transfer_reserved_buffer_num[args_common->frame_index]; i++) {

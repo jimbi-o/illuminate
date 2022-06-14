@@ -1,3 +1,5 @@
+#include "illuminate/illuminate.h"
+#include "../d3d12_header_common.h"
 #include "d3d12_render_pass_cs_dispatch.h"
 #include "d3d12_render_pass_util.h"
 namespace illuminate {
