@@ -4,6 +4,7 @@
 #include "d3d12_render_pass_debug_render_selected_buffer.h"
 #include "d3d12_render_pass_imgui.h"
 #include "d3d12_render_pass_util.h"
+#include "implot.h"
 namespace illuminate {
 namespace {
 struct Param {
@@ -89,6 +90,7 @@ void* RenderPassImgui::Init(RenderPassFuncArgsInit* args, const uint32_t render_
   auto cpu_handle_font = args->descriptor_cpu->GetHandle(imgui_font_buffer_index, DescriptorType::kSrv);
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  ImPlot::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
@@ -101,6 +103,7 @@ void* RenderPassImgui::Init(RenderPassFuncArgsInit* args, const uint32_t render_
   return PrepareParam(args->render_pass_num, args->render_pass_list, args->allocator);
 }
 void RenderPassImgui::Term() {
+  ImPlot::DestroyContext();
   ImGui_ImplDX12_Shutdown();
   ImGui_ImplWin32_Shutdown();
   ImGui::DestroyContext();

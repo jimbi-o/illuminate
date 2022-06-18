@@ -60,7 +60,8 @@ CPMAddPackage(
   VERSION 2.5.0
   DOWNLOAD_ONLY yes
 )
-CPMAddPackage("gh:ocornut/imgui#v1.86")
+CPMAddPackage("gh:ocornut/imgui#v1.87")
+CPMAddPackage("gh:epezent/implot#v0.13")
 CPMAddPackage(
   NAME WinPixEventRuntime
   URL https://www.nuget.org/api/v2/package/WinPixEventRuntime/1.0.220124001
@@ -141,6 +142,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
   "${tinygltf_SOURCE_DIR}"
   "${imgui_SOURCE_DIR}"
+  "${implot_SOURCE_DIR}"
   "${WinPixEventRuntime_SOURCE_DIR}/Include"
   "${DirectXTK12_SOURCE_DIR}/Inc"
   "${DirectX-Headers_SOURCE_DIR}/include/directx"
@@ -162,6 +164,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
   "${tinygltf_SOURCE_DIR}/tiny_gltf.h"
   "${imgui_SOURCE_DIR}/imgui.h"
+  "${implot_SOURCE_DIR}/implot.h"
   "${WinPixEventRuntime_SOURCE_DIR}/Include/WinPixEventRuntime/pix3.h"
   "${DirectXTK12_SOURCE_DIR}/Inc/DDSTextureLoader.h"
   "${DirectX-Headers_SOURCE_DIR}/include/directx/d3d12.h"

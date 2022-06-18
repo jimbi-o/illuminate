@@ -177,7 +177,6 @@ TEST_CASE("swapchain/direct queue") { // NOLINT
   CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
   Window window;
   CHECK_UNARY(window.Init("swapchain test/direct", 160, 90, nullptr)); // NOLINT
-  const uint32_t command_queue_num = 1;
   auto raw_command_queue_list = CreateCommandQueue(device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
   CommandQueueSignals command_queue_signals;
   command_queue_signals.Init(device.Get(), 1, &raw_command_queue_list);
