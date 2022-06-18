@@ -97,6 +97,7 @@ struct RenderGraph {
   uint32_t max_model_num{1024};
   uint32_t max_material_num{1024};
   uint32_t max_mipmap_num{12};
+  uint32_t timestamp_query_dst_resource_num{5};
 };
 static const uint32_t kBarrierExecutionTimingNum = 2;
 }

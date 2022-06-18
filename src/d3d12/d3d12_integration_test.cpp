@@ -423,6 +423,75 @@ auto GetSceneGpuHandlesSampler(const uint32_t sampler_num, const D3D12_CPU_DESCR
   descriptor_gpu->SetPersistentSamplerHandleNum(sampler_num);
   return descriptor_gpu->WriteToPersistentSamplerHandleRange(0, sampler_num, sampler_handles, device);
 }
+auto GetRenderPassQueueIndexList(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
+  auto render_pass_queue_index = AllocateArray<uint32_t>(allocator, render_pass_num);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    render_pass_queue_index[i] = render_pass_list[i].command_queue_index;
+  }
+  return render_pass_queue_index;
+}
+auto GetRenderPassIndexPerQueue(const uint32_t command_queue_num, const uint32_t render_pass_num, const uint32_t* render_pass_queue_index, MemoryAllocationJanitor* allocator) {
+  auto render_pass_num_per_queue = AllocateArray<uint32_t>(allocator, command_queue_num);
+  auto render_pass_index_per_queue = AllocateArray<uint32_t>(allocator, render_pass_num);
+  std::fill(render_pass_num_per_queue, render_pass_num_per_queue + command_queue_num, 0);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    render_pass_index_per_queue[i] = render_pass_num_per_queue[render_pass_queue_index[i]];
+    render_pass_num_per_queue[render_pass_queue_index[i]]++;
+  }
+  return std::make_pair(render_pass_num_per_queue, render_pass_index_per_queue);
+}
+auto GetLastPassPerQueue(const uint32_t command_queue_num, const uint32_t render_pass_num, const uint32_t* render_pass_queue_index, MemoryAllocationJanitor* allocator) {
+  auto last_pass_per_queue = AllocateArray<uint32_t>(allocator, command_queue_num);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    last_pass_per_queue[render_pass_queue_index[i]] = i;
+  }
+  return last_pass_per_queue;
+}
+auto CreateTimestampQueryHeaps(const uint32_t command_queue_num, [[maybe_unused]]const D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t* render_pass_num_per_queue, const uint32_t query_num_per_pass, D3d12Device* device, MemoryAllocationJanitor* allocator) {
+  auto timestamp_query_heaps = AllocateArray<ID3D12QueryHeap*>(allocator, command_queue_num);
+  D3D12_QUERY_HEAP_DESC desc{};
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    if (render_pass_num_per_queue[i] == 0) {
+      timestamp_query_heaps[i] = nullptr;
+      continue;
+    }
+#ifdef NDEBUG
+    desc.Type = (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+#else
+    if (IsDebuggerPresent()) {
+      // D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP issues error even on D3D12_COMMAND_LIST_TYPE_COPY when graphics debugger is enabled.
+      desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    } else {
+      desc.Type = (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    }
+#endif
+    desc.Count = render_pass_num_per_queue[i] * query_num_per_pass;
+    auto hr = device->CreateQueryHeap(&desc, IID_PPV_ARGS(&timestamp_query_heaps[i]));
+    if (FAILED(hr)) {
+      assert(timestamp_query_heaps[i] == nullptr);
+      logwarn("CreateQueryHeap failed. {} {} {} {}", desc.Type, desc.Count, i, hr);
+    }
+  }
+  return timestamp_query_heaps;
+}
+auto CreateTimestampQuertyDstResource(const uint32_t command_queue_num, const uint32_t* render_pass_num_per_queue, const uint32_t timestamp_query_dst_resource_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator) {
+  auto timestamp_query_dst_resource = AllocateArray<ID3D12Resource**>(allocator, command_queue_num);
+  auto timestamp_query_dst_allocator = AllocateArray<D3D12MA::Allocation**>(allocator, command_queue_num);
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    if (render_pass_num_per_queue[i] == 0) {
+      timestamp_query_dst_resource[i]  = nullptr;
+      timestamp_query_dst_allocator[i] = nullptr;
+      continue;
+    }
+    timestamp_query_dst_resource[i]  = AllocateArray<ID3D12Resource*>(allocator, timestamp_query_dst_resource_num);
+    timestamp_query_dst_allocator[i] = AllocateArray<D3D12MA::Allocation*>(allocator, timestamp_query_dst_resource_num);
+    const auto desc = GetBufferDesc(GetUint32(sizeof(uint64_t)) * render_pass_num_per_queue[i] * timestamp_query_dst_resource_num);
+    for (uint32_t j = 0; j < timestamp_query_dst_resource_num; j++) {
+      CreateBuffer(D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, desc, nullptr, buffer_allocator, &timestamp_query_dst_allocator[i][j], &timestamp_query_dst_resource[i][j]);
+    }
+  }
+  return std::make_pair(timestamp_query_dst_resource, timestamp_query_dst_allocator);
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -601,17 +670,23 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     scene_cbv_ptr[i] = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, system_buffer_index_list[i], kSystemBufferSize[i], &allocator);
   }
   auto prev_command_list = AllocateArray<D3d12CommandList*>(&allocator, render_graph.command_queue_num);
+  auto gpu_timestamp_frequency = AllocateArray<uint64_t>(&allocator, render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
+    command_list_set.GetCommandQueue(i)->GetTimestampFrequency(&gpu_timestamp_frequency[i]);
   }
+  const auto render_pass_queue_index = GetRenderPassQueueIndexList(render_graph.render_pass_num, render_graph.render_pass_list, &allocator);
+  const auto [render_pass_num_per_queue, render_pass_index_per_queue] = GetRenderPassIndexPerQueue(render_graph.command_queue_num, render_graph.render_pass_num, render_pass_queue_index, &allocator);
+  const auto last_pass_per_queue = GetLastPassPerQueue(render_graph.command_queue_num, render_graph.render_pass_num, render_pass_queue_index, &allocator);
+  const uint32_t timestamp_query_num_per_pass = 2;
+  auto timestamp_query_heaps = CreateTimestampQueryHeaps(render_graph.command_queue_num, render_graph.command_queue_type, render_pass_num_per_queue, timestamp_query_num_per_pass, device.Get(), &allocator);
+  const auto timestamp_query_dst_resource_num = render_graph.timestamp_query_dst_resource_num;
+  uint32_t timestamp_query_dst_resource_index = 0;
+  auto [timestamp_query_dst_resource, timestamp_query_dst_allocator] = CreateTimestampQuertyDstResource(render_graph.command_queue_num, render_pass_num_per_queue, timestamp_query_dst_resource_num, buffer_allocator, &allocator);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
     UpdateTimeDuration(dynamic_data.frame_count_reset_time_threshold_msec, &dynamic_data.frame_count, &dynamic_data.last_time_point, &dynamic_data.delta_time_msec, &dynamic_data.duration_msec_sum, &dynamic_data.prev_duration_per_frame_msec_avg);
     auto single_frame_allocator = GetTemporalMemoryAllocator();
-    auto command_queue_frame_signal_sent = AllocateArray<bool>(&single_frame_allocator, render_graph.command_queue_num);
-    for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
-      command_queue_frame_signal_sent[j] = true;
-    }
     const auto frame_index = i % render_graph.frame_buffer_num;
     UpdateSceneBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index], scene_cbv_ptr[kSystemBufferLight][frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, dynamic_data.render_pass_enable_flag, render_graph.buffer_num, dynamic_data.write_to_sub);
@@ -661,19 +736,21 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (!render_pass_enable_flag[k]) { continue; }
       const auto& render_pass = render_graph.render_pass_list[k];
       for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
-        CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(render_pass.signal_queue_index[l], render_pass.command_queue_index, render_pass_signal[render_pass.signal_pass_index[l]]));
+        CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(render_pass.signal_queue_index[l], render_pass_queue_index[k], render_pass_signal[render_pass.signal_pass_index[l]]));
       }
       if (render_pass.prepass_barrier_num == 0 && render_pass.postpass_barrier_num == 0 && !IsRenderPassRenderNeeded(&render_pass_function_list, &args_common, &args_per_pass[k])) { continue; }
-      auto command_list = prev_command_list[render_pass.command_queue_index];
+      auto command_list = prev_command_list[render_pass_queue_index[k]];
       if (command_list == nullptr) {
-        command_list = command_list_set.GetCommandList(device.Get(), render_pass.command_queue_index); // TODO decide command list reuse policy for multi-thread
-        prev_command_list[render_pass.command_queue_index] = command_list;
+        command_list = command_list_set.GetCommandList(device.Get(), render_pass_queue_index[k]); // TODO decide command list reuse policy for multi-thread
+        prev_command_list[render_pass_queue_index[k]] = command_list;
       }
       args_per_pass[k].command_list = command_list;
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
       PIXBeginEvent(command_list, 0, render_pass_name[k]); // https://devblogs.microsoft.com/pix/winpixeventruntime/
 #endif
-      if (command_list && render_graph.command_queue_type[render_pass.command_queue_index] != D3D12_COMMAND_LIST_TYPE_COPY) {
+      const auto query_index = render_pass_index_per_queue[k] * 2;
+      command_list->EndQuery(timestamp_query_heaps[render_pass_queue_index[k]], D3D12_QUERY_TYPE_TIMESTAMP, query_index);
+      if (command_list && render_graph.command_queue_type[render_pass_queue_index[k]] != D3D12_COMMAND_LIST_TYPE_COPY) {
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
       ExecuteBarrier(command_list, barrier_num[0][k], barrier_config_list[0][k], barrier_resource_list[0][k]);
@@ -682,28 +759,46 @@ TEST_CASE("d3d12 integration test") { // NOLINT
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
       PIXEndEvent(command_list);
 #endif
-      if (render_pass.execute) {
-        command_list_set.ExecuteCommandList(render_pass.command_queue_index);
-        prev_command_list[render_pass.command_queue_index] = nullptr;
-      }
-      if (render_pass.sends_signal) {
+      command_list->EndQuery(timestamp_query_heaps[render_pass_queue_index[k]], D3D12_QUERY_TYPE_TIMESTAMP, query_index + 1);
+      const auto is_last_pass_per_queue = (last_pass_per_queue[render_pass_queue_index[k]] == k);
+      if (is_last_pass_per_queue) {
         assert(render_pass.execute);
-        render_pass_signal[k] = command_queue_signals.SucceedSignal(render_pass.command_queue_index);
-        frame_signals[frame_index][render_pass.command_queue_index] = render_pass_signal[k];
+        const auto query_num = render_pass_num_per_queue[render_pass_queue_index[k]] * timestamp_query_num_per_pass;
+        auto dst_resource = timestamp_query_dst_resource[render_pass_queue_index[k]][timestamp_query_dst_resource_index];
+        timestamp_query_dst_resource_index++;
+        if (timestamp_query_dst_resource_index >= timestamp_query_dst_resource_num) {
+          timestamp_query_dst_resource_index = 0;
+        }
+        // TODO read from buffer
+        command_list->ResolveQueryData(timestamp_query_heaps[render_pass_queue_index[k]], D3D12_QUERY_TYPE_TIMESTAMP, 0, query_num, dst_resource, 0);
       }
-      command_queue_frame_signal_sent[render_pass.command_queue_index] = render_pass.sends_signal;
+      if (render_pass.execute) {
+        command_list_set.ExecuteCommandList(render_pass_queue_index[k]);
+        prev_command_list[render_pass_queue_index[k]] = nullptr;
+      }
+      if (render_pass.sends_signal || is_last_pass_per_queue) {
+        assert(render_pass.execute);
+        render_pass_signal[k] = command_queue_signals.SucceedSignal(render_pass_queue_index[k]);
+        frame_signals[frame_index][render_pass_queue_index[k]] = render_pass_signal[k];
+      }
     } // render pass
-    for (uint32_t j = 0; j < render_graph.command_queue_num; j++) {
-      if (!command_queue_frame_signal_sent[j]) {
-        auto signal_val = command_queue_signals.SucceedSignal(j);
-        frame_signals[frame_index][j] = signal_val;
-      }
-    }
     swapchain.Present();
   }
   command_queue_signals.WaitAll(device.Get());
   ClearResourceTransfer(render_graph.frame_buffer_num, &resource_transfer);
   ReleaseSceneData(&scene_data);
+  for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
+    if (timestamp_query_dst_resource[i] == nullptr) { continue; }
+    for (uint32_t j = 0; j < timestamp_query_dst_resource_num; j++) {
+      timestamp_query_dst_resource[i][j]->Release();
+      timestamp_query_dst_allocator[i][j]->Release();
+    }
+  }
+  for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
+    if (timestamp_query_heaps[i]) {
+      timestamp_query_heaps[i]->Release();
+    }
+  }
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     RenderPassTerm(&render_pass_function_list, i);
   }

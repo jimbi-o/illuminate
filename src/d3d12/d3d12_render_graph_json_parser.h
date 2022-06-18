@@ -287,6 +287,7 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
   r.max_model_num = GetNum(j, "max_model_num", r.max_model_num);
   r.max_material_num = GetNum(j, "max_material_num", r.max_material_num);
   r.max_mipmap_num = GetNum(j, "max_mipmap_num", r.max_mipmap_num);
+  r.timestamp_query_dst_resource_num = GetNum(j, "timestamp_query_dst_resource_num", r.timestamp_query_dst_resource_num);
 }
 }
 #endif
