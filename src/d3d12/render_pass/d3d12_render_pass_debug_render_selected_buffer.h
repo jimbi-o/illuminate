@@ -5,8 +5,8 @@ namespace illuminate {
 class RenderPassDebugRenderSelectedBuffer {
  public:
   static void* Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index);
+  static void Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
   static void Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass);
-  static uint32_t GetBufferAllocationIndexList(const BufferList& buffer_list, const BufferConfig* buffer_config_list, MemoryAllocationJanitor* allocator, uint32_t** dst_buffer_allocation_index_list);
  private:
   RenderPassDebugRenderSelectedBuffer() = delete;
 };

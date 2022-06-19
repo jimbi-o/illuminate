@@ -1,4 +1,5 @@
 #include <fstream>
+#include "imgui.h"
 #include <nlohmann/json.hpp>
 #include "SimpleMath.h"
 #include "tiny_gltf.h"
@@ -18,6 +19,7 @@
 #include "d3d12_view_util.h"
 #include "d3d12_win32_window.h"
 #include "illuminate/math/math.h"
+#include "illuminate/util/util_functions.h"
 #include "render_pass/d3d12_render_pass_common.h"
 #include "render_pass/d3d12_render_pass_copy_resource.h"
 #include "render_pass/d3d12_render_pass_cs_dispatch.h"
@@ -33,6 +35,9 @@ namespace illuminate {
 namespace {
 static const uint32_t kFrameLoopNum = 100000;
 static const uint32_t kInvalidIndex = ~0U;
+static const uint32_t kExtraDescriptorHandleNumCbvSrvUav = 1; // imgui font
+static const uint32_t kImguiGpuHandleIndex = 0;
+static const uint32_t kSceneGpuHandleIndex = 1;
 enum SystemBuffer : uint32_t {
   kSystemBufferCamera = 0,
   kSystemBufferLight,
@@ -58,15 +63,6 @@ auto AddSystemBuffers(nlohmann::json* json) {
     auto buffer_json = R"(
     {
       "name": "swapchain",
-      "descriptor_only": true
-    }
-    )"_json;
-    buffer_list.push_back(buffer_json);
-  }
-  {
-    auto buffer_json = R"(
-    {
-      "name": "imgui_font",
       "descriptor_only": true
     }
     )"_json;
@@ -177,13 +173,12 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
         break;
       }
       case SID("imgui"): {
-        funcs.init[i]             = RenderPassImgui::Init;
-        funcs.term[i]             = RenderPassImgui::Term;
-        funcs.update[i]           = RenderPassImgui::Update;
         funcs.render[i]           = RenderPassImgui::Render;
         break;
       }
       case SID("debug buffer"): {
+        funcs.init[i]             = RenderPassDebugRenderSelectedBuffer::Init;
+        funcs.update[i]           = RenderPassDebugRenderSelectedBuffer::Update;
         funcs.render[i]           = RenderPassDebugRenderSelectedBuffer::Render;
         break;
       }
@@ -415,14 +410,6 @@ void UpdateSceneBuffer(const RenderPassConfigDynamicData& dynamic_data, const Si
   scene_light.exposure_rate = 4.0f / dynamic_data.light_intensity;
   memcpy(scene_light_ptr, &scene_light, sizeof(scene_light));
 }
-auto GetSceneGpuHandlesView(const uint32_t view_num, const D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handles, DescriptorGpu* descriptor_gpu, D3d12Device* device) {
-  descriptor_gpu->SetPersistentViewHandleNum(view_num);
-  return descriptor_gpu->WriteToPersistentViewHandleRange(0, view_num, cpu_handles, device);
-}
-auto GetSceneGpuHandlesSampler(const uint32_t sampler_num, const D3D12_CPU_DESCRIPTOR_HANDLE& sampler_handles, DescriptorGpu* descriptor_gpu, D3d12Device* device) {
-  descriptor_gpu->SetPersistentSamplerHandleNum(sampler_num);
-  return descriptor_gpu->WriteToPersistentSamplerHandleRange(0, sampler_num, sampler_handles, device);
-}
 auto GetRenderPassQueueIndexList(const uint32_t render_pass_num, const RenderPass* render_pass_list, MemoryAllocationJanitor* allocator) {
   auto render_pass_queue_index = AllocateArray<uint32_t>(allocator, render_pass_num);
   for (uint32_t i = 0; i < render_pass_num; i++) {
@@ -492,6 +479,105 @@ auto CreateTimestampQuertyDstResource(const uint32_t command_queue_num, const ui
   }
   return std::make_pair(timestamp_query_dst_resource, timestamp_query_dst_allocator);
 }
+auto InitImgui(HWND hwnd, D3d12Device* device, const uint32_t frame_buffer_num, const DXGI_FORMAT format, const D3D12_CPU_DESCRIPTOR_HANDLE& imgui_font_cpu_handle, const D3D12_GPU_DESCRIPTOR_HANDLE& imgui_font_gpu_handle) {
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImPlot::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+  ImGui_ImplWin32_Init(hwnd);
+  ImGui_ImplDX12_Init(device, frame_buffer_num, format, nullptr/*descriptor heap not used in single viewport mode*/, imgui_font_cpu_handle, imgui_font_gpu_handle);
+  if (!ImGui_ImplDX12_CreateDeviceObjects()) {
+    logerror("ImGui_ImplDX12_CreateDeviceObjects failed.");
+    assert(false);
+  }
+}
+auto TermImgui() {
+  ImPlot::DestroyContext();
+  ImGui_ImplDX12_Shutdown();
+  ImGui_ImplWin32_Shutdown();
+  ImGui::DestroyContext();
+}
+struct TimeDurationDataSet {
+  float frame_count_reset_time_threshold_msec{250.0f};
+  uint32_t frame_count{0U};
+  std::chrono::high_resolution_clock::time_point last_time_point{std::chrono::high_resolution_clock::now()};
+  float delta_time_msec{0.0f};
+  float duration_msec_sum{0.0f};
+  float prev_duration_per_frame_msec_avg{0.0f};
+};
+auto RegisterGuiPerformance(const TimeDurationDataSet& time_duration_data_set) {
+  ImGui::SetNextWindowSize(ImVec2{});
+  if (!ImGui::Begin("performance", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) { return; }
+  ImGui::Text("CPU:%f", time_duration_data_set.prev_duration_per_frame_msec_avg);
+  {
+    auto left_top = ImGui::GetWindowPos();
+    ImVec2 right_bottom(left_top.x + 200.0f, left_top.y + 100.0f);
+    auto color = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+    // ImGui::GetWindowDrawList()->AddRectFilled(left_top, right_bottom, color);
+    // ImGui::SetNextWindowPos(ImVec2(left_top.x, right_bottom.y));
+  }
+  ImGui::End();
+}
+auto RegisterGuiCamera(RenderPassConfigDynamicData* dynamic_data) {
+  if (!ImGui::Begin("camera", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) { return; }
+  ImGui::SetNextWindowSize(ImVec2{});
+  ImGui::SliderFloat3("camera pos", dynamic_data->camera_pos, -10.0f, 10.0f, "%.1f");
+  ImGui::SliderFloat3("camera focus", dynamic_data->camera_focus, -10.0f, 10.0f, "%.1f");
+  ImGui::SliderFloat("camera fov(vertical)", &dynamic_data->fov_vertical, 1.0f, 360.0f, "%.0f");
+  ImGui::SliderFloat("near_z", &dynamic_data->near_z, 0.001f, 1.0f, "%.2f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
+  ImGui::SliderFloat("far_z", &dynamic_data->far_z, 1.0f, 10000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+  ImGui::End();
+}
+auto RegisterGuiLight(RenderPassConfigDynamicData* dynamic_data) {
+  if (!ImGui::Begin("light", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) { return; }
+  ImGui::SetNextWindowSize(ImVec2{});
+  ImGui::SliderFloat3("light direction", dynamic_data->light_direction, -1.0f, 1.0f, "%.3f");
+  ImGui::SliderFloat3("light color", dynamic_data->light_color, 0.0f, 1.0f, "%.3f");
+  ImGui::SliderFloat("light intensity", &dynamic_data->light_intensity, 0.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+  ImGui::End();
+}
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set) {
+  RegisterGuiPerformance(time_duration_data_set);
+  RegisterGuiCamera(dynamic_data);
+  RegisterGuiLight(dynamic_data);
+}
+RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator) {
+  RenderPassConfigDynamicData dynamic_data{};
+  dynamic_data.render_pass_enable_flag = AllocateArray<bool>(allocator, render_pass_num);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    dynamic_data.render_pass_enable_flag[i] = render_pass_list[i].enabled;
+  }
+  dynamic_data.write_to_sub = AllocateArray<bool*>(allocator, buffer_num);
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    dynamic_data.write_to_sub[i] = AllocateArray<bool>(allocator, render_pass_num);
+  }
+  dynamic_data.camera_focus[1] = 1.0f;
+  dynamic_data.camera_pos[0] = 5.0f;
+  dynamic_data.camera_pos[1] = 1.5f;
+  dynamic_data.light_direction[0] = 1.0f;
+  dynamic_data.light_direction[1] = 1.0f;
+  dynamic_data.light_direction[2] = 1.0f;
+  dynamic_data.light_color[0] = 1.0f;
+  dynamic_data.light_color[1] = 1.0f;
+  dynamic_data.light_color[2] = 1.0f;
+  dynamic_data.light_intensity = 10000.0f;
+  return dynamic_data;
+}
+auto UpdateCameraFromUserInput(const Size2d& buffer_size, float camera_pos[3], float camera_focus[3], float prev_mouse_pos[2]) {
+  if (ImGui::GetIO().WantCaptureMouse) { return; }
+  const auto& mouse_pos = ImGui::GetMousePos();
+  if (ImGui::IsMousePosValid(&mouse_pos) && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+    const float current_mouse_pos[2]{mouse_pos.x, mouse_pos.y};
+    RotateCamera(static_cast<float>(buffer_size.width), static_cast<float>(buffer_size.height), camera_pos, camera_focus, prev_mouse_pos, current_mouse_pos);
+  }
+  prev_mouse_pos[0] = mouse_pos.x;
+  prev_mouse_pos[1] = mouse_pos.y;
+  if (const auto mouse_wheel = ImGui::GetIO().MouseWheel; mouse_wheel != 0.0f) {
+    MoveCameraForward(camera_pos, camera_focus, mouse_wheel);
+  }
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -504,6 +590,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   CHECK_UNARY(device.Init(dxgi_core.GetAdapter())); // NOLINT
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   CHECK_NE(buffer_allocator, nullptr);
+  auto extra_descriptor_heap_cbv_srv_uav = CreateDescriptorHeap(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kExtraDescriptorHandleNumCbvSrvUav);
   MainBufferSize main_buffer_size{};
   MainBufferFormat main_buffer_format{};
   Window window;
@@ -520,6 +607,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t system_buffer_index_list[kSystemBufferNum]{};
   std::fill(system_buffer_index_list, system_buffer_index_list + kSystemBufferNum, kInvalidIndex);
   MaterialList material_list{};
+  float prev_mouse_pos[2]{};
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
   char** render_pass_name{nullptr};
 #endif
@@ -662,9 +750,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   }
   auto resource_transfer = PrepareResourceTransferer(render_graph.frame_buffer_num, std::max(render_graph.max_model_num, render_graph.max_material_num), render_graph.max_mipmap_num);
   auto scene_data = GetSceneFromTinyGltf(TEST_MODEL_PATH, 0, device.Get(), buffer_allocator, &allocator, &resource_transfer);
-  const auto scene_gpu_handles_view = GetSceneGpuHandlesView(scene_data.texture_num, scene_data.cpu_handles[kSceneDescriptorTexture], &descriptor_gpu, device.Get());
-  const auto scene_gpu_handles_sampler = GetSceneGpuHandlesSampler(scene_data.sampler_num, scene_data.cpu_handles[kSceneDescriptorSampler], &descriptor_gpu, device.Get());
+  descriptor_gpu.SetPersistentViewHandleNum(scene_data.texture_num + 1/*for imgui font*/);
+  const auto scene_gpu_handles_view = descriptor_gpu.WriteToPersistentViewHandleRange(kSceneGpuHandleIndex, scene_data.texture_num, scene_data.cpu_handles[kSceneDescriptorTexture], device.Get());
+  descriptor_gpu.SetPersistentSamplerHandleNum(scene_data.sampler_num);
+  const auto scene_gpu_handles_sampler = descriptor_gpu.WriteToPersistentSamplerHandleRange(0, scene_data.sampler_num, scene_data.cpu_handles[kSceneDescriptorSampler], device.Get());
   auto dynamic_data = InitRenderPassDynamicData(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, &allocator);
+  TimeDurationDataSet time_duration_data_set{};
   void** scene_cbv_ptr[kSystemBufferNum]{};
   for (uint32_t i = 0; i < kSystemBufferNum; i++) {
     scene_cbv_ptr[i] = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, system_buffer_index_list[i], kSystemBufferSize[i], &allocator);
@@ -683,9 +774,15 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   const auto timestamp_query_dst_resource_num = render_graph.timestamp_query_dst_resource_num;
   uint32_t timestamp_query_dst_resource_index = 0;
   auto [timestamp_query_dst_resource, timestamp_query_dst_allocator] = CreateTimestampQuertyDstResource(render_graph.command_queue_num, render_pass_num_per_queue, timestamp_query_dst_resource_num, buffer_allocator, &allocator);
+  {
+    const auto imgui_font_cpu_handle = extra_descriptor_heap_cbv_srv_uav->GetCPUDescriptorHandleForHeapStart();
+    const auto imgui_font_gpu_handle = descriptor_gpu.GetViewGpuHandle(kImguiGpuHandleIndex);
+    InitImgui(window.GetHwnd(), device.Get(), render_graph.frame_buffer_num, swapchain.GetDxgiFormat(), imgui_font_cpu_handle, imgui_font_gpu_handle);
+    descriptor_gpu.WriteToPersistentViewHandleRange(kImguiGpuHandleIndex, 1, imgui_font_cpu_handle, device.Get());
+  }
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
-    UpdateTimeDuration(dynamic_data.frame_count_reset_time_threshold_msec, &dynamic_data.frame_count, &dynamic_data.last_time_point, &dynamic_data.delta_time_msec, &dynamic_data.duration_msec_sum, &dynamic_data.prev_duration_per_frame_msec_avg);
+    UpdateTimeDuration(time_duration_data_set.frame_count_reset_time_threshold_msec, &time_duration_data_set.frame_count, &time_duration_data_set.last_time_point, &time_duration_data_set.delta_time_msec, &time_duration_data_set.duration_msec_sum, &time_duration_data_set.prev_duration_per_frame_msec_avg);
     auto single_frame_allocator = GetTemporalMemoryAllocator();
     const auto frame_index = i % render_graph.frame_buffer_num;
     UpdateSceneBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index], scene_cbv_ptr[kSystemBufferLight][frame_index]);
@@ -711,6 +808,14 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       args_per_pass[k].gpu_handles_view = PrepareGpuHandlesViewList(device.Get(), render_pass, args_per_pass[k].cpu_handles, &descriptor_gpu, scene_data.cpu_handles[kSceneDescriptorTexture], scene_gpu_handles_view, &single_frame_allocator);
       args_per_pass[k].gpu_handles_sampler = PrepareGpuHandlesSamplerList(device.Get(), render_pass, &descriptor_cpu, &descriptor_gpu, scene_gpu_handles_sampler, &single_frame_allocator);
     }
+    {
+      // imgui
+      ImGui_ImplDX12_NewFrame();
+      ImGui_ImplWin32_NewFrame();
+      ImGui::NewFrame();
+      UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
+    }
+    RegisterGui(&dynamic_data, time_duration_data_set);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
@@ -785,6 +890,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     swapchain.Present();
   }
   command_queue_signals.WaitAll(device.Get());
+  TermImgui();
   ClearResourceTransfer(render_graph.frame_buffer_num, &resource_transfer);
   ReleaseSceneData(&scene_data);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
@@ -812,6 +918,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   command_queue_signals.Term();
   command_list_set.Term();
   window.Term();
+  extra_descriptor_heap_cbv_srv_uav->Release();
   device.Term();
   dxgi_core.Term();
   gSystemMemoryAllocator->Reset();

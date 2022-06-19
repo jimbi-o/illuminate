@@ -47,6 +47,7 @@ class DescriptorGpu {
   D3D12_GPU_DESCRIPTOR_HANDLE WriteToTransientSamplerHandleRange(const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, D3d12Device* device);
   void SetPersistentViewHandleNum(const uint32_t handle_num);
   void SetPersistentSamplerHandleNum(const uint32_t handle_num);
+  D3D12_GPU_DESCRIPTOR_HANDLE GetViewGpuHandle(const uint32_t index);
   D3D12_GPU_DESCRIPTOR_HANDLE WriteToPersistentViewHandleRange(const uint32_t start, const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE handle, D3d12Device* device);
   D3D12_GPU_DESCRIPTOR_HANDLE WriteToPersistentSamplerHandleRange(const uint32_t start, const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE handle, D3d12Device* device);
   bool IsNextHandle(const D3D12_GPU_DESCRIPTOR_HANDLE& current_handle, const D3D12_GPU_DESCRIPTOR_HANDLE& next_handle, const DescriptorType& type) const;

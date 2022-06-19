@@ -4,6 +4,82 @@
 #include "d3d12_render_pass_debug_render_selected_buffer.h"
 #include "d3d12_render_pass_util.h"
 namespace illuminate {
+namespace {
+struct Param {
+  uint32_t render_pass_index_debug_show_selected_buffer{};
+  uint32_t render_pass_index_output_to_swapchain{};
+};
+uint32_t GetBufferAllocationIndexList(const BufferList& buffer_list, const BufferConfig* buffer_config_list, MemoryAllocationJanitor* allocator, uint32_t** dst_buffer_allocation_index_list) {
+  *dst_buffer_allocation_index_list = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
+  uint32_t index = 0;
+  for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
+    if (buffer_list.buffer_allocation_list[i] == nullptr) { continue; }
+    auto& buffer_config = buffer_config_list[buffer_list.buffer_config_index[i]];
+    if (buffer_config.dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) { continue; }
+    (*dst_buffer_allocation_index_list)[index] = i;
+    index++;
+  }
+  return index;
+}
+} // namespace anonymous
+void* RenderPassDebugRenderSelectedBuffer::Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
+  auto param = Allocate<Param>(args->allocator);
+  for (uint32_t i = 0; i < args->render_pass_num; i++) {
+    switch (args->render_pass_list[i].name) {
+      case SID("output to swapchain"): {
+        param->render_pass_index_output_to_swapchain = i;
+        break;
+      }
+      case SID("debug buffer"): {
+        param->render_pass_index_debug_show_selected_buffer = i;
+        break;
+      }
+    }
+  }
+  assert(param->render_pass_index_output_to_swapchain != param->render_pass_index_debug_show_selected_buffer);
+  return param;
+}
+void RenderPassDebugRenderSelectedBuffer::Update(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
+  if (!ImGui::Begin("RenderPassDebugRenderSelectedBuffer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) { return; }
+  auto param = static_cast<Param*>(args_per_pass->pass_vars_ptr);
+  bool debug_render_selected_buffer = args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_debug_show_selected_buffer];
+  ImGui::Checkbox("render selected buffer mode", &debug_render_selected_buffer);
+  if (!debug_render_selected_buffer) {
+    if (args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_debug_show_selected_buffer]) {
+      args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_debug_show_selected_buffer] = false;
+      args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_output_to_swapchain] = true;
+    }
+    ImGui::End();
+    return;
+  }
+  if (!args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_debug_show_selected_buffer]) {
+    args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_debug_show_selected_buffer] = true;
+    args_common->dynamic_data->render_pass_enable_flag[param->render_pass_index_output_to_swapchain] = false;
+  }
+  auto label_select_output_buffer = "##select output buffer";
+  if (!ImGui::BeginListBox(label_select_output_buffer)) {
+    ImGui::End();
+    return;
+  }
+  auto selected_item = &args_common->dynamic_data->debug_render_selected_buffer_allocation_index;
+  auto tmp_allocator = GetTemporalMemoryAllocator();
+  uint32_t* buffer_allocation_index_list = nullptr;
+  auto buffer_allocation_index_len = GetBufferAllocationIndexList(*args_common->buffer_list, args_common->buffer_config_list, &tmp_allocator, &buffer_allocation_index_list);
+  for (uint32_t i = 0; i < buffer_allocation_index_len; i++) {
+    const auto index = buffer_allocation_index_list[i];
+    const auto len = 128;
+    char buffer_name[len]{};
+    GetD3d12Name(args_common->buffer_list->resource_list[index], len, buffer_name);
+    if (ImGui::Selectable(buffer_name, i == *selected_item)) {
+      *selected_item = i;
+    }
+    if (i == *selected_item) {
+      ImGui::SetItemDefaultFocus();
+    }
+  }
+  ImGui::EndListBox();
+  ImGui::End();
+}
 void RenderPassDebugRenderSelectedBuffer::Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   D3D12_GPU_DESCRIPTOR_HANDLE srv_list{};
   D3D12_RESOURCE_BARRIER* barrier{};
@@ -59,17 +135,5 @@ void RenderPassDebugRenderSelectedBuffer::Render(RenderPassFuncArgsRenderCommon*
     }
     command_list->ResourceBarrier(barrier_num, barrier);
   }
-}
-uint32_t RenderPassDebugRenderSelectedBuffer::GetBufferAllocationIndexList(const BufferList& buffer_list, const BufferConfig* buffer_config_list, MemoryAllocationJanitor* allocator, uint32_t** dst_buffer_allocation_index_list) {
-  *dst_buffer_allocation_index_list = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
-  uint32_t index = 0;
-  for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
-    if (buffer_list.buffer_allocation_list[i] == nullptr) { continue; }
-    auto& buffer_config = buffer_config_list[buffer_list.buffer_config_index[i]];
-    if (buffer_config.dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) { continue; }
-    (*dst_buffer_allocation_index_list)[index] = i;
-    index++;
-  }
-  return index;
 }
 } // namespace illuminate

@@ -296,10 +296,6 @@
       "execute": true,
       "buffer_list": [
         {
-          "name": "imgui_font",
-          "state": "srv_ps"
-        },
-        {
           "name": "swapchain",
           "state": "rtv"
         }

@@ -217,6 +217,10 @@ void DescriptorGpu::SetPersistentSamplerHandleNum(const uint32_t handle_num) {
   descriptor_sampler_.reserved_num = handle_num;
   descriptor_sampler_.current_handle_num = handle_num;
 }
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::GetViewGpuHandle(const uint32_t index) {
+  D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle{descriptor_cbv_srv_uav_.heap_start_gpu + index * descriptor_cbv_srv_uav_.handle_increment_size};
+  return gpu_handle;
+}
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::WriteToPersistentViewHandleRange(const uint32_t start, const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE handle, D3d12Device* device) {
   assert(start + num <= descriptor_cbv_srv_uav_.reserved_num);
   D3D12_CPU_DESCRIPTOR_HANDLE dst_handle{descriptor_cbv_srv_uav_.heap_start_cpu + start * descriptor_cbv_srv_uav_.handle_increment_size};

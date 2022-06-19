@@ -46,8 +46,5 @@ constexpr inline auto GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_comm
 constexpr inline auto GetRenderPassPso(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass, const uint32_t variation_index) {
   return GetMaterialPso(*args_common->material_list, GetRenderPassMaterial(args_common, args_per_pass), variation_index);
 }
-RenderPassConfigDynamicData InitRenderPassDynamicData(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, MemoryAllocationJanitor* allocator);
-void UpdateCamera(const float width, const float height, float camera_pos[3], float camera_focus[3]);
-void UpdateTimeDuration(const float frame_count_reset_time_threshold_msec, uint32_t* frame_count, std::chrono::high_resolution_clock::time_point* last_time_point, float* delta_time_msec, float* duration_msec_sum, float* prev_duration_per_frame_msec_avg);
 }
 #endif

@@ -34,12 +34,6 @@ struct RenderPassConfigDynamicData {
   float light_direction[3]{};
   float light_color[3]{};
   float light_intensity{};
-  float frame_count_reset_time_threshold_msec{250.0f};
-  uint32_t frame_count{0U};
-  std::chrono::high_resolution_clock::time_point last_time_point{std::chrono::high_resolution_clock::now()};
-  float delta_time_msec{0.0f};
-  float duration_msec_sum{0.0f};
-  float prev_duration_per_frame_msec_avg{0.0f};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
