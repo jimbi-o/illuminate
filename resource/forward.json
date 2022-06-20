@@ -156,7 +156,7 @@
     },
     {
       "name": "debug buffer",
-      "type": "debug buffer",
+      "type": "postprocess",
       "enabled": false,
       "command_queue": "queue_graphics",
       "execute": true,
@@ -167,7 +167,7 @@
         }
       ],
       "sampler": ["bilinear"],
-      "material": "render selected buffer",
+      "material": "output to swapchain",
       "prepass_barrier": [
         {
           "buffer_name": "swapchain",

@@ -179,29 +179,6 @@
       ]
     },
     {
-      "name": "render selected buffer",
-      "rootsig": "render selected buffer",
-      "render_target_formats": ["R8G8B8A8_UNORM"],
-      "depth_stencil": {
-        "depth_enable": false
-      },
-      "variations": [
-        {
-          "shaders": [
-            {
-              "file": "shader/postprocess/fullscreen_triangle.vs.hlsl",
-              "target": "vs"
-            },
-            {
-              "file": "shader/test/render_selected_buffer.ps.hlsl",
-              "target": "ps",
-              "entry": "MainPs"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "name": "brdf forward",
       "rootsig": "brdf forward",
       "render_target_formats": ["R8G8B8A8_UNORM"],

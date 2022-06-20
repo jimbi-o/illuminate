@@ -265,7 +265,7 @@
     },
     {
       "name": "debug buffer",
-      "type": "debug buffer",
+      "type": "postprocess",
       "enabled": false,
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
@@ -286,7 +286,7 @@
           "state_after": ["rtv"]
         }
       ],
-      "material": "render selected buffer"
+      "material": "output to swapchain"
     },
     {
       "name": "imgui",
