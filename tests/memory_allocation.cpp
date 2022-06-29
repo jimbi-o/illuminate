@@ -186,3 +186,57 @@ TEST_CASE("DoubleEndedStackAllocator") { // NOLINT
   CHECK_EQ(allocator.GetOffsetHigher(), 0);
   CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
 }
+TEST_CASE("DoubleEndedLinearAllocator") { // NOLINT
+  using namespace illuminate; // NOLINT
+  const uint32_t size_in_byte = 64;
+  std::byte buffer[size_in_byte]{};
+  DoubleEndedLinearAllocator allocator(buffer, size_in_byte);
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 0);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto head = allocator.AllocateHead(10);
+  CHECK_EQ(head, buffer);
+  CHECK_EQ(allocator.GetOffsetLower(), 10);
+  CHECK_EQ(allocator.GetOffsetHigher(), 0);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto next = allocator.AllocateHead(10);
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(next), reinterpret_cast<std::uintptr_t>(head) + 16);
+  CHECK_EQ(allocator.GetOffsetLower(), 26);
+  CHECK_EQ(allocator.GetOffsetHigher(), 0);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto tail = allocator.AllocateTail(10);
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(tail), reinterpret_cast<std::uintptr_t>(head) + size_in_byte - 16);
+  CHECK_EQ(allocator.GetOffsetLower(), 26);
+  CHECK_EQ(allocator.GetOffsetHigher(), 16);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto tail_next = allocator.AllocateTail(10);
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(tail_next), reinterpret_cast<std::uintptr_t>(head) + size_in_byte - 32);
+  CHECK_EQ(allocator.GetOffsetLower(), 26);
+  CHECK_EQ(allocator.GetOffsetHigher(), 32);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  // null check
+  CHECK_EQ(allocator.AllocateHead(10), nullptr);
+  CHECK_EQ(allocator.GetOffsetLower(), 26);
+  CHECK_EQ(allocator.GetOffsetHigher(), 32);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  CHECK_EQ(allocator.AllocateTail(10), nullptr);
+  CHECK_EQ(allocator.GetOffsetLower(), 26);
+  CHECK_EQ(allocator.GetOffsetHigher(), 32);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  allocator.ResetLower();
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 32);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  allocator.ResetHigher();
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 0);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  CHECK_EQ(allocator.AllocateHead(10), buffer);
+  CHECK_EQ(allocator.GetOffsetLower(), 10);
+  CHECK_EQ(allocator.GetOffsetHigher(), 0);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(allocator.AllocateTail(10)), reinterpret_cast<std::uintptr_t>(head) + size_in_byte - 16);
+  CHECK_EQ(allocator.GetOffsetLower(), 10);
+  CHECK_EQ(allocator.GetOffsetHigher(), 16);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+}

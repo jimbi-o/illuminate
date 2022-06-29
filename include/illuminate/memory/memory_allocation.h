@@ -64,6 +64,40 @@ class DoubleBufferedAllocator {
   uint32_t head_index_;
   [[maybe_unused]] std::byte _pad[4]{};
 };
+class DoubleEndedLinearAllocator {
+ public:
+  explicit DoubleEndedLinearAllocator(const std::byte* buffer, const uint32_t size_in_byte)
+      : head_(reinterpret_cast<uintptr_t>(buffer))
+      , size_in_byte_(size_in_byte)
+      , offset_in_byte_lower_(0)
+      , offset_in_byte_higher_(0) {}
+  ~DoubleEndedLinearAllocator() {}
+  inline void* AllocateHead(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+    auto addr_aligned = AlignAddress(head_ + offset_in_byte_lower_, alignment_in_bytes);
+    auto offset = addr_aligned - head_ + bytes;
+    if (offset + offset_in_byte_higher_ > size_in_byte_) return nullptr;
+    offset_in_byte_lower_ = offset;
+    return reinterpret_cast<void*>(addr_aligned);
+  }
+  inline void* AllocateTail(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+    auto addr_aligned = AlignAddress(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes - kDefaultAlignmentSize, alignment_in_bytes);
+    if (addr_aligned < head_ + offset_in_byte_lower_) { return nullptr; }
+    offset_in_byte_higher_ = size_in_byte_ - (addr_aligned - head_);
+    return reinterpret_cast<void*>(addr_aligned);
+  }
+  constexpr auto GetOffsetLower() const { return offset_in_byte_lower_; }
+  constexpr auto GetOffsetHigher() const { return offset_in_byte_higher_; }
+  constexpr void ResetLower() { offset_in_byte_lower_ = 0; }
+  constexpr void ResetHigher() { offset_in_byte_higher_ = 0; }
+  constexpr auto GetBufferSizeInByte() const { return size_in_byte_; }
+ private:
+  DoubleEndedLinearAllocator(const DoubleEndedLinearAllocator&) = delete;
+  DoubleEndedLinearAllocator& operator=(const DoubleEndedLinearAllocator&) = delete;
+  const std::uintptr_t head_;
+  const size_t size_in_byte_;
+  size_t offset_in_byte_lower_;
+  size_t offset_in_byte_higher_;
+};
 class StackAllocator {
  public:
   explicit StackAllocator(const std::byte* buffer, const uint32_t size_in_byte) : head_(reinterpret_cast<uintptr_t>(buffer)), size_in_byte_(size_in_byte), offset_in_byte_(0) {}
