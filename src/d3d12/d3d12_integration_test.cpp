@@ -644,7 +644,6 @@ auto ConfigureDebugBufferPass(const BufferList& buffer_list, const uint32_t debu
   debug_buffer_state_list[0].buffer_config_index = buffer_list.buffer_config_index[debug_render_selected_buffer_allocation_index];
   debug_buffer_state_list[0].state_type = ResourceStateType::kSrvPs;
   return std::make_pair(debug_buffer_state_num, debug_buffer_state_list);
-  // TODO ConfigureRenderPassResourceStates process additional states.
 }
 } // namespace anonymous
 } // namespace illuminate

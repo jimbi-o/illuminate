@@ -84,6 +84,40 @@ class StackAllocator {
   const size_t size_in_byte_;
   size_t offset_in_byte_;
 };
+class DoubleEndedStackAllocator {
+ public:
+  explicit DoubleEndedStackAllocator(const std::byte* buffer, const uint32_t size_in_byte)
+      : head_(reinterpret_cast<uintptr_t>(buffer))
+      , size_in_byte_(size_in_byte)
+      , offset_in_byte_lower_(0)
+      , offset_in_byte_higher_(0) {}
+  ~DoubleEndedStackAllocator() {}
+  inline void* AllocateHead(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+    auto addr_aligned = AlignAddress(head_ + offset_in_byte_lower_, alignment_in_bytes);
+    auto offset = addr_aligned - head_ + bytes;
+    if (offset + offset_in_byte_higher_ > size_in_byte_) return nullptr;
+    offset_in_byte_lower_ = offset;
+    return reinterpret_cast<void*>(addr_aligned);
+  }
+  inline void* AllocateTail(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+    auto addr_aligned = AlignAddress(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes - kDefaultAlignmentSize, alignment_in_bytes);
+    if (addr_aligned < head_ + offset_in_byte_lower_) { return nullptr; }
+    offset_in_byte_higher_ = size_in_byte_ - (addr_aligned - head_);
+    return reinterpret_cast<void*>(addr_aligned);
+  }
+  constexpr auto GetOffsetLower() const { return offset_in_byte_lower_; }
+  constexpr auto GetOffsetHigher() const { return offset_in_byte_higher_; }
+  constexpr void ResetLowerToMarker(const uintptr_t marker) { offset_in_byte_lower_ = marker; }
+  constexpr void ResetHigherToMarker(const uintptr_t marker) { offset_in_byte_higher_ = marker; }
+  constexpr auto GetBufferSizeInByte() const { return size_in_byte_; }
+ private:
+  DoubleEndedStackAllocator(const DoubleEndedStackAllocator&) = delete;
+  DoubleEndedStackAllocator& operator=(const DoubleEndedStackAllocator&) = delete;
+  const std::uintptr_t head_;
+  const size_t size_in_byte_;
+  size_t offset_in_byte_lower_;
+  size_t offset_in_byte_higher_;
+};
 class MemoryAllocationJanitor {
  public:
   MemoryAllocationJanitor(StackAllocator* allocator)
