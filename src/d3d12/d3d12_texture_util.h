@@ -15,7 +15,7 @@ struct TextureCreationInfo {
   uint32_t total_size_in_bytes{0};
 };
 D3D12_RESOURCE_DESC1 GetBufferDesc(const uint32_t size_in_bytes);
-TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t* filepath, MemoryAllocationJanitor* allocator);
+TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t* filepath);
 void FillUploadResource(const TextureCreationInfo& info, ID3D12Resource* upload_resource);
 }
 #endif

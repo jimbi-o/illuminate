@@ -15,7 +15,7 @@ struct Param {
 };
 } // namespace anonymous
 void* RenderPassMeshTransform::Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
-  auto param = Allocate<Param>(args->allocator);
+  auto param = AllocateSystem<Param>();
   *param = {};
   param->stencil_val = GetNum(*args->json, "stencil_val", 0);
   param->rtv_index = ~0U;

@@ -27,7 +27,7 @@ auto UpdatePingpongC(RenderPassFuncArgsRenderCommon* args_common, RenderPassFunc
 }
 } // namespace anonymous
 void* RenderPassPostprocess::Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
-  auto param = Allocate<Param>(args->allocator);
+  auto param = AllocateSystem<Param>();
   *param = {};
   if (args->json && args->json->contains("size_type")) {
     param->size_type = (GetStringView(args->json->at("size_type")).compare("swapchain_relative") == 0) ? BufferSizeRelativeness::kSwapchainRelative : BufferSizeRelativeness::kPrimaryBufferRelative;
@@ -43,7 +43,7 @@ void* RenderPassPostprocess::Init(RenderPassFuncArgsInit* args, const uint32_t r
     if (buffer_list[i].state == ResourceStateType::kCbv) {
       const auto buffer_config_index = args->render_pass_list[render_pass_index].buffer_list[i].buffer_index;
       param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
-      param->cbv_ptr = AllocateArray<void*>(args->allocator, args->frame_buffer_num);
+      param->cbv_ptr = AllocateArraySystem<void*>(args->frame_buffer_num);
       for (uint32_t j = 0; j < args->frame_buffer_num; j++) {
         param->cbv_ptr[j] = MapResource(GetResource(*args->buffer_list, buffer_config_index, j), param->cbv_size);
       }

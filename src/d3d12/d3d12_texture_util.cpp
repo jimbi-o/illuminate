@@ -55,7 +55,7 @@ D3D12_RESOURCE_DESC1 GetBufferDesc(const uint32_t size_in_bytes) {
     },
   };
 }
-TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t* filepath, MemoryAllocationJanitor* allocator) {
+TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t* filepath) {
   TextureCreationInfo info{};
   ID3D12Resource* committed_resource{};
   std::vector<D3D12_SUBRESOURCE_DATA> subresources;
@@ -71,13 +71,13 @@ TextureCreationInfo GatherTextureCreationInfo(D3d12Device* device, const wchar_t
   committed_resource->Release();
   info.resource_desc = ConvertToResourceDesc1(resource_desc_src);
   info.subresource_num = GetUint32(subresources.size());
-  info.subresources = AllocateArray<D3D12_SUBRESOURCE_DATA>(allocator, info.subresource_num);
+  info.subresources = AllocateArrayFrame<D3D12_SUBRESOURCE_DATA>(info.subresource_num);
   for (uint32_t i = 0; i < info.subresource_num; i++) {
     info.subresources[i] = subresources[i];
   }
-  info.layout = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(allocator, info.subresource_num);
-  info.num_rows = AllocateArray<uint32_t>(allocator, info.subresource_num);
-  info.row_size_in_bytes = AllocateArray<uint64_t>(allocator, info.subresource_num);
+  info.layout = AllocateArrayFrame<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(info.subresource_num);
+  info.num_rows = AllocateArrayFrame<uint32_t>(info.subresource_num);
+  info.row_size_in_bytes = AllocateArrayFrame<uint64_t>(info.subresource_num);
   uint64_t total_bytes{};
   device->GetCopyableFootprints(&resource_desc_src, 0, info.subresource_num, 0, info.layout, info.num_rows, info.row_size_in_bytes, &total_bytes);
   info.total_size_in_bytes = GetUint32(total_bytes);
@@ -127,11 +127,10 @@ TEST_CASE("create white texture") { // NOLINT
   auto resource_desc_src = committed_resource->GetDesc();
   auto resource_desc = ConvertToResourceDesc1(resource_desc_src);
   committed_resource->Release();
-  auto tmp_allocator = GetTemporalMemoryAllocator();
   const auto subresource_num = GetUint32(subresources.size());
-  auto layout = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(&tmp_allocator, subresource_num);
-  auto num_rows = AllocateArray<uint32_t>(&tmp_allocator, subresource_num);
-  auto row_size_in_bytes = AllocateArray<uint64_t>(&tmp_allocator, subresource_num);
+  auto layout = AllocateArrayFrame<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(subresource_num);
+  auto num_rows = AllocateArrayFrame<uint32_t>(subresource_num);
+  auto row_size_in_bytes = AllocateArrayFrame<uint64_t>(subresource_num);
   uint64_t total_bytes{};
   device.Get()->GetCopyableFootprints(&resource_desc_src, 0, subresource_num, 0, layout, num_rows, row_size_in_bytes, &total_bytes);
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
@@ -172,7 +171,7 @@ TEST_CASE("create white texture") { // NOLINT
   command_list_set.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }
 TEST_CASE("gather texture creation info") { // NOLINT
   // https://www.shader.jp/?page_id=2076
@@ -195,8 +194,7 @@ TEST_CASE("gather texture creation info") { // NOLINT
   uint64_t signal_val_list[] = {0UL};
   command_queue_signals.Init(device.Get(), 1, command_list_set.GetCommandQueueList());
   // main process
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto texture_creation_info = GatherTextureCreationInfo(device.Get(), L"textures/white.dds", &tmp_allocator);
+  auto texture_creation_info = GatherTextureCreationInfo(device.Get(), L"textures/white.dds");
   D3D12MA::Allocation* upload_allocation{nullptr};
   ID3D12Resource* upload_resource{nullptr};
   CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, GetBufferDesc(texture_creation_info.total_size_in_bytes), nullptr, buffer_allocator, &upload_allocation, &upload_resource);
@@ -223,5 +221,5 @@ TEST_CASE("gather texture creation info") { // NOLINT
   command_list_set.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }

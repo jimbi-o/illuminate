@@ -5,7 +5,6 @@
 #include "d3d12_gpu_buffer_allocator.h"
 #include "shader_defines.h"
 namespace illuminate {
-class MemoryAllocationJanitor;
 struct ResourceTransfer;
 enum SceneDescriptorHandle {
   kSceneDescriptorTransform = 0,
@@ -42,7 +41,7 @@ struct SceneData {
 static const uint32_t kTextureNumPerMaterial = 4;
 static const char kSceneSamplerName[] = "scene";
 static const uint32_t kSceneSamplerId = 0xFFFF0000;
-SceneData GetSceneFromTinyGltf(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator, ResourceTransfer* resource_transfer);
+SceneData GetSceneFromTinyGltf(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer);
 void ReleaseSceneData(SceneData* scene_data);
 bool IsSceneBuffer(const char* const name);
 uint32_t EncodeSceneBufferIndex(const char* const name);

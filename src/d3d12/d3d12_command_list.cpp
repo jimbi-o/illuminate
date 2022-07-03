@@ -5,7 +5,7 @@ void CommandAllocatorPool::Init(const uint32_t frame_buffer_num, const uint32_t*
   allocator_num_per_frame_ = 0;
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     allocator_pool_size_[i] = command_allocator_num_per_queue_type[i];
-    allocator_pool_[i] = AllocateArray<D3d12CommandAllocator*>(gSystemMemoryAllocator, allocator_pool_size_[i]);
+    allocator_pool_[i] = AllocateArraySystem<D3d12CommandAllocator*>(allocator_pool_size_[i]);
     for (uint32_t j = 0; j < allocator_pool_size_[i]; j++) {
       allocator_pool_[i][j] = nullptr;
     }
@@ -13,13 +13,13 @@ void CommandAllocatorPool::Init(const uint32_t frame_buffer_num, const uint32_t*
   }
   frame_buffer_num_ = frame_buffer_num;
   frame_index_ = 0;
-  used_allocator_num_per_frame_ = AllocateArray<uint32_t>(gSystemMemoryAllocator, frame_buffer_num_);
-  allocator_in_use_ = AllocateArray<D3d12CommandAllocator**>(gSystemMemoryAllocator, frame_buffer_num_);
-  allocator_type_in_use_ = AllocateArray<D3D12_COMMAND_LIST_TYPE*>(gSystemMemoryAllocator, frame_buffer_num_);
+  used_allocator_num_per_frame_ = AllocateArraySystem<uint32_t>(frame_buffer_num_);
+  allocator_in_use_ = AllocateArraySystem<D3d12CommandAllocator**>(frame_buffer_num_);
+  allocator_type_in_use_ = AllocateArraySystem<D3D12_COMMAND_LIST_TYPE*>(frame_buffer_num_);
   for (uint32_t i = 0; i < frame_buffer_num_; i++) {
     used_allocator_num_per_frame_[i] = 0;
-    allocator_in_use_[i] = AllocateArray<D3d12CommandAllocator*>(gSystemMemoryAllocator, allocator_num_per_frame_);
-    allocator_type_in_use_[i] = AllocateArray<D3D12_COMMAND_LIST_TYPE>(gSystemMemoryAllocator, allocator_num_per_frame_);
+    allocator_in_use_[i] = AllocateArraySystem<D3d12CommandAllocator*>(allocator_num_per_frame_);
+    allocator_type_in_use_[i] = AllocateArraySystem<D3D12_COMMAND_LIST_TYPE>(allocator_num_per_frame_);
     for (uint32_t j = 0; j < allocator_num_per_frame_; j++) {
       allocator_in_use_[i][j] = nullptr;
     }
@@ -111,7 +111,7 @@ void CommandListPool::Init(const uint32_t* command_list_num_per_queue_type, cons
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     command_list_num_per_queue_type_[i] = command_list_num_per_queue_type[i];
     if (command_list_num_per_queue_type_[i] > 0) {
-      command_list_pool_[i] = AllocateArray<D3d12CommandList*>(gSystemMemoryAllocator, command_list_num_per_queue_type_[i]);
+      command_list_pool_[i] = AllocateArraySystem<D3d12CommandList*>(command_list_num_per_queue_type_[i]);
       for (uint32_t j = 0; j < command_list_num_per_queue_type_[i]; j++) {
         command_list_pool_[i][j] = nullptr;
       }
@@ -190,13 +190,13 @@ void CommandListPool::ReturnCommandList(const D3D12_COMMAND_LIST_TYPE type, cons
 }
 void CommandListInUse::Init(const uint32_t command_queue_num, const uint32_t* command_list_num_per_queue) {
   command_queue_num_ =  command_queue_num;
-  command_list_num_per_queue_ = AllocateArray<uint32_t>(gSystemMemoryAllocator, command_queue_num_);
-  pushed_command_list_num_ = AllocateArray<uint32_t>(gSystemMemoryAllocator, command_queue_num_);
-  pushed_command_list_ = AllocateArray<D3d12CommandList**>(gSystemMemoryAllocator, command_queue_num_);
+  command_list_num_per_queue_ = AllocateArraySystem<uint32_t>(command_queue_num_);
+  pushed_command_list_num_ = AllocateArraySystem<uint32_t>(command_queue_num_);
+  pushed_command_list_ = AllocateArraySystem<D3d12CommandList**>(command_queue_num_);
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     pushed_command_list_num_[i] = 0;
     command_list_num_per_queue_[i] = command_list_num_per_queue[i];
-    pushed_command_list_[i] = AllocateArray<D3d12CommandList*>(gSystemMemoryAllocator, command_list_num_per_queue_[i]);
+    pushed_command_list_[i] = AllocateArraySystem<D3d12CommandList*>(command_list_num_per_queue_[i]);
     for (uint32_t j = 0; j < command_list_num_per_queue_[i]; j++) {
       pushed_command_list_[i][j] = nullptr;
     }
@@ -229,13 +229,12 @@ void CommandListInUse::FreePushedCommandList(const uint32_t command_queue_index)
   pushed_command_list_num_[command_queue_index] = 0;
 }
 bool CommandListSet::Init(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const D3D12_COMMAND_QUEUE_PRIORITY* command_queue_priority, const uint32_t* command_list_num_per_queue, const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type) {
-  auto allocator = GetTemporalMemoryAllocator();
-  auto command_list_num_per_queue_type = AllocateArray<uint32_t>(&allocator, kCommandQueueTypeNum);
+  auto command_list_num_per_queue_type = AllocateArrayFrame<uint32_t>(kCommandQueueTypeNum);
   for (uint32_t i = 0; i < kCommandQueueTypeNum; i++) {
     command_list_num_per_queue_type[i] = 0;
   }
-  auto raw_command_queue_list = AllocateArray<D3d12CommandQueue*>(&allocator, command_queue_num);
-  command_queue_type_ = AllocateArray<D3D12_COMMAND_LIST_TYPE>(gSystemMemoryAllocator, command_queue_num);
+  auto raw_command_queue_list = AllocateArrayFrame<D3d12CommandQueue*>(command_queue_num);
+  command_queue_type_ = AllocateArraySystem<D3D12_COMMAND_LIST_TYPE>(command_queue_num);
   for (uint32_t i = 0; i < command_queue_num; i++) {
     command_queue_type_[i] = command_queue_type[i];
     command_list_num_per_queue_type[GetCommandQueueTypeIndex(command_queue_type_[i])] += command_list_num_per_queue[i];

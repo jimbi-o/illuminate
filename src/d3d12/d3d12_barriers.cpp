@@ -6,18 +6,18 @@ constexpr auto IsResourceStateInclusive(const ResourceStateType& a, const Resour
   if (a == b) { return true; }
   return a == ResourceStateType::kGenericRead && b == ResourceStateType::kCbv;
 }
-std::tuple<const ResourceStateType***, const uint32_t**> ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool** pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, const uint32_t additional_buffer_state_num, RenderPassBufferState* additional_buffer_state_list, MemoryAllocationJanitor* allocator) {
+RenderPassResourceState ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool** pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, const uint32_t additional_buffer_state_num, RenderPassBufferState* additional_buffer_state_list, const MemoryType retval_memory_type) {
   // TODO additional_buffer_state_list
-  auto resource_state_list = AllocateArray<ResourceStateType**>(allocator, buffer_num);
-  auto last_user_pass = AllocateArray<uint32_t*>(allocator, buffer_num);
+  auto resource_state_list = AllocateArray<ResourceStateType**>(retval_memory_type, buffer_num);
+  auto last_user_pass = AllocateArray<uint32_t*>(retval_memory_type, buffer_num);
   for (uint32_t i = 0; i < buffer_num; i++) {
     const auto pingpong_buffer = buffer_config_list[i].pingpong;
     const auto buffer_allocation_num = pingpong_buffer ? 2U : 1U;
-    resource_state_list[i] = AllocateArray<ResourceStateType*>(allocator, render_pass_num);
+    resource_state_list[i] = AllocateArray<ResourceStateType*>(retval_memory_type, render_pass_num);
     for (uint32_t j = 0; j < render_pass_num; j++) {
-      resource_state_list[i][j] = AllocateArray<ResourceStateType>(allocator, buffer_allocation_num);
+      resource_state_list[i][j] = AllocateArray<ResourceStateType>(retval_memory_type, buffer_allocation_num);
     }
-    last_user_pass[i] = AllocateArray<uint32_t>(allocator, buffer_allocation_num);
+    last_user_pass[i] = AllocateArray<uint32_t>(retval_memory_type, buffer_allocation_num);
     for (uint32_t k = 0; k < buffer_allocation_num; k++) {
       last_user_pass[i][k] = 0;
     }
@@ -76,13 +76,13 @@ std::tuple<const ResourceStateType***, const uint32_t**> ConfigureRenderPassReso
       }
     }
   }
-  return std::make_tuple((const ResourceStateType***)resource_state_list, (const uint32_t**)last_user_pass);
+  return {resource_state_list, last_user_pass};
 }
-std::tuple<const uint32_t**, const Barrier***> ConfigureBarrierTransitions(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const ResourceStateType*** resource_state_list, const uint32_t** last_user_pass, MemoryAllocationJanitor* allocator) {
+BarrierTransitions ConfigureBarrierTransitions(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const ResourceStateTypePerPass* resource_state_list, const uint32_t* const * const last_user_pass, const MemoryType retval_memory_type) {
   // command queue type not considered yet.
-  auto barrier_num = AllocateArray<uint32_t*>(allocator, kBarrierExecutionTimingNum);
+  auto barrier_num = AllocateArray<uint32_t*>(retval_memory_type, kBarrierExecutionTimingNum);
   for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
-    barrier_num[i] = AllocateArray<uint32_t>(allocator, render_pass_num);
+    barrier_num[i] = AllocateArray<uint32_t>(retval_memory_type, render_pass_num);
     for (uint32_t j = 0; j < render_pass_num; j++) {
       barrier_num[i][j] = (i == 0) ? render_pass_list[j].prepass_barrier_num : render_pass_list[j].postpass_barrier_num;
     }
@@ -103,17 +103,14 @@ std::tuple<const uint32_t**, const Barrier***> ConfigureBarrierTransitions(const
       }
     }
   }
-  auto barrier_config_list = AllocateArray<Barrier**>(allocator, kBarrierExecutionTimingNum);
+  auto barrier_config_list = AllocateArray<Barrier**>(retval_memory_type, kBarrierExecutionTimingNum);
+  auto barrier_index = AllocateArrayFrame<uint32_t*>(kBarrierExecutionTimingNum);
   for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
-    barrier_config_list[i] = AllocateArray<Barrier*>(allocator, render_pass_num);
+    barrier_config_list[i] = AllocateArray<Barrier*>(retval_memory_type, render_pass_num);
     for (uint32_t j = 0; j < render_pass_num; j++) {
-      barrier_config_list[i][j] = (barrier_num[i][j] == 0) ? nullptr : AllocateArray<Barrier>(allocator, barrier_num[i][j]);
+      barrier_config_list[i][j] = (barrier_num[i][j] == 0) ? nullptr : AllocateArray<Barrier>(retval_memory_type, barrier_num[i][j]);
     }
-  }
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto barrier_index = AllocateArray<uint32_t*>(&tmp_allocator, kBarrierExecutionTimingNum);
-  for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
-    barrier_index[i] = AllocateArray<uint32_t>(&tmp_allocator, render_pass_num);
+    barrier_index[i] = AllocateArrayFrame<uint32_t>(render_pass_num);
   }
   for (uint32_t i = 0; i < render_pass_num; i++) {
     for (uint32_t j = 0; j < render_pass_list[i].prepass_barrier_num; j++) {
@@ -171,7 +168,7 @@ std::tuple<const uint32_t**, const Barrier***> ConfigureBarrierTransitions(const
     }
   }
 #endif
-  return std::make_tuple((const uint32_t**)barrier_num, (const Barrier***)barrier_config_list);
+  return {barrier_num, barrier_config_list};
 }
 } // namespace illuminate
 TEST_CASE("buffer state change") {
@@ -255,12 +252,11 @@ TEST_CASE("buffer state change") {
   render_pass_list[1].postpass_barrier = postpass_barrier;
   render_pass_list[2].buffer_num = countof(buffer_list2);
   render_pass_list[2].buffer_list = buffer_list2;
-  auto allocator = GetTemporalMemoryAllocator();
-  auto pingpong_buffer_write_to_sub_list = AllocateArray<bool*>(&allocator, countof(buffer_config_list));
-  pingpong_buffer_write_to_sub_list[0] = AllocateArray<bool>(&allocator, countof(render_pass_list));
-  pingpong_buffer_write_to_sub_list[1] = AllocateArray<bool>(&allocator, countof(render_pass_list));
-  pingpong_buffer_write_to_sub_list[2] = AllocateArray<bool>(&allocator, countof(render_pass_list));
-  pingpong_buffer_write_to_sub_list[3] = AllocateArray<bool>(&allocator, countof(render_pass_list));
+  auto pingpong_buffer_write_to_sub_list = AllocateArray<bool*>(MemoryType::kScene, countof(buffer_config_list));
+  pingpong_buffer_write_to_sub_list[0] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
+  pingpong_buffer_write_to_sub_list[1] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
+  pingpong_buffer_write_to_sub_list[2] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
+  pingpong_buffer_write_to_sub_list[3] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
   pingpong_buffer_write_to_sub_list[0][0] = false;
   pingpong_buffer_write_to_sub_list[0][1] = true;
   pingpong_buffer_write_to_sub_list[0][2] = false;
@@ -274,7 +270,7 @@ TEST_CASE("buffer state change") {
   pingpong_buffer_write_to_sub_list[3][1] = false;
   pingpong_buffer_write_to_sub_list[3][2] = false;
   const bool render_pass_enable_flag[] = {true,true,true,};
-  auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, (const bool**)pingpong_buffer_write_to_sub_list, render_pass_enable_flag, 0, nullptr, &allocator);
+  auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, (const bool**)pingpong_buffer_write_to_sub_list, render_pass_enable_flag, 0, nullptr, MemoryType::kScene);
   // resource_state_list[buffer_index][pass_index][main(0)/sub(1)]
   CHECK_EQ(resource_state_list[0][0][0], ResourceStateType::kRtv);
   CHECK_EQ(resource_state_list[0][1][0], ResourceStateType::kSrvPs);
@@ -292,7 +288,7 @@ TEST_CASE("buffer state change") {
   CHECK_EQ(last_user_pass[0][1], 2);
   CHECK_EQ(last_user_pass[1][0], 2);
   CHECK_EQ(last_user_pass[3][0], 1);
-  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, resource_state_list, last_user_pass, &allocator);
+  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, resource_state_list, last_user_pass, MemoryType::kScene);
   // barrier_num[prepass(0)/postpass(1)][pass_index][barrier_index]
   CHECK_EQ(barrier_num[0][0], 0);
   CHECK_EQ(barrier_num[1][0], 0);
@@ -361,4 +357,5 @@ TEST_CASE("buffer state change") {
   CHECK_EQ(barrier_config_list[1][2][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[1][2][1].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[1][2][1].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  ResetAllocation(MemoryType::kScene);
 }

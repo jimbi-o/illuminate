@@ -248,8 +248,7 @@ void SetTransformValues(const tinygltf::Model& model, SceneData* scene_data, con
     scene_data->transform_offset[i] = transform_element_num;
     transform_element_num += scene_data->model_instance_num[i];
   }
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto transform_offset_index = AllocateArray<uint32_t>(&tmp_allocator, scene_data->model_num);
+  auto transform_offset_index = AllocateArrayFrame<uint32_t>(scene_data->model_num);
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     transform_offset_index[i] = 0;
   }
@@ -326,8 +325,7 @@ auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
   shader::MaterialCommonSettings material_common_settings{};
   material_common_settings.misc_offset = static_cast<uint32_t>(sizeof(shader::AlbedoInfo)) * material_num;
   const auto material_index_list_size = material_common_settings.misc_offset + static_cast<uint32_t>(sizeof(shader::MaterialMiscInfo)) * material_num;
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto material_index_list = tmp_allocator.Allocate(material_index_list_size);
+  auto material_index_list = AllocateFrame(material_index_list_size);
   auto albedo_infos = static_cast<shader::AlbedoInfo*>(material_index_list);
   auto misc_infos = static_cast<shader::MaterialMiscInfo*>(SucceedPtr(material_index_list, material_common_settings.misc_offset));
   const uint32_t texture_offset = kDefaultTextureNum; // white, black & default normal texture at texture array head
@@ -405,7 +403,6 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
   const auto texture_num = scene_data->texture_num;
   auto handle_index = descriptor_index_offset;
   for (uint32_t i = 0; i < texture_num; i++) {
-    auto tmp_allocator = GetTemporalMemoryAllocator();
     std::filesystem::path path;
     if (i == kWhiteTextureIndex) {
       path = "textures/white.dds";
@@ -418,7 +415,7 @@ auto PrepareSceneTextureUpload(const tinygltf::Model& model, const char* const g
       path.replace_filename(model.images[i-kDefaultTextureNum].uri);
       path.replace_extension(".dds");
     }
-    auto texture_creation_info = GatherTextureCreationInfo(device, path.wstring().c_str(), &tmp_allocator);
+    auto texture_creation_info = GatherTextureCreationInfo(device, path.wstring().c_str());
     if (texture_creation_info.resource_desc.Width == 0) {
       logwarn("invalid texture {}", path.string());
       continue;
@@ -587,18 +584,18 @@ auto CreateSamplers(const std::vector<tinygltf::Sampler>& samplers, D3d12Device*
     device->CreateSampler(&sampler_desc, handle);
   }
 }
-auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_path, MemoryAllocationJanitor* allocator, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_path, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   SceneData scene_data{};
   scene_data.model_num = GetUint32(model.meshes.size());
-  scene_data.model_instance_num = AllocateArray<uint32_t>(allocator, scene_data.model_num);
-  scene_data.model_submesh_num = AllocateArray<uint32_t>(allocator, scene_data.model_num);
-  scene_data.model_submesh_index = AllocateArray<uint32_t*>(allocator, scene_data.model_num);
-  scene_data.transform_offset = AllocateArray<uint32_t>(allocator, scene_data.model_num);
+  scene_data.model_instance_num = AllocateArrayScene<uint32_t>(scene_data.model_num);
+  scene_data.model_submesh_num = AllocateArrayScene<uint32_t>(scene_data.model_num);
+  scene_data.model_submesh_index = AllocateArrayScene<uint32_t*>(scene_data.model_num);
+  scene_data.transform_offset = AllocateArrayScene<uint32_t>(scene_data.model_num);
   uint32_t mesh_num = 0;
   for (uint32_t i = 0; i < scene_data.model_num; i++) {
     scene_data.model_instance_num[i] = 0;
     scene_data.model_submesh_num[i] = GetUint32(model.meshes[i].primitives.size());
-    scene_data.model_submesh_index[i] = AllocateArray<uint32_t>(allocator, scene_data.model_submesh_num[i]);
+    scene_data.model_submesh_index[i] = AllocateArrayScene<uint32_t>(scene_data.model_submesh_num[i]);
     for (uint32_t j = 0; j < scene_data.model_submesh_num[i]; j++) {
       scene_data.model_submesh_index[i][j] = mesh_num;
       mesh_num++;
@@ -607,13 +604,13 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   scene_data.texture_num = GetTextureNum(model);
   const auto resource_num = mesh_num * (kVertexBufferTypeNum + 1/*index buffer*/) + scene_data.texture_num + kSceneDescriptorHandleTypeNum - 2/*texture,sampler*/;
   scene_data.resource_num = 0;
-  scene_data.resources = AllocateArray<ID3D12Resource*>(allocator, resource_num);
-  scene_data.allocations = AllocateArray<D3D12MA::Allocation*>(allocator, resource_num);
-  scene_data.submesh_index_buffer_len = AllocateArray<uint32_t>(allocator, mesh_num);
-  scene_data.submesh_index_buffer_view = AllocateArray<D3D12_INDEX_BUFFER_VIEW>(allocator, mesh_num);
-  scene_data.submesh_vertex_buffer_view = AllocateArray<D3D12_VERTEX_BUFFER_VIEW>(allocator, mesh_num * kVertexBufferTypeNum);
+  scene_data.resources = AllocateArrayScene<ID3D12Resource*>(resource_num);
+  scene_data.allocations = AllocateArrayScene<D3D12MA::Allocation*>(resource_num);
+  scene_data.submesh_index_buffer_len = AllocateArrayScene<uint32_t>(mesh_num);
+  scene_data.submesh_index_buffer_view = AllocateArrayScene<D3D12_INDEX_BUFFER_VIEW>(mesh_num);
+  scene_data.submesh_vertex_buffer_view = AllocateArrayScene<D3D12_VERTEX_BUFFER_VIEW>(mesh_num * kVertexBufferTypeNum);
   for (uint32_t i = 0; i < kVertexBufferTypeNum; i++) {
-    scene_data.submesh_vertex_buffer_view_index[i] = AllocateArray<uint32_t>(allocator, mesh_num);
+    scene_data.submesh_vertex_buffer_view_index[i] = AllocateArrayScene<uint32_t>(mesh_num);
   }
   {
     const auto default_buffer_index = scene_data.resource_num;
@@ -662,8 +659,8 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
     scene_data.resource_num += num;
     vertex_buffer_index_offset += num;
   }
-  scene_data.submesh_material_variation_hash = AllocateArray<StrHash>(allocator, mesh_num);
-  scene_data.submesh_material_index = AllocateArray<uint32_t>(allocator, mesh_num);
+  scene_data.submesh_material_variation_hash = AllocateArrayScene<StrHash>(mesh_num);
+  scene_data.submesh_material_index = AllocateArrayScene<uint32_t>(mesh_num);
   SetSubmeshMaterials(model, &scene_data);
   for (const auto& node : model.scenes[0].nodes) {
     CountModelInstanceNum(model, node, scene_data.model_instance_num);
@@ -700,14 +697,14 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   return scene_data;
 }
 } // namespace anonymous
-SceneData GetSceneFromTinyGltf(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator, ResourceTransfer* resource_transfer) {
+SceneData GetSceneFromTinyGltf(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   loginfo("loading {}", filename);
   tinygltf::Model model;
   if (!GetTinyGltfModel(filename, &model)) {
     logerror("gltf load failed. {}", filename);
     return {};
   }
-  return ParseTinyGltfScene(model, filename, allocator, frame_index, device, buffer_allocator, resource_transfer);
+  return ParseTinyGltfScene(model, filename, frame_index, device, buffer_allocator, resource_transfer);
 }
 void ReleaseSceneData(SceneData* scene_data) {
   for (uint32_t i = 0; i < scene_data->resource_num; i++) {
@@ -763,15 +760,14 @@ TEST_CASE("gltf scene") { // NOLINT
   Device device;
   device.Init(dxgi_core.GetAdapter()); // NOLINT
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
-  auto tmp_allocator = GetTemporalMemoryAllocator();
   const uint32_t frame_num = 2;
   uint32_t frame_index = 0;
   auto resource_transfer = PrepareResourceTransferer(frame_num, 1024, 11);
-  auto scene_data = GetSceneFromTinyGltf(TEST_MODEL_PATH, frame_index, device.Get(), buffer_allocator, &tmp_allocator, &resource_transfer);
+  auto scene_data = GetSceneFromTinyGltf(TEST_MODEL_PATH, frame_index, device.Get(), buffer_allocator, &resource_transfer);
   ClearResourceTransfer(2, &resource_transfer);
   ReleaseSceneData(&scene_data);
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }

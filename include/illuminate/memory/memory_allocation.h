@@ -36,6 +36,7 @@ class LinearAllocator {
   constexpr auto GetOffset() const { return offset_in_byte_; }
   constexpr void Reset() { offset_in_byte_ = 0; }
   constexpr auto GetBufferSizeInByte() const { return size_in_byte_; }
+  auto GetBuffer() const { return reinterpret_cast<std::byte*>(head_); }
  private:
   const std::uintptr_t head_;
   const size_t size_in_byte_;
@@ -72,14 +73,14 @@ class DoubleEndedLinearAllocator {
       , offset_in_byte_lower_(0)
       , offset_in_byte_higher_(0) {}
   ~DoubleEndedLinearAllocator() {}
-  inline void* AllocateHead(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  inline void* AllocateLower(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
     auto addr_aligned = AlignAddress(head_ + offset_in_byte_lower_, alignment_in_bytes);
     auto offset = addr_aligned - head_ + bytes;
     if (offset + offset_in_byte_higher_ > size_in_byte_) return nullptr;
     offset_in_byte_lower_ = offset;
     return reinterpret_cast<void*>(addr_aligned);
   }
-  inline void* AllocateTail(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  inline void* AllocateHigher(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
     auto addr_aligned = AlignAddress(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes - kDefaultAlignmentSize, alignment_in_bytes);
     if (addr_aligned < head_ + offset_in_byte_lower_) { return nullptr; }
     offset_in_byte_higher_ = size_in_byte_ - (addr_aligned - head_);
@@ -90,6 +91,7 @@ class DoubleEndedLinearAllocator {
   constexpr void ResetLower() { offset_in_byte_lower_ = 0; }
   constexpr void ResetHigher() { offset_in_byte_higher_ = 0; }
   constexpr auto GetBufferSizeInByte() const { return size_in_byte_; }
+  auto GetBuffer() const { return reinterpret_cast<std::byte*>(head_); }
  private:
   DoubleEndedLinearAllocator(const DoubleEndedLinearAllocator&) = delete;
   DoubleEndedLinearAllocator& operator=(const DoubleEndedLinearAllocator&) = delete;
@@ -126,14 +128,14 @@ class DoubleEndedStackAllocator {
       , offset_in_byte_lower_(0)
       , offset_in_byte_higher_(0) {}
   ~DoubleEndedStackAllocator() {}
-  inline void* AllocateHead(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  inline void* AllocateLower(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
     auto addr_aligned = AlignAddress(head_ + offset_in_byte_lower_, alignment_in_bytes);
     auto offset = addr_aligned - head_ + bytes;
     if (offset + offset_in_byte_higher_ > size_in_byte_) return nullptr;
     offset_in_byte_lower_ = offset;
     return reinterpret_cast<void*>(addr_aligned);
   }
-  inline void* AllocateTail(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  inline void* AllocateHigher(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
     auto addr_aligned = AlignAddress(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes - kDefaultAlignmentSize, alignment_in_bytes);
     if (addr_aligned < head_ + offset_in_byte_lower_) { return nullptr; }
     offset_in_byte_higher_ = size_in_byte_ - (addr_aligned - head_);
@@ -169,6 +171,18 @@ class MemoryAllocationJanitor {
  private:
   StackAllocator* allocator_{};
   std::uintptr_t marker_{};
+};
+template <typename A, size_t N>
+class TemporalAllocator {
+ public:
+  TemporalAllocator() : allocator_(buffer_, N) {}
+  void* Allocate(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
+    return allocator_.Allocate(bytes, alignment_in_bytes);
+  }
+  constexpr auto GetOffset() const { return allocator_.GetOffset(); }
+ private:
+  A allocator_;
+  std::byte buffer_[N];
 };
 template <typename T, typename A>
 auto Allocate(A* allocator, const size_t alignment_in_bytes = kDefaultAlignmentSize) {

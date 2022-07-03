@@ -28,7 +28,7 @@ constexpr inline auto GetBufferAllocationNum(const BufferConfig& config, const u
   }
   return 1U;
 }
-BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator);
+BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator);
 void ReleaseBuffers(BufferList* buffer_list);
 constexpr inline auto GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const uint32_t index) {
   return buffer_list.buffer_allocation_index[buffer_index][index];

@@ -3,7 +3,7 @@
 namespace illuminate {
 namespace {
 void* D3d12BufferAllocatorAllocCallback(size_t Size, size_t Alignment, [[maybe_unused]] void* pUserData) {
-  return gSystemMemoryAllocator->Allocate(Size, Alignment);
+  return AllocateSystem(Size, Alignment);
 }
 void D3d12BufferAllocatorFreeCallback([[maybe_unused]] void* pMemory, [[maybe_unused]] void* pUserData) {}
 auto GetResourceWidth(const BufferConfig& config, const MainBufferSize& main_buffer_size) {
@@ -78,20 +78,20 @@ void CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES i
     }
   }
 }
-BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator, MemoryAllocationJanitor* allocator) {
+BufferList CreateBuffers(const uint32_t buffer_config_num, const BufferConfig* buffer_config_list, const MainBufferSize& main_buffer_size, const uint32_t frame_buffer_num, D3D12MA::Allocator* buffer_allocator) {
   BufferList buffer_list{};
-  buffer_list.buffer_allocation_index = AllocateArray<uint32_t*>(allocator, buffer_config_num);
+  buffer_list.buffer_allocation_index = AllocateArraySystem<uint32_t*>(buffer_config_num);
   for (uint32_t i = 0; i < buffer_config_num; i++) {
     buffer_list.buffer_allocation_num += GetBufferAllocationNum(buffer_config_list[i], frame_buffer_num);
   }
-  buffer_list.buffer_allocation_list = AllocateArray<D3D12MA::Allocation*>(allocator, buffer_list.buffer_allocation_num);
-  buffer_list.resource_list = AllocateArray<ID3D12Resource*>(allocator, buffer_list.buffer_allocation_num);
-  buffer_list.buffer_config_index = AllocateArray<uint32_t>(allocator, buffer_list.buffer_allocation_num);
+  buffer_list.buffer_allocation_list = AllocateArraySystem<D3D12MA::Allocation*>(buffer_list.buffer_allocation_num);
+  buffer_list.resource_list = AllocateArraySystem<ID3D12Resource*>(buffer_list.buffer_allocation_num);
+  buffer_list.buffer_config_index = AllocateArraySystem<uint32_t>(buffer_list.buffer_allocation_num);
   uint32_t buffer_allocation_index = 0;
   for (uint32_t i = 0; i < buffer_config_num; i++) {
     auto& buffer_config = buffer_config_list[i];
     const auto alloc_num = GetBufferAllocationNum(buffer_config, frame_buffer_num);
-    buffer_list.buffer_allocation_index[i] = AllocateArray<uint32_t>(allocator, alloc_num);
+    buffer_list.buffer_allocation_index[i] = AllocateArraySystem<uint32_t>(alloc_num);
     for (uint32_t j = 0; j < alloc_num; j++) {
       buffer_list.buffer_allocation_index[i][j] = buffer_allocation_index;
       buffer_list.buffer_config_index[buffer_allocation_index] = i;
@@ -176,10 +176,9 @@ TEST_CASE("barrier configuration") { // NOLINT
   render_pass_list[2].flip_pingpong_index_list = flip_pingpong_index_list2;
   render_pass_list[3].flip_pingpong_num = countof(flip_pingpong_index_list3); // last flip will be ignored.
   render_pass_list[3].flip_pingpong_index_list = flip_pingpong_index_list3; // last flip will be ignored.
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto pingpong_buffer_write_to_sub_list = AllocateArray<bool*>(&tmp_allocator, buffer_num);
+  auto pingpong_buffer_write_to_sub_list = AllocateArrayFrame<bool*>(buffer_num);
   for (uint32_t i = 0; i < buffer_num; i++) {
-    pingpong_buffer_write_to_sub_list[i] = AllocateArray<bool>(&tmp_allocator, render_pass_num);
+    pingpong_buffer_write_to_sub_list[i] = AllocateArrayFrame<bool>(render_pass_num);
   }
   ConfigurePingPongBufferWriteToSubList(render_pass_num, render_pass_list, render_pass_enable_flag, buffer_num, pingpong_buffer_write_to_sub_list);
   CHECK_EQ(pingpong_buffer_write_to_sub_list[0][0], false);
@@ -224,4 +223,5 @@ TEST_CASE("barrier configuration") { // NOLINT
   CHECK_EQ(pingpong_buffer_write_to_sub_list[4][1], false);
   CHECK_EQ(pingpong_buffer_write_to_sub_list[4][2], false);
   CHECK_EQ(pingpong_buffer_write_to_sub_list[4][3], false);
+  ClearAllAllocations();
 }

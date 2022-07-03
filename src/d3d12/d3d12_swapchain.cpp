@@ -76,7 +76,7 @@ bool Swapchain::Init(DxgiFactory* factory, D3d12CommandQueue* command_queue, D3d
   }
   // get swapchain resource buffers for rtv
   {
-    resources_ = AllocateArray<ID3D12Resource*>(gSystemMemoryAllocator, swapchain_buffer_num_);
+    resources_ = AllocateArraySystem<ID3D12Resource*>(swapchain_buffer_num_);
     for (uint32_t i = 0; i < swapchain_buffer_num_; i++) {
       ID3D12Resource* resource = nullptr;
       auto hr = swapchain_->GetBuffer(i, IID_PPV_ARGS(&resource));
@@ -117,7 +117,7 @@ bool Swapchain::Init(DxgiFactory* factory, D3d12CommandQueue* command_queue, D3d
     };
     auto rtv_handle = descriptor_heap_->GetCPUDescriptorHandleForHeapStart();
     auto rtv_step_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    cpu_handles_rtv_ = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(gSystemMemoryAllocator, swapchain_buffer_num_);
+    cpu_handles_rtv_ = AllocateArraySystem<D3D12_CPU_DESCRIPTOR_HANDLE>(swapchain_buffer_num_);
     for (uint32_t i = 0; i < swapchain_buffer_num_; i++) {
       device->CreateRenderTargetView(resources_[i], &rtv_desc, rtv_handle);
       cpu_handles_rtv_[i] = rtv_handle;
@@ -203,7 +203,7 @@ TEST_CASE("swapchain/direct queue") { // NOLINT
   window.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }
 #if 0
 // error at Swapchain::Init
@@ -243,7 +243,7 @@ TEST_CASE("swapchain/compute queue") { // NOLINT
   window.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }
 #endif
 #endif

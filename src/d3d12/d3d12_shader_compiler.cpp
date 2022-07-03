@@ -242,11 +242,11 @@ struct PsoDescGraphics {
     .DepthBoundsTestEnable = false,
   };
 };
-auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json& variation, const nlohmann::json& common_input_element_list, MemoryAllocationJanitor* allocator) {
+auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json& variation, const nlohmann::json& common_input_element_list) {
   if (variation.at("shaders").size() == 1 && variation.at("shaders")[0].at("target") == "cs") {
     return (PsoDescGraphics*)nullptr;
   }
-  auto desc = Allocate<PsoDescGraphics>(allocator);
+  auto desc = AllocateFrame<PsoDescGraphics>();
   *desc = {};
   if (material.contains("render_target_formats")) {
     auto& render_target_formats = material.at("render_target_formats");
@@ -265,7 +265,7 @@ auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json
   if (variation.contains("input_element")) {
     const auto& shader_input_element_json = variation.at("input_element");
     desc->input_layout.NumElements = GetUint32(shader_input_element_json.size());
-    auto input_element = AllocateArray<D3D12_INPUT_ELEMENT_DESC>(allocator, desc->input_layout.NumElements);
+    auto input_element = AllocateArrayFrame<D3D12_INPUT_ELEMENT_DESC>(desc->input_layout.NumElements);
     for (uint32_t i = 0; i < desc->input_layout.NumElements; i++) {
       const auto shader_input_element_name = GetStringView(shader_input_element_json[i]);
       uint32_t index = ~0U;
@@ -307,25 +307,25 @@ auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json
   }
   return desc;
 }
-auto PrepareCompileArgsFromCommonSettings(const nlohmann::json& common_settings, const uint32_t params_num, MemoryAllocationJanitor* allocator) {
+auto PrepareCompileArgsFromCommonSettings(const nlohmann::json& common_settings, const uint32_t params_num) {
   uint32_t args_num = 4 + params_num; // target+entry
   uint32_t entry_index = 0, target_index = 0, params_index = 0;
   if (common_settings.contains("args")) {
     args_num += GetUint32(common_settings.at("args").size());
   }
-  auto args = AllocateArray<wchar_t*>(allocator, args_num);
+  auto args = AllocateArrayFrame<wchar_t*>(args_num);
   uint32_t args_index = 0;
   if (common_settings.contains("args")) {
     const auto& args_list = common_settings.at("args");
     for (; args_index < args_list.size(); args_index++) {
-      args[args_index] = CopyStrToWstrContainer(args_list[args_index], allocator);
+      args[args_index] = CopyStrToWstrContainer(args_list[args_index], MemoryType::kFrame);
     }
   }
-  args[args_index] = CopyStrToWstrContainer("-E", allocator);
+  args[args_index] = CopyStrToWstrContainer("-E", MemoryType::kFrame);
   args_index++;
   entry_index = args_index;
   args_index++;
-  args[args_index] = CopyStrToWstrContainer("-T", allocator);
+  args[args_index] = CopyStrToWstrContainer("-T", MemoryType::kFrame);
   args_index++;
   target_index = args_index;
   args_index++;
@@ -333,17 +333,17 @@ auto PrepareCompileArgsFromCommonSettings(const nlohmann::json& common_settings,
   assert(args_index + params_num == args_num);
   return std::make_tuple(args_num, args, entry_index, target_index, params_index);
 }
-auto WriteVariationParamsToCompileArgs(const nlohmann::json& common_settings, const nlohmann::json& shader_json, const nlohmann::json* params_json, const uint32_t* param_index_list, wchar_t** args, const uint32_t entry_index, const uint32_t target_index, const uint32_t params_index, MemoryAllocationJanitor* allocator) {
-  args[entry_index] = CopyStrToWstrContainer(shader_json.contains("entry") ? shader_json.at("entry") : common_settings.at("entry"), allocator);
+auto WriteVariationParamsToCompileArgs(const nlohmann::json& common_settings, const nlohmann::json& shader_json, const nlohmann::json* params_json, const uint32_t* param_index_list, wchar_t** args, const uint32_t entry_index, const uint32_t target_index, const uint32_t params_index) {
+  args[entry_index] = CopyStrToWstrContainer(shader_json.contains("entry") ? shader_json.at("entry") : common_settings.at("entry"), MemoryType::kFrame);
   auto target = GetStringView(shader_json, "target");
-  args[target_index] = CopyStrToWstrContainer(common_settings.at(target.data()), allocator);
+  args[target_index] = CopyStrToWstrContainer(common_settings.at(target.data()), MemoryType::kFrame);
   if (!params_json) { return params_index; }
   const auto params_num = GetUint32(params_json->size());
   for (uint32_t i = 0; i < params_num; i++) {
     auto name = GetStringView((*params_json)[i], "name");
     auto val = GetStringView((*params_json)[i].at("val")[param_index_list[i]]);
     auto str = std::string("-D") + name.data() + std::string("=") + val.data();
-    args[params_index + i] = CopyStrToWstrContainer(str, allocator);
+    args[params_index + i] = CopyStrToWstrContainer(str, MemoryType::kFrame);
   }
   return params_index + params_num;
 }
@@ -376,7 +376,7 @@ auto GetD3d12PipelineStateSubobjectTypeShader(const char* const target) {
   assert(false && "invalid shader target");
   return D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
 }
-auto CreatePsoDesc(ID3D12RootSignature* rootsig, const nlohmann::json& shader_json, const uint32_t shader_object_num, IDxcBlob** shader_object_list, PsoDescGraphics* pso_desc_graphics, MemoryAllocationJanitor* allocator) {
+auto CreatePsoDesc(ID3D12RootSignature* rootsig, const nlohmann::json& shader_json, const uint32_t shader_object_num, IDxcBlob** shader_object_list, PsoDescGraphics* pso_desc_graphics) {
   struct PsoDescRootSignature {
     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type_root_signature{};
     ID3D12RootSignature* root_signature{nullptr};
@@ -386,7 +386,7 @@ auto CreatePsoDesc(ID3D12RootSignature* rootsig, const nlohmann::json& shader_js
     D3D12_SHADER_BYTECODE shader_bytecode{nullptr};
   };
   const auto size = GetUint32(sizeof(PsoDescRootSignature)) + GetUint32(sizeof(PsoDescShaderBytecode)) * shader_object_num + (pso_desc_graphics == nullptr ? 0 : GetUint32(sizeof(*pso_desc_graphics)));
-  auto ptr = allocator->Allocate(size);
+  auto ptr = AllocateFrame(size);
   auto head = ptr;
   if (pso_desc_graphics != nullptr) {
     memcpy(ptr, pso_desc_graphics, sizeof(*pso_desc_graphics));
@@ -420,9 +420,8 @@ auto GetPsoName(const std::string_view& material_name, const nlohmann::json* par
   return name;
 }
 auto CountRootsigNum(const nlohmann::json& json) {
-  auto tmp_allocator = GetTemporalMemoryAllocator();
   const auto num = GetUint32(json.size());
-  auto hash_list = AllocateArray<StrHash>(&tmp_allocator, num);
+  auto hash_list = AllocateArrayFrame<StrHash>(num);
   uint32_t used_hash = 0;
   for (uint32_t i = 0; i < num; i++) {
     const auto rootsig_name_hash = CalcEntityStrHash(json[i], "rootsig");
@@ -440,8 +439,8 @@ auto CountRootsigNum(const nlohmann::json& json) {
   }
   return used_hash;
 }
-auto CreateRootsigNameList(const uint32_t num, const nlohmann::json& json, MemoryAllocationJanitor* allocator) {
-  auto hash_list = AllocateArray<StrHash>(allocator, num);
+auto CreateRootsigNameList(const uint32_t num, const nlohmann::json& json) {
+  auto hash_list = AllocateArrayFrame<StrHash>( num);
   uint32_t next_index = 0;
   for (uint32_t i = 0; i < num; i++) {
     const auto rootsig_name_hash = CalcEntityStrHash(json[i], "rootsig");
@@ -483,23 +482,21 @@ uint32_t GetVertexBufferTypeFlags(const nlohmann::json& variation) {
 }
 void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
                uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
-               uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** material_pso_offset, uint32_t** vertex_buffer_type_flags,
-               MemoryAllocationJanitor* allocator) {
+               uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** material_pso_offset, uint32_t** vertex_buffer_type_flags) {
   const auto& common_settings = json.at("common_settings");
   const auto& material_json_list = json.at("materials");
   *rootsig_num = CountRootsigNum(material_json_list);
-  *rootsig_list = AllocateArray<ID3D12RootSignature*>(allocator, *rootsig_num);
+  *rootsig_list = AllocateArraySystem<ID3D12RootSignature*>(*rootsig_num);
   for (uint32_t i = 0; i < *rootsig_num; i++) {
     (*rootsig_list)[i] = nullptr;
   }
   *pso_num = CountPsoNum(material_json_list);
-  *pso_list = AllocateArray<ID3D12PipelineState*>(allocator, *pso_num);
+  *pso_list = AllocateArraySystem<ID3D12PipelineState*>(*pso_num);
   const auto& input_element_list = common_settings.at("input_elements");
   const auto material_num = GetUint32(material_json_list.size());
-  *material_pso_offset = AllocateArray<uint32_t>(allocator, material_num);
-  *vertex_buffer_type_flags = AllocateArray<uint32_t>(allocator, *pso_num);
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto rootsig_name_list = CreateRootsigNameList(*rootsig_num, material_json_list, &tmp_allocator);
+  *material_pso_offset = AllocateArraySystem<uint32_t>(material_num);
+  *vertex_buffer_type_flags = AllocateArraySystem<uint32_t>(*pso_num);
+  auto rootsig_name_list = CreateRootsigNameList(*rootsig_num, material_json_list);
   uint32_t pso_index = 0;
   for (uint32_t i = 0; i < material_num; i++) {
     (*material_pso_offset)[i] = pso_index;
@@ -509,14 +506,13 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
     for (const auto& variation : variations) {
       const auto& shader_json = variation.at("shaders");
       const auto shader_num = GetUint32(shader_json.size());
-      auto variation_allocator = GetTemporalMemoryAllocator();
-      const auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list, &variation_allocator);
+      const auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list);
       const auto variation_vertex_buffer_type_flags = GetVertexBufferTypeFlags(variation);
       const auto& params_json = variation.contains("params") ? &variation.at("params") : nullptr;
       const auto params_num = params_json ? GetUint32(params_json->size()) : 1;
-      auto [compile_args_num, compile_args, entry_index, target_index, params_index] = PrepareCompileArgsFromCommonSettings(common_settings, params_num, &variation_allocator);
-      auto param_array_size_list = AllocateArray<uint32_t>(&variation_allocator, params_num);
-      auto param_index_list = AllocateArray<uint32_t>(&variation_allocator, params_num);
+      auto [compile_args_num, compile_args, entry_index, target_index, params_index] = PrepareCompileArgsFromCommonSettings(common_settings, params_num);
+      auto param_array_size_list = AllocateArrayFrame<uint32_t>(params_num);
+      auto param_index_list = AllocateArrayFrame<uint32_t>(params_num);
       SetArrayValues(0, params_num, param_index_list);
       SetArrayValues(1, params_num, param_array_size_list);
       if (params_json) {
@@ -525,12 +521,11 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
         }
       }
       while (true) {
-        auto shader_list_allocator = GetTemporalMemoryAllocator();
-        auto compile_unit_list = AllocateArray<IDxcResult*>(&shader_list_allocator, shader_num);
-        auto shader_object_list = AllocateArray<IDxcBlob*>(&shader_list_allocator, shader_num);
+        auto compile_unit_list = AllocateArrayFrame<IDxcResult*>(shader_num);
+        auto shader_object_list = AllocateArrayFrame<IDxcBlob*>(shader_num);
         for (uint32_t j = 0; j < shader_num; j++) {
-          const auto args_num = WriteVariationParamsToCompileArgs(common_settings, shader_json[j], params_json, param_index_list, compile_args, entry_index, target_index, params_index, &shader_list_allocator);
-          auto filename = CopyStrToWstrContainer(GetStringView(shader_json[j], ("file")), &shader_list_allocator);
+          const auto args_num = WriteVariationParamsToCompileArgs(common_settings, shader_json[j], params_json, param_index_list, compile_args, entry_index, target_index, params_index);
+          auto filename = CopyStrToWstrContainer(GetStringView(shader_json[j], ("file")), MemoryType::kFrame);
           compile_unit_list[j] = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)compile_args);
           shader_object_list[j] = GetShaderObject(compile_unit_list[j]);
         }
@@ -540,7 +535,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
           SetD3d12Name(rootsig, GetStringView(material, "rootsig"));
           (*rootsig_list)[rootsig_index] = rootsig;
         }
-        auto [pso_desc_size, pso_desc] = CreatePsoDesc(rootsig, shader_json, shader_num, shader_object_list, pso_desc_graphics, &shader_list_allocator);
+        auto [pso_desc_size, pso_desc] = CreatePsoDesc(rootsig, shader_json, shader_num, shader_object_list, pso_desc_graphics);
         (*pso_list)[pso_index] = CreatePipelineState(device, pso_desc_size, pso_desc);
         SetD3d12Name((*pso_list)[pso_index], GetPsoName(material.at("name"), params_json, params_num, param_index_list));
         (*vertex_buffer_type_flags)[pso_index] = variation_vertex_buffer_type_flags;
@@ -564,23 +559,22 @@ auto CalcMaterialVariationParamsHash(const nlohmann::json& params, const uint32_
   }
   return hash;
 }
-void SetMaterialVariationValues(const nlohmann::json& material_json, MemoryAllocationJanitor* allocator, uint32_t* material_num, uint32_t** material_hash_list, uint32_t** variation_hash_list_len, uint32_t*** variation_hash_list) {
+void SetMaterialVariationValues(const nlohmann::json& material_json, uint32_t* material_num, uint32_t** material_hash_list, uint32_t** variation_hash_list_len, uint32_t*** variation_hash_list) {
   const auto& material_list_json = material_json.at("materials");
-  *material_num = CreateJsonStrHashList(material_list_json, "name", material_hash_list, allocator);
-  *variation_hash_list_len = AllocateArray<uint32_t>(allocator, *material_num);
-  *variation_hash_list = AllocateArray<StrHash*>(allocator, *material_num);
+  *material_num = CreateJsonStrHashList(material_list_json, "name", material_hash_list, MemoryType::kSystem);
+  *variation_hash_list_len = AllocateArraySystem<uint32_t>(*material_num);
+  *variation_hash_list = AllocateArraySystem<StrHash*>(*material_num);
   for (uint32_t i = 0; i < *material_num; i++) {
     const auto& material = material_list_json[i];
     const auto variation_num = CountVariationNum(material);
     (*variation_hash_list_len)[i] = variation_num;
-    (*variation_hash_list)[i] = AllocateArray<StrHash>(allocator, variation_num);
+    (*variation_hash_list)[i] = AllocateArraySystem<StrHash>(variation_num);
     uint32_t hash_index = 0;
     for (const auto& variation : material.at("variations")) {
       const auto& params_json = variation.contains("params") ? &variation.at("params") : nullptr;
       const auto params_num = params_json ? GetUint32(params_json->size()) : 1;
-      auto tmp_allocator = GetTemporalMemoryAllocator();
-      auto param_array_size_list = AllocateArray<uint32_t>(&tmp_allocator, params_num);
-      auto param_index_list = AllocateArray<uint32_t>(&tmp_allocator, params_num);
+      auto param_array_size_list = AllocateArrayFrame<uint32_t>(params_num);
+      auto param_index_list = AllocateArrayFrame<uint32_t>(params_num);
       SetArrayValues(0, params_num, param_index_list);
       SetArrayValues(1, params_num, param_array_size_list);
       if (params_json) {
@@ -625,12 +619,11 @@ void ShaderCompiler::Term() {
     FreeLibrary(library_);
   }
 }
-MaterialList ShaderCompiler::BuildMaterials(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator) {
+MaterialList ShaderCompiler::BuildMaterials(const nlohmann::json& material_json, D3d12Device* device) {
   MaterialList list{};
   ParseJson(material_json, compiler_, include_handler_, utils_, device,
-            &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, &list.vertex_buffer_type_flags,
-            allocator);
-  SetMaterialVariationValues(material_json, allocator, &list.material_num, &list.material_hash_list, &list.variation_hash_list_len, &list.variation_hash_list);
+            &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, &list.vertex_buffer_type_flags);
+  SetMaterialVariationValues(material_json, &list.material_num, &list.material_hash_list, &list.variation_hash_list_len, &list.variation_hash_list);
   return list;
 }
 void ReleasePsoAndRootsig(MaterialList* list) {

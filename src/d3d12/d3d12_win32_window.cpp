@@ -101,7 +101,7 @@ bool SetBackToWindowMode(HWND hwnd, const RECT& rect) {
 bool Window::Init(const char* const title, const uint32_t width, const uint32_t height, WindowCallback callback_func) {
   ProcessMessage();
   const auto str_len = GetUint32(strlen(title)) + 1;
-  title_ = AllocateArray<char>(gSystemMemoryAllocator, str_len);
+  title_ = AllocateArraySystem<char>(str_len);
   strcpy_s(title_, str_len, title);
   hwnd_ = illuminate::InitWindow(title_, width, height, callback_func == nullptr ? DefWindowProc : callback_func);
   window_closed_ = (hwnd_ == nullptr);

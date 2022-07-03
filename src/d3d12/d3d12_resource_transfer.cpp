@@ -2,39 +2,40 @@
 #include "d3d12_src_common.h"
 namespace illuminate {
 ResourceTransfer PrepareResourceTransferer(const uint32_t frame_buffer_num, const uint32_t resource_num_per_frame, const uint32_t max_mipmap_num) {
+  // TODO use double buffered memory?
   ResourceTransfer r {
     .max_transfer_buffer_num_per_frame        = resource_num_per_frame,
     .layout_num_per_texture                   = max_mipmap_num,
-    .transfer_reserved_buffer_num             = AllocateArray<uint32_t>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_reserved_buffer_src             = AllocateArray<ID3D12Resource**>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_reserved_buffer_src_allocation  = AllocateArray<D3D12MA::Allocation**>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_reserved_buffer_dst             = AllocateArray<ID3D12Resource**>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_reserved_texture_num            = AllocateArray<uint32_t>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_reserved_texture_src            = AllocateArray<ID3D12Resource**>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_reserved_texture_src_allocation = AllocateArray<D3D12MA::Allocation**>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_reserved_texture_dst            = AllocateArray<ID3D12Resource**>(gSystemMemoryAllocator, frame_buffer_num),
-    .texture_subresource_num                  = AllocateArray<uint32_t*>(gSystemMemoryAllocator, frame_buffer_num),
-    .texture_layout                           = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT**>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_processed_buffer_num            = AllocateArray<uint32_t>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_processed_buffer                = AllocateArray<ID3D12Resource**>(gSystemMemoryAllocator, frame_buffer_num),
-    .transfer_processed_buffer_allocation     = AllocateArray<D3D12MA::Allocation**>(gSystemMemoryAllocator, frame_buffer_num),
+    .transfer_reserved_buffer_num             = AllocateArraySystem<uint32_t>(frame_buffer_num),
+    .transfer_reserved_buffer_src             = AllocateArraySystem<ID3D12Resource**>(frame_buffer_num),
+    .transfer_reserved_buffer_src_allocation  = AllocateArraySystem<D3D12MA::Allocation**>(frame_buffer_num),
+    .transfer_reserved_buffer_dst             = AllocateArraySystem<ID3D12Resource**>(frame_buffer_num),
+    .transfer_reserved_texture_num            = AllocateArraySystem<uint32_t>(frame_buffer_num),
+    .transfer_reserved_texture_src            = AllocateArraySystem<ID3D12Resource**>(frame_buffer_num),
+    .transfer_reserved_texture_src_allocation = AllocateArraySystem<D3D12MA::Allocation**>(frame_buffer_num),
+    .transfer_reserved_texture_dst            = AllocateArraySystem<ID3D12Resource**>(frame_buffer_num),
+    .texture_subresource_num                  = AllocateArraySystem<uint32_t*>(frame_buffer_num),
+    .texture_layout                           = AllocateArraySystem<D3D12_PLACED_SUBRESOURCE_FOOTPRINT**>(frame_buffer_num),
+    .transfer_processed_buffer_num            = AllocateArraySystem<uint32_t>(frame_buffer_num),
+    .transfer_processed_buffer                = AllocateArraySystem<ID3D12Resource**>(frame_buffer_num),
+    .transfer_processed_buffer_allocation     = AllocateArraySystem<D3D12MA::Allocation**>(frame_buffer_num),
   };
   for (uint32_t i = 0; i < frame_buffer_num; i++) {
     r.transfer_reserved_buffer_num[i]             = 0;
-    r.transfer_reserved_buffer_src[i]             = AllocateArray<ID3D12Resource*>(gSystemMemoryAllocator, resource_num_per_frame);
-    r.transfer_reserved_buffer_src_allocation[i]  = AllocateArray<D3D12MA::Allocation*>(gSystemMemoryAllocator, resource_num_per_frame);
-    r.transfer_reserved_buffer_dst[i]             = AllocateArray<ID3D12Resource*>(gSystemMemoryAllocator, resource_num_per_frame);
+    r.transfer_reserved_buffer_src[i]             = AllocateArraySystem<ID3D12Resource*>(resource_num_per_frame);
+    r.transfer_reserved_buffer_src_allocation[i]  = AllocateArraySystem<D3D12MA::Allocation*>(resource_num_per_frame);
+    r.transfer_reserved_buffer_dst[i]             = AllocateArraySystem<ID3D12Resource*>(resource_num_per_frame);
     r.transfer_reserved_texture_num[i]            = 0;
-    r.texture_subresource_num[i]                  = AllocateArray<uint32_t>(gSystemMemoryAllocator, resource_num_per_frame);
-    r.texture_layout[i]                           = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(gSystemMemoryAllocator, resource_num_per_frame);
-    r.transfer_reserved_texture_src[i]            = AllocateArray<ID3D12Resource*>(gSystemMemoryAllocator, resource_num_per_frame);
-    r.transfer_reserved_texture_src_allocation[i] = AllocateArray<D3D12MA::Allocation*>(gSystemMemoryAllocator, resource_num_per_frame);
-    r.transfer_reserved_texture_dst[i]            = AllocateArray<ID3D12Resource*>(gSystemMemoryAllocator, resource_num_per_frame);
+    r.texture_subresource_num[i]                  = AllocateArraySystem<uint32_t>(resource_num_per_frame);
+    r.texture_layout[i]                           = AllocateArraySystem<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(resource_num_per_frame);
+    r.transfer_reserved_texture_src[i]            = AllocateArraySystem<ID3D12Resource*>(resource_num_per_frame);
+    r.transfer_reserved_texture_src_allocation[i] = AllocateArraySystem<D3D12MA::Allocation*>(resource_num_per_frame);
+    r.transfer_reserved_texture_dst[i]            = AllocateArraySystem<ID3D12Resource*>(resource_num_per_frame);
     r.transfer_processed_buffer_num[i]            = 0;
-    r.transfer_processed_buffer[i]                = AllocateArray<ID3D12Resource*>(gSystemMemoryAllocator, resource_num_per_frame * 2);
-    r.transfer_processed_buffer_allocation[i]     = AllocateArray<D3D12MA::Allocation*>(gSystemMemoryAllocator, resource_num_per_frame * 2);
+    r.transfer_processed_buffer[i]                = AllocateArraySystem<ID3D12Resource*>(resource_num_per_frame * 2);
+    r.transfer_processed_buffer_allocation[i]     = AllocateArraySystem<D3D12MA::Allocation*>(resource_num_per_frame * 2);
     for (uint32_t j = 0; j < resource_num_per_frame; j++) {
-      r.texture_layout[i][j] = AllocateArray<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(gSystemMemoryAllocator, max_mipmap_num);
+      r.texture_layout[i][j] = AllocateArraySystem<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(max_mipmap_num);
     }
   }
   return r;
@@ -105,7 +106,6 @@ TEST_CASE("ResourceTransfer") { // NOLINT
   Device device;
   device.Init(dxgi_core.GetAdapter()); // NOLINT
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
-  auto tmp_allocator = GetTemporalMemoryAllocator();
   // main process
   uint32_t frame_index = 0;
   auto resource_transfer = PrepareResourceTransferer(2, 1024, 11);
@@ -188,7 +188,7 @@ TEST_CASE("ResourceTransfer") { // NOLINT
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }
 TEST_CASE("ClearResourceTransfer") { // NOLINT
   using namespace illuminate; // NOLINT
@@ -197,7 +197,6 @@ TEST_CASE("ClearResourceTransfer") { // NOLINT
   Device device;
   device.Init(dxgi_core.GetAdapter()); // NOLINT
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
-  auto tmp_allocator = GetTemporalMemoryAllocator();
   // main process
   uint32_t frame_index = 0;
   auto resource_transfer = PrepareResourceTransferer(2, 1024, 11);
@@ -279,5 +278,5 @@ TEST_CASE("ClearResourceTransfer") { // NOLINT
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }

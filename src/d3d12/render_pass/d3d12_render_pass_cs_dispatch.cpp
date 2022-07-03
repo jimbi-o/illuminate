@@ -10,7 +10,7 @@ struct Param {
 };
 } // namespace anonymous
 void* RenderPassCsDispatch::Init(RenderPassFuncArgsInit* args, [[maybe_unused]]const uint32_t render_pass_index) {
-  auto param = Allocate<Param>(args->allocator);
+  auto param = AllocateSystem<Param>();
   *param = {};
   param->thread_group_count_x = args->json->at("thread_group_count_x");
   param->thread_group_count_y = args->json->at("thread_group_count_y");

@@ -12,7 +12,7 @@ D3d12CommandQueue* CreateCommandQueue(D3d12Device* const device, const D3D12_COM
 }
 void CommandQueueList::Init(const uint32_t command_queue_num, D3d12CommandQueue** command_queue_list) {
   command_queue_num_ = command_queue_num;
-  command_queue_list_ = AllocateArray<D3d12CommandQueue*>(gSystemMemoryAllocator, command_queue_num);
+  command_queue_list_ = AllocateArraySystem<D3d12CommandQueue*>(command_queue_num);
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     command_queue_list_[i] = command_queue_list[i];
   }
@@ -44,8 +44,8 @@ bool CloseHandle(HANDLE handle) {
 bool CommandQueueSignals::Init(D3d12Device* const device, const uint32_t command_queue_num, D3d12CommandQueue** command_queue_list) {
   command_queue_num_ = command_queue_num;
   command_queue_list_ = command_queue_list;
-  fence_ = AllocateArray<D3d12Fence*>(gSystemMemoryAllocator, command_queue_num);
-  used_signal_val_list_ = AllocateArray<uint64_t>(gSystemMemoryAllocator, command_queue_num);
+  fence_ = AllocateArraySystem<D3d12Fence*>(command_queue_num);
+  used_signal_val_list_ = AllocateArraySystem<uint64_t>(command_queue_num);
   for (uint32_t i = 0; i < command_queue_num; i++) {
     used_signal_val_list_[i] = 0UL;
     ID3D12Fence* fence = nullptr;
@@ -106,8 +106,7 @@ bool CommandQueueSignals::RegisterWaitOnCommandQueue(const uint32_t producer_que
 }
 bool CommandQueueSignals::WaitOnCpu(D3d12Device* const device, const uint64_t* signal_val_list) {
   uint32_t wait_queue_num = 0;
-  auto allocator = GetTemporalMemoryAllocator();
-  auto wait_queue_index = AllocateArray<uint32_t>(&allocator, command_queue_num_);
+  auto wait_queue_index = AllocateArrayFrame<uint32_t>(command_queue_num_);
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     auto comp_val = fence_[i]->GetCompletedValue();
     if (comp_val >= signal_val_list[i]) {
@@ -125,8 +124,8 @@ bool CommandQueueSignals::WaitOnCpu(D3d12Device* const device, const uint64_t* s
       return false;
     }
   } else {
-    auto waiting_queue_fences = AllocateArray<ID3D12Fence*>(&allocator, wait_queue_num);
-    auto waiting_signals = AllocateArray<uint64_t>(&allocator, wait_queue_num);
+    auto waiting_queue_fences = AllocateArrayFrame<ID3D12Fence*>(wait_queue_num);
+    auto waiting_signals = AllocateArrayFrame<uint64_t>(wait_queue_num);
     for (uint32_t i = 0; i < wait_queue_num; i++) {
       waiting_queue_fences[i] = fence_[wait_queue_index[i]];
       waiting_signals[i] = signal_val_list[wait_queue_index[i]];
@@ -149,8 +148,7 @@ bool CommandQueueSignals::WaitOnCpu(D3d12Device* const device, const uint64_t* s
   return true;
 }
 bool CommandQueueSignals::WaitAll(D3d12Device* const device) {
-  auto allocator = GetTemporalMemoryAllocator();
-  auto signal_val_list = AllocateArray<uint64_t>(&allocator, command_queue_num_);
+  auto signal_val_list = AllocateArrayFrame<uint64_t>(command_queue_num_);
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     signal_val_list[i] = SucceedSignal(i);
   }
@@ -204,7 +202,7 @@ TEST_CASE("class CommandQueueList") { // NOLINT
   command_queue_list.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }
 TEST_CASE("class CommandQueueSignals") { // NOLINT
   using namespace illuminate; // NOLINT
@@ -243,6 +241,6 @@ TEST_CASE("class CommandQueueSignals") { // NOLINT
   command_queue_signals.Term();
   device.Term();
   dxgi_core.Term();
-  gSystemMemoryAllocator->Reset();
+  ClearAllAllocations();
 }
 #endif

@@ -21,7 +21,7 @@ class ShaderCompiler {
  public:
   bool Init();
   void Term();
-  MaterialList BuildMaterials(const nlohmann::json& material_json, D3d12Device* device, MemoryAllocationJanitor* allocator);
+  MaterialList BuildMaterials(const nlohmann::json& material_json, D3d12Device* device);
  private:
   HMODULE library_{nullptr};
   IDxcCompiler3* compiler_{nullptr};

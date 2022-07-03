@@ -12,7 +12,6 @@ struct SceneData;
 struct RenderPassFuncArgsInit {
   const nlohmann::json* json{nullptr};
   uint32_t frame_buffer_num{0};
-  MemoryAllocationJanitor* allocator{nullptr};
   BufferList* buffer_list{nullptr};
   BufferConfig* buffer_config_list{nullptr};
   RenderPass* render_pass_list{nullptr};

@@ -17,12 +17,12 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D1
   }
   return descriptor_heap;
 }
-bool DescriptorCpu::Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t* descriptor_handle_num_per_type, MemoryAllocationJanitor* allocator) {
+bool DescriptorCpu::Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t* descriptor_handle_num_per_type) {
   buffer_allocation_num_ = buffer_allocation_num;
   sampler_num_ = descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)];
   for (uint32_t i = 0; i < kDescriptorTypeNum; i++) {
     const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num_ : buffer_allocation_num_;
-    handles_[i] = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(allocator, num);
+    handles_[i] = AllocateArraySystem<D3D12_CPU_DESCRIPTOR_HANDLE>(num);
     for (uint32_t j = 0; j < num; j++) {
       handles_[i][j].ptr = 0;
     }
@@ -182,9 +182,8 @@ bool DescriptorGpu::IsNextHandle(const D3D12_GPU_DESCRIPTOR_HANDLE& current_hand
 }
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorGpu::WriteToTransientHandleRange(const uint32_t num, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, const D3D12_DESCRIPTOR_HEAP_TYPE heap_type, DescriptorHeapSetGpu* descriptor, D3d12Device* device) {
   if (num == 0) { return {}; }
-  auto tmp_allocator = GetTemporalMemoryAllocator();
-  auto handle_num = AllocateArray<uint32_t>(&tmp_allocator, num);
-  auto handle_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(&tmp_allocator, num);
+  auto handle_num = AllocateArrayFrame<uint32_t>(num);
+  auto handle_list = AllocateArrayFrame<D3D12_CPU_DESCRIPTOR_HANDLE>(num);
   uint32_t index = 0;
   handle_num[index] = 1;
   handle_list[index].ptr = handles[0].ptr;

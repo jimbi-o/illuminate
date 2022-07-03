@@ -12,10 +12,10 @@
 namespace illuminate {
 void SetD3d12Name(ID3D12Object* obj, const std::string_view name);
 uint32_t GetD3d12Name(ID3D12Object* obj, const uint32_t dst_size, char* dst);
-void CopyStrToWstrContainer(wchar_t** dst, const std::string_view src, MemoryAllocationJanitor* allocator);
-inline auto CopyStrToWstrContainer(const std::string_view src, MemoryAllocationJanitor* allocator) {
+void CopyStrToWstrContainer(wchar_t** dst, const std::string_view src, const MemoryType memory_type);
+inline auto CopyStrToWstrContainer(const std::string_view src, const MemoryType memory_type) {
   wchar_t* dst = nullptr;
-  CopyStrToWstrContainer(&dst, src, allocator);
+  CopyStrToWstrContainer(&dst, src, memory_type);
   return dst;
 }
 // https://stackoverflow.com/questions/49454005/how-to-get-an-array-size-at-compile-time
