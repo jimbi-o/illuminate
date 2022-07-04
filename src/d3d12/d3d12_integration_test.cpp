@@ -432,16 +432,7 @@ auto CreateTimestampQueryHeaps(const uint32_t command_queue_num, [[maybe_unused]
       timestamp_query_heaps[i] = nullptr;
       continue;
     }
-#ifdef NDEBUG
     desc.Type = (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-#else
-    if (IsDebuggerPresent()) {
-      // D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP issues error even on D3D12_COMMAND_LIST_TYPE_COPY when graphics debugger is enabled.
-      desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-    } else {
-      desc.Type = (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-    }
-#endif
     desc.Count = render_pass_num_per_queue[i] * query_num_per_pass;
     auto hr = device->CreateQueryHeap(&desc, IID_PPV_ARGS(&timestamp_query_heaps[i]));
     if (FAILED(hr)) {
@@ -913,7 +904,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
       args_per_pass[k].command_list = command_list;
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
-      PIXBeginEvent(command_list, 0, render_pass_name[k]); // https://devblogs.microsoft.com/pix/winpixeventruntime/
+      if (!IsDebuggerPresent() || command_list && render_graph.command_queue_type[render_pass_queue_index[k]] != D3D12_COMMAND_LIST_TYPE_COPY) {
+        // debugger issues an error on copy queue
+        PIXBeginEvent(command_list, 0, render_pass_name[k]); // https://devblogs.microsoft.com/pix/winpixeventruntime/
+      }
 #endif
       const auto query_index = render_pass_index_per_queue[k] * 2;
       command_list->EndQuery(timestamp_query_heaps[render_pass_queue_index[k]], D3D12_QUERY_TYPE_TIMESTAMP, query_index);
@@ -924,7 +918,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       RenderPassRender(&render_pass_function_list, &args_common, &args_per_pass[k]);
       ExecuteBarrier(command_list, barrier_num[1][k], barrier_config_list[1][k], barrier_resource_list[1][k]);
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
-      PIXEndEvent(command_list);
+      if (!IsDebuggerPresent() || command_list && render_graph.command_queue_type[render_pass_queue_index[k]] != D3D12_COMMAND_LIST_TYPE_COPY) {
+        // debugger issues an error on copy queue
+        PIXEndEvent(command_list);
+      }
 #endif
       command_list->EndQuery(timestamp_query_heaps[render_pass_queue_index[k]], D3D12_QUERY_TYPE_TIMESTAMP, query_index + 1);
       const auto is_last_pass_per_queue = (last_pass_per_queue[render_pass_queue_index[k]] == k);
@@ -936,8 +933,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         if (timestamp_query_dst_resource_index >= timestamp_query_dst_resource_num) {
           timestamp_query_dst_resource_index = 0;
         }
-        // TODO read from buffer
-        command_list->ResolveQueryData(timestamp_query_heaps[render_pass_queue_index[k]], D3D12_QUERY_TYPE_TIMESTAMP, 0, query_num, dst_resource, 0);
+        if (!IsDebuggerPresent()) {
+          // graphics debugger issues an error:
+          // D3D12 ERROR: ID3D12GraphicsCommandList::SetComputeRootSignature: Invalid API called.  This method is not valid for D3D12_COMMAND_LIST_TYPE_COPY. [ EXECUTION ERROR #933: NO_COMPUTE_API_SUPPORT]
+          // TODO read from buffer
+          command_list->ResolveQueryData(timestamp_query_heaps[render_pass_queue_index[k]], D3D12_QUERY_TYPE_TIMESTAMP, 0, query_num, dst_resource, 0);
+        }
       }
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass_queue_index[k]);
