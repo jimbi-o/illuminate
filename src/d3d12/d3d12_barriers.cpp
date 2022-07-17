@@ -6,7 +6,7 @@ constexpr auto IsResourceStateInclusive(const ResourceStateType& a, const Resour
   if (a == b) { return true; }
   return a == ResourceStateType::kGenericRead && b == ResourceStateType::kCbv;
 }
-RenderPassResourceState ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool** pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, const uint32_t additional_buffer_state_num, RenderPassBufferState* additional_buffer_state_list, const MemoryType retval_memory_type) {
+RenderPassResourceState ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool* const* pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, const uint32_t additional_buffer_state_num, const RenderPassBufferState* additional_buffer_state_list, const MemoryType retval_memory_type) {
   // TODO additional_buffer_state_list
   auto resource_state_list = AllocateArray<ResourceStateType**>(retval_memory_type, buffer_num);
   auto last_user_pass = AllocateArray<uint32_t*>(retval_memory_type, buffer_num);
