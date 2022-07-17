@@ -11,15 +11,19 @@ constexpr auto SucceedPtrWithStructSize(const void* src) {
 inline auto SucceedPtr(const void* src, const uint32_t size_in_byte) {
   return reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(src) + size_in_byte);
 }
+template <typename T, typename U>
+constexpr inline auto AlignAddress(const T addr, const U align/*power of 2*/) {
+  static_assert(sizeof(T) == sizeof(U));
+  const auto mask = align - 1;
+  return (addr + mask) & ~mask;
+}
+template <typename T, typename U>
+constexpr inline auto AlignAddressWithoutOffset(const T addr, const U align/*power of 2*/) {
+  static_assert(sizeof(T) == sizeof(U));
+  const auto mask = align - 1;
+  return addr & ~mask;
+}
 static const size_t kDefaultAlignmentSize = 8;
-constexpr inline auto AlignAddress(const std::uintptr_t addr, const size_t align/*power of 2*/) {
-  const auto mask = align - 1;
-  return (addr + mask) & ~mask;
-}
-constexpr inline auto AlignAddress(const uint32_t addr, const uint32_t align/*power of 2*/) {
-  const auto mask = align - 1;
-  return (addr + mask) & ~mask;
-}
 class LinearAllocator {
  public:
   explicit LinearAllocator(const std::byte* buffer, const uint32_t size_in_byte) : head_(reinterpret_cast<uintptr_t>(buffer)), size_in_byte_(size_in_byte), offset_in_byte_(0) {}
@@ -81,7 +85,7 @@ class DoubleEndedLinearAllocator {
     return reinterpret_cast<void*>(addr_aligned);
   }
   inline void* AllocateHigher(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
-    auto addr_aligned = AlignAddress(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes - kDefaultAlignmentSize, alignment_in_bytes);
+    auto addr_aligned = AlignAddressWithoutOffset(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes, alignment_in_bytes);
     if (addr_aligned < head_ + offset_in_byte_lower_) { return nullptr; }
     offset_in_byte_higher_ = size_in_byte_ - (addr_aligned - head_);
     return reinterpret_cast<void*>(addr_aligned);
@@ -136,7 +140,7 @@ class DoubleEndedStackAllocator {
     return reinterpret_cast<void*>(addr_aligned);
   }
   inline void* AllocateHigher(size_t bytes, size_t alignment_in_bytes = kDefaultAlignmentSize) {
-    auto addr_aligned = AlignAddress(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes - kDefaultAlignmentSize, alignment_in_bytes);
+    auto addr_aligned = AlignAddressWithoutOffset(head_ + size_in_byte_ - offset_in_byte_higher_ - bytes, alignment_in_bytes);
     if (addr_aligned < head_ + offset_in_byte_lower_) { return nullptr; }
     offset_in_byte_higher_ = size_in_byte_ - (addr_aligned - head_);
     return reinterpret_cast<void*>(addr_aligned);

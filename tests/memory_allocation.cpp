@@ -240,3 +240,32 @@ TEST_CASE("DoubleEndedLinearAllocator") { // NOLINT
   CHECK_EQ(allocator.GetOffsetHigher(), 16);
   CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
 }
+TEST_CASE("DoubleEndedLinearAllocator tail") { // NOLINT
+  using namespace illuminate; // NOLINT
+  const uint32_t size_in_byte = 72;
+  std::byte buffer[size_in_byte]{};
+  DoubleEndedLinearAllocator allocator(buffer, size_in_byte);
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 0);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto tail = allocator.AllocateHigher(sizeof(uint32_t));
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(tail), reinterpret_cast<std::uintptr_t>(buffer) + size_in_byte - 8);
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 8);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto tail2 = allocator.AllocateHigher(sizeof(uint32_t) * 8);
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(tail2), reinterpret_cast<std::uintptr_t>(buffer) + size_in_byte - 40);
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 40);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto tail3 = allocator.AllocateHigher(sizeof(uint32_t) * 4);
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(tail3), reinterpret_cast<std::uintptr_t>(buffer) + size_in_byte - 56);
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 56);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+  auto tail4 = allocator.AllocateHigher(sizeof(uint32_t) * 3);
+  CHECK_EQ(reinterpret_cast<std::uintptr_t>(tail4), reinterpret_cast<std::uintptr_t>(buffer) + size_in_byte - 72);
+  CHECK_EQ(allocator.GetOffsetLower(), 0);
+  CHECK_EQ(allocator.GetOffsetHigher(), 72);
+  CHECK_EQ(allocator.GetBufferSizeInByte(), size_in_byte);
+}
