@@ -33,6 +33,9 @@ void ReleaseBuffers(BufferList* buffer_list);
 constexpr inline auto GetBufferAllocationIndex(const BufferList& buffer_list, const uint32_t buffer_index, const uint32_t index) {
   return buffer_list.buffer_allocation_index[buffer_index][index];
 }
+constexpr inline auto GetResource(const BufferList& buffer_list, const uint32_t buffer_allocation_index) {
+  return buffer_list.resource_list[buffer_allocation_index];
+}
 constexpr inline auto GetResource(const BufferList& buffer_list, const uint32_t buffer_config_index, const uint32_t sub_index) {
   return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_config_index, sub_index)];
 }

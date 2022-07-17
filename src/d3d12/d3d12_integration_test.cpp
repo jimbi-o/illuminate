@@ -526,46 +526,65 @@ auto RegisterGuiLight(RenderPassConfigDynamicData* dynamic_data) {
   ImGui::SliderFloat("light intensity", &dynamic_data->light_intensity, 0.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
   ImGui::End();
 }
-auto RegisterGuiDebugBufferView(const uint32_t render_pass_index_debug_show_selected_buffer, const uint32_t render_pass_index_output_to_swapchain, const BufferList& buffer_list, const uint32_t debug_viewable_buffer_allocation_index_len, const uint32_t* debug_viewable_buffer_allocation_index_list, bool* render_pass_enable_flag, uint32_t* debug_render_selected_buffer_allocation_index) {
-  if (!ImGui::Begin("debug buffer", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return; }
-  bool debug_render_selected_buffer = render_pass_enable_flag[render_pass_index_debug_show_selected_buffer];
-  ImGui::Checkbox("render selected buffer mode", &debug_render_selected_buffer);
-  if (!debug_render_selected_buffer) {
-    if (render_pass_enable_flag[render_pass_index_debug_show_selected_buffer]) {
-      render_pass_enable_flag[render_pass_index_debug_show_selected_buffer] = false;
-      render_pass_enable_flag[render_pass_index_output_to_swapchain] = true;
-    }
-    ImGui::End();
-    return;
-  }
-  if (!render_pass_enable_flag[render_pass_index_debug_show_selected_buffer]) {
-    render_pass_enable_flag[render_pass_index_debug_show_selected_buffer] = true;
-    render_pass_enable_flag[render_pass_index_output_to_swapchain] = false;
-  }
-  auto label_select_output_buffer = "##select output buffer";
-  if (!ImGui::BeginListBox(label_select_output_buffer)) {
-    ImGui::End();
-    return;
-  }
-  for (uint32_t i = 0; i < debug_viewable_buffer_allocation_index_len; i++) {
-    const auto index = debug_viewable_buffer_allocation_index_list[i];
-    const auto len = 128;
-    char buffer_name[len]{};
-    GetD3d12Name(buffer_list.resource_list[index], len, buffer_name);
-    if (ImGui::Selectable(buffer_name, i == *debug_render_selected_buffer_allocation_index)) {
-      *debug_render_selected_buffer_allocation_index = i;
-    }
-    if (i == *debug_render_selected_buffer_allocation_index) {
-      ImGui::SetItemDefaultFocus();
+struct ArrayWithNum {
+  uint32_t num;
+  uint32_t* const array;
+};
+auto GetDebugViewableBufferConfigIndexList(const uint32_t buffer_num, const BufferConfig* buffer_config_list, const MemoryType& memory_type) {
+  uint32_t index = 0;
+  auto debug_viewable_buffer_config_index_list = AllocateArray<uint32_t>(memory_type, buffer_num);
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    if (buffer_config_list[i].dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
+      debug_viewable_buffer_config_index_list[index] = i;
+      index++;
     }
   }
-  ImGui::EndListBox();
-  ImGui::End();
+  return ArrayWithNum{index, debug_viewable_buffer_config_index_list};
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set) {
+auto GetBufferAllocationIndexList(const uint32_t buffer_config_index_num, const uint32_t* buffer_config_index_list, const BufferConfig* buffer_config_list, const BufferList& buffer_list, const uint32_t frame_buffer_num, const MemoryType& memory_type) {
+  uint32_t count = 0;
+  for (uint32_t i = 0; i < buffer_config_index_num; i++) {
+    count += GetBufferAllocationNum(buffer_config_list[buffer_config_index_list[i]], frame_buffer_num);
+  }
+  uint32_t index = 0;
+  auto buffer_allocation_index_list = AllocateArray<uint32_t>(memory_type, count);
+  for (uint32_t i = 0; i < buffer_config_index_num; i++) {
+    const auto c = GetBufferAllocationNum(buffer_config_list[buffer_config_index_list[i]], frame_buffer_num);
+    for (uint32_t j = 0; j < c; j++) {
+      buffer_allocation_index_list[index] = GetBufferAllocationIndex(buffer_list, buffer_config_index_list[i], j);
+      index++;
+    }
+  }
+  assert(index == count);
+  return ArrayWithNum(count, buffer_allocation_index_list);
+}
+auto GetBufferResourceList(const uint32_t buffer_num, const uint32_t* buffer_allocation_index_list, const BufferList& buffer_list, const MemoryType& memory_type) {
+  auto buffer_resource_list = AllocateArray<ID3D12Resource*>(memory_type, buffer_num);
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    buffer_resource_list[i] = GetResource(buffer_list, buffer_allocation_index_list[i]);
+  }
+  return buffer_resource_list;
+}
+auto GetBufferNameList(const uint32_t resource_num, ID3D12Resource** resource_list, const MemoryType& memory_type) {
+  auto buffer_name_list = AllocateArray<char*>(memory_type, resource_num);
+  const uint32_t name_len = 32;
+  for (uint32_t i = 0; i < resource_num; i++) {
+    buffer_name_list[i] = AllocateArray<char>(memory_type, name_len);
+    GetD3d12Name(resource_list[i], name_len, buffer_name_list[i]);
+  }
+  return buffer_name_list;
+}
+auto ShowComboList(const char* const window_name, const char* const item_list_name, const uint32_t item_num, const char* const* item_name_list, int32_t* selected_index) {
+  if (!ImGui::Begin(window_name, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return false; }
+  const auto ret = ImGui::Combo(item_list_name, selected_index, item_name_list, item_num);
+  ImGui::End();
+  return ret;
+}
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, int32_t* debug_buffer_selected_index) {
   RegisterGuiPerformance(time_duration_data_set);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
+  ShowComboList("debug buffers", "buffer name", debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_selected_index);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData() {
   RenderPassConfigDynamicData dynamic_data{};
@@ -797,6 +816,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
     write_to_sub[i] = AllocateArraySystem<bool>(render_graph.render_pass_num);
   }
+  int32_t debug_buffer_selected_index = 0;
   ResetAllocation(MemoryType::kFrame);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
@@ -809,6 +829,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     swapchain.UpdateBackBufferIndex();
     RegisterResource(swapchain_buffer_allocation_index, swapchain.GetResource(), &buffer_list);
     descriptor_cpu.RegisterExternalHandle(swapchain_buffer_allocation_index, DescriptorType::kRtv, swapchain.GetRtvHandle());
+    auto [debug_viewable_buffer_config_num, debug_viewable_buffer_config_index_list] = GetDebugViewableBufferConfigIndexList(render_graph.buffer_num, render_graph.buffer_list, MemoryType::kFrame);
+    auto [debug_viewable_buffer_allocation_num, debug_viewable_buffer_allocation_index_list] = GetBufferAllocationIndexList(debug_viewable_buffer_config_num, debug_viewable_buffer_config_index_list, render_graph.buffer_list, buffer_list, render_graph.frame_buffer_num, MemoryType::kFrame);
+    auto debug_viewable_buffer_resource_list = GetBufferResourceList(debug_viewable_buffer_allocation_num, debug_viewable_buffer_allocation_index_list, buffer_list, MemoryType::kFrame);
+    auto debug_viewable_buffer_name_list = GetBufferNameList(debug_viewable_buffer_allocation_num, debug_viewable_buffer_resource_list, MemoryType::kFrame);
     // set up render pass args
     const auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, write_to_sub, render_pass_enable_flag, MemoryType::kFrame);
     const auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, resource_state_list, last_user_pass, MemoryType::kFrame);
@@ -833,7 +857,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ImGui::NewFrame();
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
-    RegisterGui(&dynamic_data, time_duration_data_set);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_selected_index);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
