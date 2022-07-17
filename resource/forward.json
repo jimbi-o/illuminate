@@ -155,30 +155,6 @@
       "sampler": ["bilinear"]
     },
     {
-      "name": "debug buffer",
-      "type": "postprocess",
-      "enabled": false,
-      "command_queue": "queue_graphics",
-      "execute": true,
-      "buffer_list": [
-        {
-          "name": "swapchain",
-          "state": "rtv"
-        }
-      ],
-      "sampler": ["bilinear"],
-      "material": "output to swapchain",
-      "prepass_barrier": [
-        {
-          "buffer_name": "swapchain",
-          "type": "transition",
-          "split_type": "none",
-          "state_before": ["present"],
-          "state_after": ["rtv"]
-        }
-      ]
-    },
-    {
       "name": "imgui",
       "type": "imgui",
       "enabled": true,
