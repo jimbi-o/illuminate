@@ -18,7 +18,7 @@ struct BarrierTransitions {
   const uint32_t* const* barrier_num;
   const Barrier* const* const* barrier_config_list;
 };
-RenderPassResourceState ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool*const* pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, const uint32_t additional_buffer_state_num, const RenderPassBufferState* additional_buffer_state_list, const MemoryType retval_memory_type);
+RenderPassResourceState ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool*const* pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, const MemoryType retval_memory_type);
 BarrierTransitions ConfigureBarrierTransitions(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const ResourceStateTypePerPass* resource_state_list, const uint32_t* const * const last_user_pass, const MemoryType retval_memory_type);
 }
 #endif

@@ -184,31 +184,20 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
   }
   return funcs;
 }
-auto GetRenderPassAdditionalBufferStates(const uint32_t additional_buffer_state_num, const RenderPassBufferState* additional_buffer_state_list) {
-  uint32_t render_pass_additional_buffer_state_num = 0;
-  // TODO
-  auto render_pass_additional_buffer_state_list = AllocateArrayFrame<RenderPassBufferState>(render_pass_additional_buffer_state_num);
-  return std::make_pair(render_pass_additional_buffer_state_num, render_pass_additional_buffer_state_list);
-}
 struct RenderPassCpuHandleInfo {
   uint32_t buffer_num;
   ID3D12Resource** resource_list;
   D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list;
   ResourceStateType* resource_state_list;
 };
-auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool* const* write_to_sub, const BufferConfig* buffer_config_list, const uint32_t frame_index, const D3D12_CPU_DESCRIPTOR_HANDLE* scene_cpu_handles, const uint32_t additional_buffer_state_num, const RenderPassBufferState* additional_buffer_state_list) {
-  const auto buffer_num = render_pass.buffer_num + additional_buffer_state_num;
+auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* descriptor_cpu, const BufferList& buffer_list, const bool* const* write_to_sub, const BufferConfig* buffer_config_list, const uint32_t frame_index, const D3D12_CPU_DESCRIPTOR_HANDLE* scene_cpu_handles) {
+  const auto buffer_num = render_pass.buffer_num;
   auto resource_list = AllocateArrayFrame<ID3D12Resource*>(buffer_num);
   auto cpu_handle_list = AllocateArrayFrame<D3D12_CPU_DESCRIPTOR_HANDLE>(buffer_num);
   auto resource_state_list = AllocateArrayFrame<ResourceStateType>(buffer_num);
-  uint32_t additional_buffer_index = 0;
   for (uint32_t b = 0; b < buffer_num; b++) {
-    const bool is_additional_buffer = b >= render_pass.buffer_num;
-    const auto buffer_index = is_additional_buffer ? additional_buffer_state_list[additional_buffer_index].buffer_config_index : render_pass.buffer_list[b].buffer_index;
-    const auto buffer_state = is_additional_buffer ? additional_buffer_state_list[additional_buffer_index].state_type : render_pass.buffer_list[b].state;
-    if (is_additional_buffer) {
-      additional_buffer_index++;
-    }
+    const auto buffer_index = render_pass.buffer_list[b].buffer_index;
+    const auto buffer_state = render_pass.buffer_list[b].state;
     resource_state_list[b] = buffer_state;
     if (IsSceneBuffer(buffer_index)) {
       if (!IsGpuHandleAvailableType(buffer_state)) {
@@ -231,12 +220,11 @@ auto PrepareResourceCpuHandleList(const RenderPass& render_pass, DescriptorCpu* 
   }
   return RenderPassCpuHandleInfo{buffer_num, resource_list, cpu_handle_list, resource_state_list};
 }
-auto GetIndexOffsetList(const RenderPass& render_pass, const uint32_t additional_buffer_state_num) {
-  auto index_offset_list = AllocateArrayFrame<uint32_t>(render_pass.buffer_num + additional_buffer_state_num);
+auto GetIndexOffsetList(const RenderPass& render_pass) {
+  auto index_offset_list = AllocateArrayFrame<uint32_t>(render_pass.buffer_num);
   for (uint32_t i = 0; i < render_pass.buffer_num; i++) {
     index_offset_list[i] = render_pass.buffer_list[i].index_offset;
   }
-  std::fill(index_offset_list + render_pass.buffer_num, index_offset_list + render_pass.buffer_num + additional_buffer_state_num, 0);
   return index_offset_list;
 }
 auto PrepareGpuHandlesViewList(D3d12Device* device, const uint32_t buffer_num, const ResourceStateType* resource_state_list, const uint32_t offset_num, const uint32_t* index_offset_list, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list, DescriptorGpu* const descriptor_gpu, const D3D12_CPU_DESCRIPTOR_HANDLE& texture_list_cpu_handle, const D3D12_GPU_DESCRIPTOR_HANDLE& texture_list_gpu_handle) {
@@ -574,11 +562,10 @@ auto RegisterGuiDebugBufferView(const uint32_t render_pass_index_debug_show_sele
   ImGui::EndListBox();
   ImGui::End();
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t render_pass_index_debug_show_selected_buffer, const uint32_t render_pass_index_output_to_swapchain, const BufferList buffer_list, const uint32_t debug_viewable_buffer_allocation_index_len, const uint32_t* debug_viewable_buffer_allocation_index_list, bool* render_pass_enable_flag, uint32_t* debug_render_selected_buffer_allocation_index) {
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set) {
   RegisterGuiPerformance(time_duration_data_set);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
-  RegisterGuiDebugBufferView(render_pass_index_debug_show_selected_buffer, render_pass_index_output_to_swapchain, buffer_list, debug_viewable_buffer_allocation_index_len, debug_viewable_buffer_allocation_index_list, render_pass_enable_flag, debug_render_selected_buffer_allocation_index);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData() {
   RenderPassConfigDynamicData dynamic_data{};
@@ -606,50 +593,6 @@ auto UpdateCameraFromUserInput(const Size2d& buffer_size, float camera_pos[3], f
   if (const auto mouse_wheel = ImGui::GetIO().MouseWheel; mouse_wheel != 0.0f) {
     MoveCameraForward(camera_pos, camera_focus, mouse_wheel);
   }
-}
-auto GetRenderPassIndexToSwapOnDebugBufferView(const uint32_t render_pass_num, const RenderPass* render_pass_list) {
-  uint32_t render_pass_index_debug_show_selected_buffer{};
-  uint32_t render_pass_index_output_to_swapchain{};
-  for (uint32_t i = 0; i < render_pass_num; i++) {
-    switch (render_pass_list[i].name) {
-      case SID("output to swapchain"): {
-        render_pass_index_output_to_swapchain = i;
-        break;
-      }
-      case SID("debug buffer"): {
-        render_pass_index_debug_show_selected_buffer = i;
-        break;
-      }
-    }
-  }
-  return std::make_pair(render_pass_index_output_to_swapchain, render_pass_index_debug_show_selected_buffer);
-}
-auto GetDebugViewableBufferAllocationListImpl(const BufferList& buffer_list, const BufferConfig* buffer_config_list, uint32_t* dst_buffer_allocation_index_list) {
-  uint32_t index = 0;
-  for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
-    if (buffer_list.buffer_allocation_list[i] == nullptr) { continue; }
-    auto& buffer_config = buffer_config_list[buffer_list.buffer_config_index[i]];
-    if (buffer_config.dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) { continue; }
-    if (dst_buffer_allocation_index_list) {
-      dst_buffer_allocation_index_list[index] = i;
-    }
-    index++;
-  }
-  return index;
-}
-auto GetDebugViewableBufferAllocationList(const BufferList& buffer_list, const BufferConfig* buffer_config_list) {
-  const auto debug_viewable_buffer_allocation_index_len = GetDebugViewableBufferAllocationListImpl(buffer_list, buffer_config_list, nullptr);
-  auto debug_viewable_buffer_allocation_index_list = AllocateArraySystem<uint32_t>(debug_viewable_buffer_allocation_index_len);
-  GetDebugViewableBufferAllocationListImpl(buffer_list, buffer_config_list, debug_viewable_buffer_allocation_index_list);
-  return std::make_pair(debug_viewable_buffer_allocation_index_len, debug_viewable_buffer_allocation_index_list);
-}
-auto ConfigureDebugBufferPass(const BufferList& buffer_list, const uint32_t debug_render_selected_buffer_allocation_index, const uint32_t render_pass_index_debug_show_selected_buffer) {
-  uint32_t debug_buffer_state_num = 1;
-  auto debug_buffer_state_list = AllocateArrayFrame<RenderPassBufferState>(debug_buffer_state_num);
-  debug_buffer_state_list[0].pass_index = render_pass_index_debug_show_selected_buffer;
-  debug_buffer_state_list[0].buffer_config_index = buffer_list.buffer_config_index[debug_render_selected_buffer_allocation_index];
-  debug_buffer_state_list[0].state_type = ResourceStateType::kSrvPs;
-  return std::make_pair(debug_buffer_state_num, debug_buffer_state_list);
 }
 } // namespace anonymous
 } // namespace illuminate
@@ -854,9 +797,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
     write_to_sub[i] = AllocateArraySystem<bool>(render_graph.render_pass_num);
   }
-  auto [render_pass_index_output_to_swapchain, render_pass_index_debug_show_selected_buffer] = GetRenderPassIndexToSwapOnDebugBufferView(render_graph.render_pass_num, render_graph.render_pass_list);
-  auto [debug_viewable_buffer_allocation_index_len, debug_viewable_buffer_allocation_index_list] = GetDebugViewableBufferAllocationList(buffer_list, render_graph.buffer_list);
-  uint32_t debug_render_selected_buffer_allocation_index{0U};
   ResetAllocation(MemoryType::kFrame);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
@@ -870,10 +810,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     RegisterResource(swapchain_buffer_allocation_index, swapchain.GetResource(), &buffer_list);
     descriptor_cpu.RegisterExternalHandle(swapchain_buffer_allocation_index, DescriptorType::kRtv, swapchain.GetRtvHandle());
     // set up render pass args
-    const auto [additional_buffer_state_num, additional_buffer_state_list] = render_pass_enable_flag[render_pass_index_debug_show_selected_buffer]
-        ? ConfigureDebugBufferPass(buffer_list, debug_render_selected_buffer_allocation_index, render_pass_index_debug_show_selected_buffer)
-        : std::make_pair(0U, (RenderPassBufferState*)nullptr);
-    const auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, write_to_sub, render_pass_enable_flag, additional_buffer_state_num, additional_buffer_state_list, MemoryType::kFrame);
+    const auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, write_to_sub, render_pass_enable_flag, MemoryType::kFrame);
     const auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(render_graph.render_pass_num, render_graph.render_pass_list, render_graph.buffer_num, render_graph.buffer_list, resource_state_list, last_user_pass, MemoryType::kFrame);
     auto barrier_resource_list = PrepareBarrierResourceList(render_graph.render_pass_num, barrier_num, barrier_config_list, buffer_list);
     auto args_per_pass = AllocateArrayFrame<RenderPassFuncArgsRenderPerPass>(render_graph.render_pass_num);
@@ -882,11 +819,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (!render_pass_enable_flag[k]) { continue; }
       args_per_pass[k].pass_vars_ptr = render_pass_vars[k];
       args_per_pass[k].render_pass_index = k;
-      auto [render_pass_additional_buffer_state_num, render_pass_additional_buffer_state_list] = GetRenderPassAdditionalBufferStates(additional_buffer_state_num, additional_buffer_state_list);
-      auto [buffer_num, resources, cpu_handles, render_pass_resource_state_list] = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, write_to_sub, render_graph.buffer_list, frame_index, scene_data.cpu_handles, render_pass_additional_buffer_state_num, render_pass_additional_buffer_state_list);
+      auto [buffer_num, resources, cpu_handles, render_pass_resource_state_list] = PrepareResourceCpuHandleList(render_pass, &descriptor_cpu, buffer_list, write_to_sub, render_graph.buffer_list, frame_index, scene_data.cpu_handles);
       args_per_pass[k].resources = resources;
       args_per_pass[k].cpu_handles = cpu_handles;
-      auto index_offset_list = GetIndexOffsetList(render_pass, render_pass_additional_buffer_state_num);
+      auto index_offset_list = GetIndexOffsetList(render_pass);
       args_per_pass[k].gpu_handles_view = PrepareGpuHandlesViewList(device.Get(), buffer_num, render_pass_resource_state_list, render_pass.max_buffer_index_offset + 1, index_offset_list, args_per_pass[k].cpu_handles, &descriptor_gpu, scene_data.cpu_handles[kSceneDescriptorTexture], scene_gpu_handles_view);
       args_per_pass[k].gpu_handles_sampler = PrepareGpuHandlesSamplerList(device.Get(), render_pass, &descriptor_cpu, &descriptor_gpu, scene_gpu_handles_sampler);
     }
@@ -897,7 +833,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ImGui::NewFrame();
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
-    RegisterGui(&dynamic_data, time_duration_data_set, render_pass_index_debug_show_selected_buffer, render_pass_index_output_to_swapchain, buffer_list, debug_viewable_buffer_allocation_index_len, debug_viewable_buffer_allocation_index_list, render_pass_enable_flag, &debug_render_selected_buffer_allocation_index);
+    RegisterGui(&dynamic_data, time_duration_data_set);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
