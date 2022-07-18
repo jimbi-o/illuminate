@@ -211,79 +211,7 @@ void GetSamplerConfig(const nlohmann::json& j, D3D12_SAMPLER_DESC* sampler_desc)
   sampler_desc->MinLOD = GetFloat(j, "min_lod", 0.0f);
   sampler_desc->MaxLOD = GetFloat(j, "max_lod", 65535.0f);
 }
-void GetBarrierList(const nlohmann::json& j, const nlohmann::json& buffer_json, const uint32_t barrier_num, Barrier* barrier_list) {
-  for (uint32_t barrier_index = 0; barrier_index < barrier_num; barrier_index++) {
-    auto& dst_barrier = barrier_list[barrier_index];
-    auto& src_barrier = j[barrier_index];
-    {
-      auto buffer_name = GetStringView(src_barrier, "buffer_name");
-      const auto num = static_cast<uint32_t>(buffer_json.size());
-      for (uint32_t i = 0; i < num; i++) {
-        if (buffer_name.compare(GetStringView(buffer_json[i], "name")) == 0) {
-          dst_barrier.buffer_index = i;
-          break;
-        }
-      }
-    }
-    {
-      auto type_str = GetStringView(src_barrier, "type");
-      if (type_str.compare("transition") == 0) {
-        dst_barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-      } else if (type_str.compare("aliasing") == 0) {
-        dst_barrier.type = D3D12_RESOURCE_BARRIER_TYPE_ALIASING;
-      } else if (type_str.compare("uav") == 0) {
-        dst_barrier.type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-      } else {
-        logerror("invalid barrier type: {} {} {}", type_str.data(), GetStringView(src_barrier, "buffer_name").data(), barrier_index);
-        assert(false && "invalid barrier type");
-      }
-    } // type
-    if (src_barrier.contains("split_type")) {
-      auto flag_str = GetStringView(src_barrier, "split_type");
-      if (flag_str.compare("begin") == 0) {
-        dst_barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY;
-      } else if (flag_str.compare("end") == 0) {
-        dst_barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_END_ONLY;
-      } else {
-        dst_barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-      }
-    } else {
-      dst_barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    } // flag
-    switch (dst_barrier.type) {
-      case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION: {
-        dst_barrier.state_before = D3D12_RESOURCE_STATE_COMMON;
-        dst_barrier.state_after  = D3D12_RESOURCE_STATE_COMMON;
-        {
-          const auto& state_before = src_barrier.at("state_before");
-          for (const auto& state : state_before) {
-            dst_barrier.state_before |= ConvertToD3d12ResourceState(GetResourceStateType(state));
-          }
-        }
-        {
-          const auto& state_after = src_barrier.at("state_after");
-          for (const auto& state : state_after) {
-            dst_barrier.state_after |= ConvertToD3d12ResourceState(GetResourceStateType(state));
-          }
-        }
-        break;
-      }
-      case D3D12_RESOURCE_BARRIER_TYPE_ALIASING: {
-        assert(false && "aliasing barrier not implemented yet");
-        break;
-      }
-      case D3D12_RESOURCE_BARRIER_TYPE_UAV: {
-        break;
-      }
-      default: {
-        logerror("invalid barrier type. {}", dst_barrier.type);
-        assert(false);
-        break;
-      }
-    } // switch
-  }
-}
-}
+} // namespace
 void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, RenderGraph* graph) {
   auto& r = *graph;
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
@@ -432,18 +360,6 @@ void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, 
         dst_pass.material = FindHashIndex(material_num, material_hash_list, hash);
         assert(dst_pass.material < material_num);
       } // material
-      if (src_pass.contains("prepass_barrier")) {
-        auto& prepass_barrier = src_pass.at("prepass_barrier");
-        dst_pass.prepass_barrier_num = static_cast<uint32_t>(prepass_barrier.size());
-        dst_pass.prepass_barrier = AllocateArraySystem<Barrier>(dst_pass.prepass_barrier_num);
-        GetBarrierList(prepass_barrier, j.at("buffer"), dst_pass.prepass_barrier_num, dst_pass.prepass_barrier);
-      }
-      if (src_pass.contains("postpass_barrier")) {
-        auto& postpass_barrier = src_pass.at("postpass_barrier");
-        dst_pass.postpass_barrier_num = static_cast<uint32_t>(postpass_barrier.size());
-        dst_pass.postpass_barrier = AllocateArraySystem<Barrier>(dst_pass.postpass_barrier_num);
-        GetBarrierList(postpass_barrier, j.at("buffer"), dst_pass.postpass_barrier_num, dst_pass.postpass_barrier);
-      } // barriers
       dst_pass.execute = GetBool(src_pass, "execute", false);
       if (src_pass.contains("flip_pingpong")) {
         const auto& pingpong = src_pass.at("flip_pingpong");

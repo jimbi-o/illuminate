@@ -36,14 +36,6 @@ struct RenderPassBuffer {
   uint32_t index_offset{0U};
   ResourceStateType state{};
 };
-struct Barrier {
-  uint32_t buffer_index{};
-  uint32_t local_index{0};
-  D3D12_RESOURCE_BARRIER_TYPE type{};
-  D3D12_RESOURCE_BARRIER_FLAGS flag{}; // split begin/end/none
-  D3D12_RESOURCE_STATES state_before{};
-  D3D12_RESOURCE_STATES state_after{};
-};
 struct RenderPass {
   StrHash name{};
   StrHash type{};
@@ -54,10 +46,6 @@ struct RenderPass {
   RenderPassBuffer* buffer_list{nullptr};
   uint32_t max_buffer_index_offset{0};
   uint32_t material{};
-  uint32_t prepass_barrier_num{0};
-  Barrier* prepass_barrier{nullptr};
-  uint32_t postpass_barrier_num{0};
-  Barrier* postpass_barrier{nullptr};
   bool execute{false};
   bool sends_signal{false};
   uint32_t wait_pass_num{0};
@@ -99,6 +87,5 @@ struct RenderGraph {
   uint32_t max_mipmap_num{12};
   uint32_t timestamp_query_dst_resource_num{5};
 };
-static const uint32_t kBarrierExecutionTimingNum = 2;
 }
 #endif

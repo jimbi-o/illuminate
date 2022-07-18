@@ -5,6 +5,7 @@
 #include "d3d12_render_graph.h"
 #include "illuminate/memory/memory_allocation.h"
 namespace illuminate {
+enum class MemoryType : uint8_t;
 D3D12MA::Allocator* GetBufferAllocator(DxgiAdapter* adapter, D3d12Device* device);
 D3D12_RESOURCE_DESC1 ConvertToD3d12ResourceDesc1(const BufferConfig& config, const MainBufferSize& main_buffer_size);
 void CreateBuffer(const D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_STATES initial_state, const D3D12_RESOURCE_DESC1& resource_desc, const D3D12_CLEAR_VALUE* clear_value, D3D12MA::Allocator* allocator, D3D12MA::Allocation** allocation, ID3D12Resource** resource);
@@ -39,6 +40,7 @@ constexpr inline auto GetResource(const BufferList& buffer_list, const uint32_t 
 constexpr inline auto GetResource(const BufferList& buffer_list, const uint32_t buffer_config_index, const uint32_t sub_index) {
   return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_config_index, sub_index)];
 }
+ID3D12Resource** GetResourceList(const uint32_t buffer_num, const uint32_t* const buffer_allocation_index_list, const BufferList& buffer_list, const MemoryType& type);
 constexpr inline auto GetBufferLocalIndex(const BufferConfig& buffer_config, const ResourceStateType state, const bool write_to_sub, const uint32_t frame_index) {
   if (buffer_config.pingpong) {
     const auto read_only = IsResourceStateReadOnly(state);

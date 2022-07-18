@@ -1,360 +1,324 @@
 #include "d3d12_barriers.h"
+#include "d3d12_scene.h"
 #include "d3d12_src_common.h"
-#include "doctest/doctest.h"
 namespace illuminate {
-constexpr auto IsResourceStateInclusive(const ResourceStateType& a, const ResourceStateType& b) {
-  if (a == b) { return true; }
-  return a == ResourceStateType::kGenericRead && b == ResourceStateType::kCbv;
+namespace {
+auto FindBufferIndex(const uint32_t num, const uint32_t* buffer_id_list, const uint32_t buffer_id) {
+  for (uint32_t i = 0; i < num; i++) {
+    if (buffer_id_list[i] == buffer_id) { return i; }
+  }
+  return ~0U;
 }
-RenderPassResourceState ConfigureRenderPassResourceStates(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const bool* const* pingpong_buffer_write_to_sub_list, const bool* render_pass_enable_flag, const MemoryType retval_memory_type) {
-  auto resource_state_list = AllocateArray<ResourceStateType**>(retval_memory_type, buffer_num);
-  auto last_user_pass = AllocateArray<uint32_t*>(retval_memory_type, buffer_num);
-  for (uint32_t i = 0; i < buffer_num; i++) {
-    const auto pingpong_buffer = buffer_config_list[i].pingpong;
-    const auto buffer_allocation_num = pingpong_buffer ? 2U : 1U;
-    resource_state_list[i] = AllocateArray<ResourceStateType*>(retval_memory_type, render_pass_num);
-    for (uint32_t j = 0; j < render_pass_num; j++) {
-      resource_state_list[i][j] = AllocateArray<ResourceStateType>(retval_memory_type, buffer_allocation_num);
-    }
-    last_user_pass[i] = AllocateArray<uint32_t>(retval_memory_type, buffer_allocation_num);
-    for (uint32_t k = 0; k < buffer_allocation_num; k++) {
-      last_user_pass[i][k] = 0;
-    }
-    auto state_main = buffer_config_list[i].initial_state;
-    if (buffer_config_list[i].descriptor_only) {
-      for (uint32_t j = 0; j < render_pass_num; j++) {
-        for (uint32_t k = 0; k < buffer_allocation_num; k++) {
-          resource_state_list[i][j][k] = state_main;
-        }
-      }
-      continue;
-    }
-    auto state_sub  = state_main;
-    for (uint32_t j = 0; j < render_pass_num; j++) {
-      if (render_pass_enable_flag[j]) {
-        uint32_t buffer_count = 0;
-        for (uint32_t k = 0; k < render_pass_list[j].buffer_num; k++) {
-          if (render_pass_list[j].buffer_list[k].buffer_index == i) {
-            if (pingpong_buffer) {
-              auto read_only = IsResourceStateReadOnly(render_pass_list[j].buffer_list[k].state);
-              auto write_to_sub = pingpong_buffer_write_to_sub_list[i][j];
-              if (read_only && write_to_sub || !read_only && !write_to_sub) {
-                if (!IsResourceStateInclusive(state_main, render_pass_list[j].buffer_list[k].state)) {
-                  state_main = render_pass_list[j].buffer_list[k].state;
-                }
-                last_user_pass[i][0] = j;
-              } else {
-                if (!IsResourceStateInclusive(state_sub, render_pass_list[j].buffer_list[k].state)) {
-                  state_sub = render_pass_list[j].buffer_list[k].state;
-                }
-                last_user_pass[i][1] = j;
-              }
-            } else {
-              if (!IsResourceStateInclusive(state_main, render_pass_list[j].buffer_list[k].state)) {
-                state_main = render_pass_list[j].buffer_list[k].state;
-              }
-              last_user_pass[i][0] = j;
-            }
-            buffer_count++;
-            if (buffer_count >= buffer_allocation_num) { break; }
-          }
-        }
-      }
-      resource_state_list[i][j][0] = state_main;
-      if (pingpong_buffer) {
-        resource_state_list[i][j][1] = state_sub;
-      }
-    }
-    for (uint32_t k = 0; k < buffer_allocation_num; k++) {
-      if (!IsResourceStateInclusive(buffer_config_list[i].initial_state, resource_state_list[i][last_user_pass[i][k]][0])) {
-        auto pass_index = last_user_pass[i][k] + 1;
-        for (; pass_index < render_pass_num && !render_pass_enable_flag[pass_index]; pass_index++);
-        for (; pass_index < render_pass_num; pass_index++) {
-          resource_state_list[i][pass_index][k] = buffer_config_list[i].initial_state;
-        }
-      }
+auto GetPrevState(const uint32_t num, const uint32_t* buffer_id_list, const ResourceStateType* states, const uint32_t buffer_id) {
+  for (uint32_t i = 0; i < num; i++) {
+    if (buffer_id_list[i] == buffer_id) {
+      return states[i];
     }
   }
-  return {resource_state_list, last_user_pass};
+  logerror("no valid bufferid found {} {}", num, buffer_id);
+  assert(false && "no valid bufferid found");
+  return ResourceStateType::kCommon;
 }
-BarrierTransitions ConfigureBarrierTransitions(const uint32_t render_pass_num, const RenderPass* render_pass_list, const uint32_t buffer_num, const BufferConfig* buffer_config_list, const ResourceStateTypePerPass* resource_state_list, const uint32_t* const * const last_user_pass, const MemoryType retval_memory_type) {
-  // command queue type not considered yet.
-  auto barrier_num = AllocateArray<uint32_t*>(retval_memory_type, kBarrierExecutionTimingNum);
-  for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
-    barrier_num[i] = AllocateArray<uint32_t>(retval_memory_type, render_pass_num);
-    for (uint32_t j = 0; j < render_pass_num; j++) {
-      barrier_num[i][j] = (i == 0) ? render_pass_list[j].prepass_barrier_num : render_pass_list[j].postpass_barrier_num;
-    }
-  }
-  for (uint32_t i = 0; i < buffer_num; i++) {
-    const auto check_buffer_num = buffer_config_list[i].pingpong ? 2U : 1U;
-    for (uint32_t k = 0; k < check_buffer_num; k++) {
-      if (buffer_config_list[i].initial_state != resource_state_list[i][0][k]) {
-        barrier_num[0][0]++;
-      }
-      for (uint32_t j = 1; j <= last_user_pass[i][k]; j++) {
-        if (resource_state_list[i][j][k] != resource_state_list[i][j - 1][k]) {
-          barrier_num[0][j]++;
-        }
-      }
-      if (resource_state_list[i][last_user_pass[i][k]][k] != buffer_config_list[i].initial_state) {
-        barrier_num[1][last_user_pass[i][k]]++;
-      }
-    }
-  }
-  auto barrier_config_list = AllocateArray<Barrier**>(retval_memory_type, kBarrierExecutionTimingNum);
-  auto barrier_index = AllocateArrayFrame<uint32_t*>(kBarrierExecutionTimingNum);
-  for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
-    barrier_config_list[i] = AllocateArray<Barrier*>(retval_memory_type, render_pass_num);
-    for (uint32_t j = 0; j < render_pass_num; j++) {
-      barrier_config_list[i][j] = (barrier_num[i][j] == 0) ? nullptr : AllocateArray<Barrier>(retval_memory_type, barrier_num[i][j]);
-    }
-    barrier_index[i] = AllocateArrayFrame<uint32_t>(render_pass_num);
+enum class BarrierFillMode :uint8_t { kNumOnly, kFillParams, };
+template <BarrierFillMode fill_mode>
+auto ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num,
+                                 const uint32_t* const * render_pass_buffer_allocation_index_list, const ResourceStateType* const * render_pass_resource_state_list,
+                                 const uint32_t buffer_num_with_initial_state, const uint32_t* const buffer_allocation_index_with_initial_state, const ResourceStateType* initial_state,
+                                 const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state, 
+                                 const MemoryType& memory_type, uint32_t** barrier_num, BarrierConfig*** barrier_config_list) {
+  auto buffer_id_list = AllocateArray<uint32_t>(memory_type, buffer_num);
+  auto buffer_initial_state = AllocateArray<ResourceStateType>(memory_type, buffer_num);
+  auto buffer_prev_state = AllocateArray<ResourceStateType>(memory_type, buffer_num);
+  auto last_user_pass = AllocateArray<uint32_t>(memory_type, buffer_num);
+  auto barrier_index = AllocateArrayFrame<uint32_t*>(render_pass_num);
+  uint32_t next_vacant_buffer_index = 0;
+  for (uint32_t i = 0; i < buffer_num_with_initial_state; i++) {
+    buffer_id_list[next_vacant_buffer_index]       = buffer_allocation_index_with_initial_state[i];
+    buffer_initial_state[next_vacant_buffer_index] = initial_state[i];
+    buffer_prev_state[next_vacant_buffer_index]    = initial_state[i];
+    last_user_pass[next_vacant_buffer_index]       = ~0U;
+    next_vacant_buffer_index++;
   }
   for (uint32_t i = 0; i < render_pass_num; i++) {
-    for (uint32_t j = 0; j < render_pass_list[i].prepass_barrier_num; j++) {
-      memcpy(&barrier_config_list[0][i][j], &render_pass_list[i].prepass_barrier[j], sizeof(barrier_config_list[0][i][j]));
-    }
-    barrier_index[0][i] = render_pass_list[i].prepass_barrier_num;
-    for (uint32_t j = 0; j < render_pass_list[i].postpass_barrier_num; j++) {
-      memcpy(&barrier_config_list[1][i][j], &render_pass_list[i].postpass_barrier[j], sizeof(barrier_config_list[1][i][j]));
-    }
-    barrier_index[1][i] = render_pass_list[i].postpass_barrier_num;
-  }
-  for (uint32_t i = 0; i < buffer_num; i++) {
-    const auto check_buffer_num = buffer_config_list[i].pingpong ? 2U : 1U;
-    for (uint32_t k = 0; k < check_buffer_num; k++) {
-      if (buffer_config_list[i].initial_state != resource_state_list[i][0][k]) {
-        auto& barrier = barrier_config_list[0][0][barrier_index[0][0]];
-        barrier.buffer_index = i;
-        barrier.local_index = k;
-        barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.state_before = ConvertToD3d12ResourceState(buffer_config_list[i].initial_state);
-        barrier.state_after  = ConvertToD3d12ResourceState(resource_state_list[i][0][k]);
-        barrier_index[0][0]++;
+    barrier_index[i] = AllocateArrayFrame<uint32_t>(kBarrierExecutionTimingNum);
+    barrier_index[i][0] = 0;
+    barrier_index[i][1] = 0;
+    for (uint32_t j = 0; j < render_pass_buffer_num[i]; j++) {
+      const auto buffer_id = render_pass_buffer_allocation_index_list[i][j];
+      if (IsSceneBuffer(buffer_id)) { continue; }
+      auto buffer_index = FindBufferIndex(next_vacant_buffer_index, buffer_id_list, buffer_id);
+      if (buffer_index == ~0U) {
+        buffer_id_list[next_vacant_buffer_index]       = buffer_id;
+        buffer_initial_state[next_vacant_buffer_index] = render_pass_resource_state_list[i][j];
+        buffer_prev_state[next_vacant_buffer_index]    = render_pass_resource_state_list[i][j];
+        last_user_pass[next_vacant_buffer_index]       = i;
+        next_vacant_buffer_index++;
+        continue;
       }
-      for (uint32_t j = 1; j <= last_user_pass[i][k]; j++) {
-        if (resource_state_list[i][j][k] != resource_state_list[i][j - 1][k]) {
-          auto& barrier = barrier_config_list[0][j][barrier_index[0][j]];
-          barrier.buffer_index = i;
-          barrier.local_index = k;
-          barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-          barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-          barrier.state_before = ConvertToD3d12ResourceState(resource_state_list[i][j - 1][k]);
-          barrier.state_after  = ConvertToD3d12ResourceState(resource_state_list[i][j][k]);
-          barrier_index[0][j]++;
-        }
+      last_user_pass[buffer_index] = i;
+      auto prev_state = GetPrevState(next_vacant_buffer_index, buffer_id_list, buffer_prev_state, buffer_id);
+      if (prev_state == render_pass_resource_state_list[i][j]) { continue; }
+      if constexpr (fill_mode == BarrierFillMode::kFillParams) {
+        barrier_config_list[i][0][barrier_index[i][0]].buffer_allocation_index = buffer_id;
+        barrier_config_list[i][0][barrier_index[i][0]].type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier_config_list[i][0][barrier_index[i][0]].flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier_config_list[i][0][barrier_index[i][0]].state_before = ConvertToD3d12ResourceState(prev_state);
+        barrier_config_list[i][0][barrier_index[i][0]].state_after  = ConvertToD3d12ResourceState(render_pass_resource_state_list[i][j]);
       }
-      if (resource_state_list[i][last_user_pass[i][k]][k] != buffer_config_list[i].initial_state) {
-        auto& barrier = barrier_config_list[1][last_user_pass[i][k]][barrier_index[1][last_user_pass[i][k]]];
-        barrier.buffer_index = i;
-        barrier.local_index = k;
-        barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.state_before = ConvertToD3d12ResourceState(resource_state_list[i][last_user_pass[i][k]][k]);
-        barrier.state_after  = ConvertToD3d12ResourceState(buffer_config_list[i].initial_state);
-        barrier_index[1][last_user_pass[i][k]]++;
-      }
+      buffer_prev_state[buffer_index] = render_pass_resource_state_list[i][j];
+      barrier_index[i][0]++;
     }
   }
-#ifdef BUILD_WITH_TEST
-  for (uint32_t i = 0; i < kBarrierExecutionTimingNum; i++) {
-    CAPTURE(i);
-    for (uint32_t j = 0; j < render_pass_num; j++) {
-      CAPTURE(j);
-      CHECK_EQ(barrier_index[i][j], barrier_num[i][j]);
+  for (uint32_t i = 0; i < next_vacant_buffer_index; i++) {
+    const auto buffer_id = buffer_id_list[i];
+    const auto prev_state = GetPrevState(next_vacant_buffer_index, buffer_id_list, buffer_prev_state, buffer_id);
+    const auto pass_index = last_user_pass[i];
+    auto next_state = buffer_initial_state[i];
+    for (uint32_t j = 0; j < buffer_num_with_final_state; j++) {
+      if (buffer_id != buffer_allocation_index_with_final_state[j]) { continue; }
+      next_state = final_state[j];
+      break;
+    }
+    if (prev_state == next_state) { continue; }
+    if constexpr (fill_mode == BarrierFillMode::kFillParams) {
+      const auto current_barrier_index = barrier_index[pass_index][1];
+      barrier_config_list[pass_index][1][current_barrier_index].buffer_allocation_index = buffer_id;
+      barrier_config_list[pass_index][1][current_barrier_index].type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+      barrier_config_list[pass_index][1][current_barrier_index].flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+      barrier_config_list[pass_index][1][current_barrier_index].state_before = ConvertToD3d12ResourceState(prev_state);
+      barrier_config_list[pass_index][1][current_barrier_index].state_after  = ConvertToD3d12ResourceState(next_state);
+    }
+    barrier_index[pass_index][1]++;
+  }
+  if constexpr (fill_mode == BarrierFillMode::kNumOnly) {
+    for (uint32_t i = 0; i < render_pass_num; i++) {
+      barrier_num[i] = AllocateArray<uint32_t>(memory_type, kBarrierExecutionTimingNum);
+      barrier_num[i][0] = barrier_index[i][0];
+      barrier_num[i][1] = barrier_index[i][1];
     }
   }
-#endif
+}
+} // namespace
+BarrierTransitions ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num,
+                                               const uint32_t* const * render_pass_buffer_allocation_index_list, const ResourceStateType* const * render_pass_resource_state_list,
+                                               const uint32_t buffer_num_with_initial_state, const uint32_t* const buffer_allocation_index_with_initial_state, const ResourceStateType* initial_state,
+                                               const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state, 
+                                               const MemoryType& memory_type) {
+  auto barrier_num = AllocateArray<uint32_t*>(memory_type, render_pass_num);
+  ConfigureBarrierTransitions<BarrierFillMode::kNumOnly>(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                         buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
+                                                         buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
+                                                         MemoryType::kFrame, barrier_num, nullptr);
+  auto barrier_config_list = AllocateArray<BarrierConfig**>(memory_type, render_pass_num);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    barrier_config_list[i] = AllocateArray<BarrierConfig*>(memory_type, kBarrierExecutionTimingNum);
+    barrier_config_list[i][0] = AllocateArray<BarrierConfig>(memory_type, barrier_num[i][0]);
+    barrier_config_list[i][1] = AllocateArray<BarrierConfig>(memory_type, barrier_num[i][1]);
+  }
+  ConfigureBarrierTransitions<BarrierFillMode::kFillParams>(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                          buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
+                                                          buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
+                                                          MemoryType::kFrame, barrier_num, barrier_config_list);
   return {barrier_num, barrier_config_list};
 }
 } // namespace illuminate
-TEST_CASE("buffer state change") {
+#include "doctest/doctest.h"
+TEST_CASE("barrier/swapchain") {
   using namespace illuminate;
-  BufferConfig buffer_config_list[]{
-    {.buffer_index = 0, .initial_state = ResourceStateType::kRtv, .pingpong = true, },
-    {.buffer_index = 1, .initial_state = ResourceStateType::kRtv, .pingpong = false, },
-    {.buffer_index = 2, .descriptor_only = true, },
-    {.buffer_index = 3, .initial_state = ResourceStateType::kRtv, .pingpong = false, },
+  const uint32_t buffer_num = 1;
+  const uint32_t render_pass_num = 1;
+  const uint32_t render_pass_buffer_num[render_pass_num] = {1};
+  const uint32_t render_pass_buffer_allocation_index_list_pass_0[] = {99};
+  const uint32_t* render_pass_buffer_allocation_index_list[render_pass_num] = {
+    render_pass_buffer_allocation_index_list_pass_0,
   };
-  RenderPass render_pass_list[]{{},{},{},};
-  RenderPassBuffer buffer_list0[] = {
-    {
-      .buffer_index = 0,
-      .state = ResourceStateType::kRtv,
-    },
-    {
-      .buffer_index = 3,
-      .state = ResourceStateType::kRtv,
-    },
+  const ResourceStateType render_pass_resource_state_list_pass_0[] = {ResourceStateType::kRtv};
+  const ResourceStateType* render_pass_resource_state_list[render_pass_num] = {
+    render_pass_resource_state_list_pass_0,
   };
-  RenderPassBuffer buffer_list1[] = {
-    {
-      .buffer_index = 0,
-      .state = ResourceStateType::kRtv,
-    },
-    {
-      .buffer_index = 0,
-      .state = ResourceStateType::kSrvPs,
-    },
-    {
-      .buffer_index = 1,
-      .state = ResourceStateType::kRtv,
-    },
-    {
-      .buffer_index = 3,
-      .state = ResourceStateType::kSrvPs,
-    },
-  };
-  RenderPassBuffer buffer_list2[] = {
-    {
-      .buffer_index = 0,
-      .state = ResourceStateType::kRtv,
-    },
-    {
-      .buffer_index = 0,
-      .state = ResourceStateType::kSrvPs,
-    },
-    {
-      .buffer_index = 1,
-      .state = ResourceStateType::kSrvPs,
-    },
-  };
-  Barrier prepass_barrier[] = {
-    {
-      .buffer_index = 2,
-      .local_index = 0,
-      .type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-      .flag = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-      .state_before = D3D12_RESOURCE_STATE_PRESENT,
-      .state_after  = D3D12_RESOURCE_STATE_RENDER_TARGET,
-    },
-  };
-  Barrier postpass_barrier[] = {
-    {
-      .buffer_index = 2,
-      .local_index = 0,
-      .type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-      .flag = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-      .state_before = D3D12_RESOURCE_STATE_RENDER_TARGET,
-      .state_after  = D3D12_RESOURCE_STATE_PRESENT,
-    },
-  };
-  render_pass_list[0].buffer_num = countof(buffer_list0);
-  render_pass_list[0].buffer_list = buffer_list0;
-  render_pass_list[1].buffer_num = countof(buffer_list1);
-  render_pass_list[1].buffer_list = buffer_list1;
-  render_pass_list[1].prepass_barrier_num = countof(prepass_barrier);
-  render_pass_list[1].prepass_barrier = prepass_barrier;
-  render_pass_list[1].postpass_barrier_num = countof(postpass_barrier);
-  render_pass_list[1].postpass_barrier = postpass_barrier;
-  render_pass_list[2].buffer_num = countof(buffer_list2);
-  render_pass_list[2].buffer_list = buffer_list2;
-  auto pingpong_buffer_write_to_sub_list = AllocateArray<bool*>(MemoryType::kScene, countof(buffer_config_list));
-  pingpong_buffer_write_to_sub_list[0] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
-  pingpong_buffer_write_to_sub_list[1] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
-  pingpong_buffer_write_to_sub_list[2] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
-  pingpong_buffer_write_to_sub_list[3] = AllocateArray<bool>(MemoryType::kScene, countof(render_pass_list));
-  pingpong_buffer_write_to_sub_list[0][0] = false;
-  pingpong_buffer_write_to_sub_list[0][1] = true;
-  pingpong_buffer_write_to_sub_list[0][2] = false;
-  pingpong_buffer_write_to_sub_list[1][0] = false;
-  pingpong_buffer_write_to_sub_list[1][1] = false;
-  pingpong_buffer_write_to_sub_list[1][2] = false;
-  pingpong_buffer_write_to_sub_list[2][0] = false;
-  pingpong_buffer_write_to_sub_list[2][1] = false;
-  pingpong_buffer_write_to_sub_list[2][2] = false;
-  pingpong_buffer_write_to_sub_list[3][0] = false;
-  pingpong_buffer_write_to_sub_list[3][1] = false;
-  pingpong_buffer_write_to_sub_list[3][2] = false;
-  const bool render_pass_enable_flag[] = {true,true,true,};
-  auto [resource_state_list, last_user_pass] = ConfigureRenderPassResourceStates(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, (const bool**)pingpong_buffer_write_to_sub_list, render_pass_enable_flag, MemoryType::kScene);
-  // resource_state_list[buffer_index][pass_index][main(0)/sub(1)]
-  CHECK_EQ(resource_state_list[0][0][0], ResourceStateType::kRtv);
-  CHECK_EQ(resource_state_list[0][1][0], ResourceStateType::kSrvPs);
-  CHECK_EQ(resource_state_list[0][2][0], ResourceStateType::kRtv);
-  CHECK_EQ(resource_state_list[0][0][1], ResourceStateType::kRtv);
-  CHECK_EQ(resource_state_list[0][1][1], ResourceStateType::kRtv);
-  CHECK_EQ(resource_state_list[0][2][1], ResourceStateType::kSrvPs);
-  CHECK_EQ(resource_state_list[1][0][0], ResourceStateType::kRtv);
-  CHECK_EQ(resource_state_list[1][1][0], ResourceStateType::kRtv);
-  CHECK_EQ(resource_state_list[1][2][0], ResourceStateType::kSrvPs);
-  CHECK_EQ(resource_state_list[3][0][0], ResourceStateType::kRtv);
-  CHECK_EQ(resource_state_list[3][1][0], ResourceStateType::kSrvPs);
-  CHECK_EQ(resource_state_list[3][2][0], ResourceStateType::kRtv);
-  CHECK_EQ(last_user_pass[0][0], 2);
-  CHECK_EQ(last_user_pass[0][1], 2);
-  CHECK_EQ(last_user_pass[1][0], 2);
-  CHECK_EQ(last_user_pass[3][0], 1);
-  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(countof(render_pass_list), render_pass_list, countof(buffer_config_list), buffer_config_list, resource_state_list, last_user_pass, MemoryType::kScene);
-  // barrier_num[prepass(0)/postpass(1)][pass_index][barrier_index]
-  CHECK_EQ(barrier_num[0][0], 0);
-  CHECK_EQ(barrier_num[1][0], 0);
-  CHECK_EQ(barrier_num[0][1], 3);
-  CHECK_EQ(barrier_num[1][1], 2);
-  CHECK_EQ(barrier_num[0][2], 3);
-  CHECK_EQ(barrier_num[1][2], 2);
-  // barrier_config_list[prepass(0)/postpass(1)][pass_index][barrier_index]
-  CHECK_EQ(barrier_config_list[0][1][0].buffer_index, 2);
-  CHECK_EQ(barrier_config_list[0][1][0].local_index, 0);
+  const uint32_t buffer_num_with_initial_state = 1;
+  const uint32_t buffer_allocation_index_with_initial_state[buffer_num_with_initial_state] = {99};
+  const ResourceStateType initial_state[buffer_num_with_initial_state] = {ResourceStateType::kPresent};
+  const uint32_t buffer_num_with_final_state = 1;
+  const uint32_t buffer_allocation_index_with_final_state[buffer_num_with_final_state] = {99};
+  const ResourceStateType final_state[buffer_num_with_final_state] = {ResourceStateType::kPresent};
+  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                                        buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
+                                                                        buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
+                                                                        MemoryType::kFrame);
+  CHECK_EQ(barrier_num[0][0], 1);
+  CHECK_EQ(barrier_config_list[0][0][0].buffer_allocation_index, 99);
+  CHECK_EQ(barrier_config_list[0][0][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[0][0][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[0][0][0].state_before, D3D12_RESOURCE_STATE_PRESENT);
+  CHECK_EQ(barrier_config_list[0][0][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_num[0][1], 1);
+  CHECK_EQ(barrier_config_list[0][1][0].buffer_allocation_index, 99);
   CHECK_EQ(barrier_config_list[0][1][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[0][1][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[0][1][0].state_before, D3D12_RESOURCE_STATE_PRESENT);
-  CHECK_EQ(barrier_config_list[0][1][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[0][1][1].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[0][1][1].local_index, 0);
-  CHECK_EQ(barrier_config_list[0][1][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
-  CHECK_EQ(barrier_config_list[0][1][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[0][1][1].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[0][1][1].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-  CHECK_EQ(barrier_config_list[0][1][2].buffer_index, 3);
-  CHECK_EQ(barrier_config_list[0][1][2].local_index, 0);
-  CHECK_EQ(barrier_config_list[0][1][2].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
-  CHECK_EQ(barrier_config_list[0][1][2].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[0][1][2].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[0][1][2].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-  CHECK_EQ(barrier_config_list[1][1][0].buffer_index, 2);
-  CHECK_EQ(barrier_config_list[1][1][0].local_index, 0);
+  CHECK_EQ(barrier_config_list[0][1][0].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[0][1][0].state_after, D3D12_RESOURCE_STATE_PRESENT);
+  ClearAllAllocations();
+}
+TEST_CASE("barrier/simple") {
+  using namespace illuminate;
+  const uint32_t buffer_num = 2;
+  const uint32_t render_pass_num = 2;
+  const uint32_t render_pass_buffer_num[render_pass_num] = {1, 2};
+  const uint32_t render_pass_buffer_allocation_index_list_pass_0[] = {35};
+  const uint32_t render_pass_buffer_allocation_index_list_pass_1[] = {35, 99};
+  const uint32_t* render_pass_buffer_allocation_index_list[render_pass_num] = {
+    render_pass_buffer_allocation_index_list_pass_0,
+    render_pass_buffer_allocation_index_list_pass_1,
+  };
+  const ResourceStateType render_pass_resource_state_list_pass_0[] = {ResourceStateType::kRtv};
+  const ResourceStateType render_pass_resource_state_list_pass_1[] = {ResourceStateType::kSrvPs, ResourceStateType::kRtv};
+  const ResourceStateType* render_pass_resource_state_list[render_pass_num] = {
+    render_pass_resource_state_list_pass_0,
+    render_pass_resource_state_list_pass_1,
+  };
+  const uint32_t buffer_num_with_initial_state = 1;
+  const uint32_t buffer_allocation_index_with_initial_state[buffer_num_with_initial_state] = {99};
+  const ResourceStateType initial_state[buffer_num_with_initial_state] = {ResourceStateType::kPresent};
+  const uint32_t buffer_num_with_final_state = 1;
+  const uint32_t buffer_allocation_index_with_final_state[buffer_num_with_final_state] = {99};
+  const ResourceStateType final_state[buffer_num_with_final_state] = {ResourceStateType::kPresent};
+  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                                        buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
+                                                                        buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
+                                                                        MemoryType::kFrame);
+  CHECK_EQ(barrier_num[0][0], 0);
+  CHECK_EQ(barrier_num[0][1], 0);
+  CHECK_EQ(barrier_num[1][0], 2);
+  CHECK_EQ(barrier_config_list[1][0][0].buffer_allocation_index, 35);
+  CHECK_EQ(barrier_config_list[1][0][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[1][0][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[1][0][0].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[1][0][0].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[1][0][1].buffer_allocation_index, 99);
+  CHECK_EQ(barrier_config_list[1][0][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[1][0][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[1][0][1].state_before, D3D12_RESOURCE_STATE_PRESENT);
+  CHECK_EQ(barrier_config_list[1][0][1].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_num[1][1], 2);
+  CHECK_EQ(barrier_config_list[1][1][0].buffer_allocation_index, 99);
   CHECK_EQ(barrier_config_list[1][1][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[1][1][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[1][1][0].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
   CHECK_EQ(barrier_config_list[1][1][0].state_after, D3D12_RESOURCE_STATE_PRESENT);
-  CHECK_EQ(barrier_config_list[1][1][1].buffer_index, 3);
-  CHECK_EQ(barrier_config_list[1][1][1].local_index, 0);
+  CHECK_EQ(barrier_config_list[1][1][1].buffer_allocation_index, 35);
   CHECK_EQ(barrier_config_list[1][1][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
   CHECK_EQ(barrier_config_list[1][1][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
   CHECK_EQ(barrier_config_list[1][1][1].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   CHECK_EQ(barrier_config_list[1][1][1].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[0][2][0].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[0][2][0].local_index, 0);
-  CHECK_EQ(barrier_config_list[0][2][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
-  CHECK_EQ(barrier_config_list[0][2][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[0][2][0].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-  CHECK_EQ(barrier_config_list[0][2][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[0][2][1].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[0][2][1].local_index, 1);
-  CHECK_EQ(barrier_config_list[0][2][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
-  CHECK_EQ(barrier_config_list[0][2][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[0][2][1].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[0][2][1].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-  CHECK_EQ(barrier_config_list[0][2][2].buffer_index, 1);
-  CHECK_EQ(barrier_config_list[0][2][2].local_index, 0);
-  CHECK_EQ(barrier_config_list[0][2][2].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
-  CHECK_EQ(barrier_config_list[0][2][2].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[0][2][2].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[0][2][2].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-  CHECK_EQ(barrier_config_list[1][2][0].buffer_index, 0);
-  CHECK_EQ(barrier_config_list[1][2][0].local_index, 1);
-  CHECK_EQ(barrier_config_list[1][2][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
-  CHECK_EQ(barrier_config_list[1][2][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[1][2][0].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-  CHECK_EQ(barrier_config_list[1][2][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  CHECK_EQ(barrier_config_list[1][2][1].buffer_index, 1);
-  CHECK_EQ(barrier_config_list[1][2][1].local_index, 0);
-  CHECK_EQ(barrier_config_list[1][2][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
-  CHECK_EQ(barrier_config_list[1][2][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
-  CHECK_EQ(barrier_config_list[1][2][1].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-  CHECK_EQ(barrier_config_list[1][2][1].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
-  ResetAllocation(MemoryType::kScene);
+  ClearAllAllocations();
+}
+TEST_CASE("barrier/pinpong") {
+  using namespace illuminate;
+  const uint32_t buffer_num = 7;
+  const uint32_t render_pass_num = 3;
+  const uint32_t render_pass_buffer_num[render_pass_num] = {5, 5, 6};
+  const uint32_t render_pass_buffer_allocation_index_list_pass_0[] = {35, 18, 14, 21, 11};
+  const uint32_t render_pass_buffer_allocation_index_list_pass_1[] = {18, 29, 35, 14, 11};
+  const uint32_t render_pass_buffer_allocation_index_list_pass_2[] = {21, 18, 29, 99, 14, 11};
+  const uint32_t* render_pass_buffer_allocation_index_list[render_pass_num] = {
+    render_pass_buffer_allocation_index_list_pass_0,
+    render_pass_buffer_allocation_index_list_pass_1,
+    render_pass_buffer_allocation_index_list_pass_2,
+  };
+  const ResourceStateType render_pass_resource_state_list_pass_0[] = {ResourceStateType::kRtv, ResourceStateType::kRtv, ResourceStateType::kRtv, ResourceStateType::kRtv, ResourceStateType::kRtv};
+  const ResourceStateType render_pass_resource_state_list_pass_1[] = {ResourceStateType::kSrvPs, ResourceStateType::kRtv, ResourceStateType::kSrvPs, ResourceStateType::kRtv, ResourceStateType::kSrvPs};
+  const ResourceStateType render_pass_resource_state_list_pass_2[] = {ResourceStateType::kSrvPs, ResourceStateType::kSrvPs, ResourceStateType::kSrvPs, ResourceStateType::kRtv, ResourceStateType::kSrvPs, ResourceStateType::kRtv};
+  const ResourceStateType* render_pass_resource_state_list[render_pass_num] = {
+    render_pass_resource_state_list_pass_0,
+    render_pass_resource_state_list_pass_1,
+    render_pass_resource_state_list_pass_2,
+  };
+  const uint32_t buffer_num_with_initial_state = 1;
+  const uint32_t buffer_allocation_index_with_initial_state[buffer_num_with_initial_state] = {99};
+  const ResourceStateType initial_state[buffer_num_with_initial_state] = {ResourceStateType::kPresent};
+  const uint32_t buffer_num_with_final_state = 1;
+  const uint32_t buffer_allocation_index_with_final_state[buffer_num_with_final_state] = {99};
+  const ResourceStateType final_state[buffer_num_with_final_state] = {ResourceStateType::kPresent};
+  auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                                        buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
+                                                                        buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
+                                                                        MemoryType::kFrame);
+  CHECK_EQ(barrier_num[0][0], 0);
+  CHECK_EQ(barrier_num[0][1], 0);
+  CHECK_EQ(barrier_num[1][0], 3);
+  CHECK_EQ(barrier_config_list[1][0][0].buffer_allocation_index, 18);
+  CHECK_EQ(barrier_config_list[1][0][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[1][0][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[1][0][0].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[1][0][0].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[1][0][1].buffer_allocation_index, 35);
+  CHECK_EQ(barrier_config_list[1][0][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[1][0][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[1][0][1].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[1][0][1].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[1][0][2].buffer_allocation_index, 11);
+  CHECK_EQ(barrier_config_list[1][0][2].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[1][0][2].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[1][0][2].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[1][0][2].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_num[1][1], 1);
+  CHECK_EQ(barrier_config_list[1][1][0].buffer_allocation_index, 35);
+  CHECK_EQ(barrier_config_list[1][1][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[1][1][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[1][1][0].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[1][1][0].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_num[2][0], 5);
+  CHECK_EQ(barrier_config_list[2][0][0].buffer_allocation_index, 21);
+  CHECK_EQ(barrier_config_list[2][0][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][0][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][0][0].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][0][0].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][0][1].buffer_allocation_index, 29);
+  CHECK_EQ(barrier_config_list[2][0][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][0][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][0][1].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][0][1].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][0][2].buffer_allocation_index, 99);
+  CHECK_EQ(barrier_config_list[2][0][2].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][0][2].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][0][2].state_before, D3D12_RESOURCE_STATE_PRESENT);
+  CHECK_EQ(barrier_config_list[2][0][2].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][0][3].buffer_allocation_index, 14);
+  CHECK_EQ(barrier_config_list[2][0][3].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][0][3].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][0][3].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][0][3].state_after, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][0][4].buffer_allocation_index, 11);
+  CHECK_EQ(barrier_config_list[2][0][4].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][0][4].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][0][4].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][0][4].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_num[2][1], 5);
+  CHECK_EQ(barrier_config_list[2][1][0].buffer_allocation_index, 99);
+  CHECK_EQ(barrier_config_list[2][1][0].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][1][0].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][1][0].state_before, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][1][0].state_after, D3D12_RESOURCE_STATE_PRESENT);
+  CHECK_EQ(barrier_config_list[2][1][1].buffer_allocation_index, 18);
+  CHECK_EQ(barrier_config_list[2][1][1].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][1][1].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][1][1].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][1][1].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][1][2].buffer_allocation_index, 14);
+  CHECK_EQ(barrier_config_list[2][1][2].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][1][2].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][1][2].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][1][2].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][1][3].buffer_allocation_index, 21);
+  CHECK_EQ(barrier_config_list[2][1][3].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][1][3].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][1][3].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][1][3].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  CHECK_EQ(barrier_config_list[2][1][4].buffer_allocation_index, 29);
+  CHECK_EQ(barrier_config_list[2][1][4].type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
+  CHECK_EQ(barrier_config_list[2][1][4].flag, D3D12_RESOURCE_BARRIER_FLAG_NONE);
+  CHECK_EQ(barrier_config_list[2][1][4].state_before, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  CHECK_EQ(barrier_config_list[2][1][4].state_after, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  ClearAllAllocations();
 }

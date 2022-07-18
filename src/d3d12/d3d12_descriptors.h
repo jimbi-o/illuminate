@@ -15,6 +15,7 @@ class DescriptorCpu {
     return handles_[descriptor_type_index][index];
   }
   void RegisterExternalHandle(const uint32_t index, const DescriptorType type, const D3D12_CPU_DESCRIPTOR_HANDLE& handle);
+  D3D12_CPU_DESCRIPTOR_HANDLE* GetCpuHandleList(const uint32_t buffer_num, const uint32_t* buffer_allocation_index_list, const ResourceStateType* resource_state_list, const D3D12_CPU_DESCRIPTOR_HANDLE scene_data_cpu_handles[], const MemoryType& memory_type) const;
  private:
   static constexpr D3D12_DESCRIPTOR_HEAP_TYPE GetDescriptorTypeIndex(const DescriptorType& type) {
     switch (type) {

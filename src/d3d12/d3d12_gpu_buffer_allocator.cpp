@@ -1,4 +1,5 @@
 #include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_scene.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
 namespace {
@@ -154,6 +155,17 @@ void ConfigurePingPongBufferWriteToSubList(const uint32_t render_pass_num, const
       }
     }
   }
+}
+ID3D12Resource** GetResourceList(const uint32_t buffer_num, const uint32_t* const buffer_allocation_index_list, const BufferList& buffer_list, const MemoryType& type) {
+  auto resource_list = AllocateArray<ID3D12Resource*>(type, buffer_num);
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    if (IsSceneBuffer(buffer_allocation_index_list[i])) {
+      resource_list[i] = nullptr;
+      continue;
+    }
+    resource_list[i] = buffer_list.resource_list[buffer_allocation_index_list[i]];
+  }
+  return resource_list;
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
