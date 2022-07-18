@@ -574,17 +574,19 @@ auto GetBufferNameList(const uint32_t resource_num, ID3D12Resource** resource_li
   }
   return buffer_name_list;
 }
-auto ShowComboList(const char* const window_name, const char* const item_list_name, const uint32_t item_num, const char* const* item_name_list, int32_t* selected_index) {
-  if (!ImGui::Begin(window_name, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return false; }
-  const auto ret = ImGui::Combo(item_list_name, selected_index, item_name_list, item_num);
+auto RegisterGuiDebugView(const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index) {
+  if (!ImGui::Begin("debug buffers", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return; }
+  ImGui::Checkbox("enable debug buffer view", debug_buffer_view_enabled);
+  if (*debug_buffer_view_enabled) {
+    ImGui::Combo("buffer name", debug_buffer_selected_index, debug_viewable_buffer_name_list, debug_viewable_buffer_num);
+  }
   ImGui::End();
-  return ret;
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, int32_t* debug_buffer_selected_index) {
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index) {
   RegisterGuiPerformance(time_duration_data_set);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
-  ShowComboList("debug buffers", "buffer name", debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_selected_index);
+  RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData() {
   RenderPassConfigDynamicData dynamic_data{};
@@ -816,6 +818,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
     write_to_sub[i] = AllocateArraySystem<bool>(render_graph.render_pass_num);
   }
+  bool debug_buffer_view_enabled = false;
   int32_t debug_buffer_selected_index = 0;
   ResetAllocation(MemoryType::kFrame);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
@@ -857,7 +860,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ImGui::NewFrame();
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_selected_index);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
