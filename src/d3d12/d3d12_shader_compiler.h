@@ -45,5 +45,6 @@ constexpr auto GetMaterialPso(const MaterialList& material_list, const uint32_t 
 }
 uint32_t FindMaterialVariationIndex(const MaterialList& material_list, const uint32_t material, const StrHash variation_hash);
 void ReleasePsoAndRootsig(MaterialList*);
+MaterialList BuildMaterialList(D3d12Device* device, const nlohmann::json& material_json);
 }
 #endif

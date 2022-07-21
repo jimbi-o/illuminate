@@ -643,6 +643,16 @@ uint32_t FindMaterialVariationIndex(const MaterialList& material_list, const uin
   }
   return MaterialList::kInvalidIndex;
 }
+MaterialList BuildMaterialList(D3d12Device* device, const nlohmann::json& material_json) {
+  ShaderCompiler shader_compiler;
+  if (!shader_compiler.Init()) {
+    logwarn("shader compilation failed.");
+    return MaterialList{};
+  }
+  auto material_list = shader_compiler.BuildMaterials(material_json, device);
+  shader_compiler.Term();
+  return material_list;
+}
 } // namespace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_device.h"

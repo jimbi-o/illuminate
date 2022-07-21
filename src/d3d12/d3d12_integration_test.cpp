@@ -586,7 +586,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
   uint32_t system_buffer_index_list[kSystemBufferNum]{};
   std::fill(system_buffer_index_list, system_buffer_index_list + kSystemBufferNum, kInvalidIndex);
-  MaterialList material_list{};
   float prev_mouse_pos[2]{};
   uint32_t render_pass_index_output_to_swapchain{};
   uint32_t render_pass_buffer_index_primary_input{};
@@ -594,12 +593,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   char** render_pass_name{nullptr};
 #endif
   auto frame_loop_num = kFrameLoopNum;
+  auto material_list = BuildMaterialList(device.Get(), GetTestJson("material.json"));
   {
-    auto material_json = GetTestJson("material.json");
-    ShaderCompiler shader_compiler;
-    CHECK_UNARY(shader_compiler.Init());
-    material_list = shader_compiler.BuildMaterials(material_json, device.Get());
-    shader_compiler.Term();
     nlohmann::json json;
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
