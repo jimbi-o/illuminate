@@ -601,10 +601,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     material_list = shader_compiler.BuildMaterials(material_json, device.Get());
     shader_compiler.Term();
     nlohmann::json json;
-    /*SUBCASE("config.json") {
+    SUBCASE("config.json") {
       json = GetTestJson("config.json");
       frame_loop_num = 5;
-      }*/
+    }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
       frame_loop_num = 100000;
