@@ -303,7 +303,7 @@ void UpdateSceneBuffer(const RenderPassConfigDynamicData& dynamic_data, const Si
   shader::SceneLightData scene_light{};
   scene_light.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
   scene_light.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
-  scene_light.exposure_rate = 4.0f / dynamic_data.light_intensity;
+  scene_light.exposure_rate = 10.0f / dynamic_data.light_intensity;
   memcpy(scene_light_ptr, &scene_light, sizeof(scene_light));
 }
 auto GetRenderPassQueueIndexList(const uint32_t render_pass_num, const RenderPass* render_pass_list) {

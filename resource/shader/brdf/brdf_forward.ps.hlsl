@@ -53,5 +53,5 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   float nv = clamp(dot(n, v), 0.0f, 1.0f);
   float nh = clamp(dot(n, h), 0.0f, 1.0f);
   float3 brdf = BrdfDefault(color.rgb, material_misc.metallic, material_misc.roughness, vh, nl, nv, nh);
-  return float4((brdf * scene_light.light_color.xyz * scene_light.light_color.w) * scene_light.exposure_rate + material_misc.emissive, 1.0f);
+  return float4((brdf * nl * scene_light.light_color.xyz * scene_light.light_color.w) * scene_light.exposure_rate + material_misc.emissive, 1.0f);
 }
