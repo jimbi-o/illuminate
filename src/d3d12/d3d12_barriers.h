@@ -1,7 +1,6 @@
 #ifndef ILLUMINATE_D3D12_BARRIES_H
 #define ILLUMINATE_D3D12_BARRIES_H
 #include "d3d12_header_common.h"
-#include "d3d12_render_graph.h"
 namespace illuminate {
 enum class MemoryType : uint8_t;
 struct BarrierConfig {
