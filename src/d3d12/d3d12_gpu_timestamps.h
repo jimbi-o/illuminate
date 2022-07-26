@@ -7,6 +7,7 @@ struct GpuTimestampSet {
   ID3D12QueryHeap** timestamp_query_heaps{};
   ID3D12Resource*** timestamp_query_dst_resource{};
   D3D12MA::Allocation*** timestamp_query_dst_allocation{};
+  uint64_t*** timestamp_query_dst_ptr{};
   uint32_t timestamp_query_dst_resource_index{0};
 };
 GpuTimestampSet CreateGpuTimestampSet(const uint32_t command_queue_num, D3d12CommandQueue** command_queue_list, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t* render_pass_num_per_queue, D3d12Device* device, D3D12MA::Allocator* buffer_allocator);

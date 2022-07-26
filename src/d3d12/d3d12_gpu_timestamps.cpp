@@ -28,6 +28,7 @@ auto CreateTimestampQueryHeaps(const uint32_t command_queue_num, const D3D12_COM
 auto CreateTimestampQuertyDstResource(const uint32_t command_queue_num, const uint32_t* render_pass_num_per_queue, D3D12MA::Allocator* buffer_allocator) {
   auto timestamp_query_dst_resource = AllocateArraySystem<ID3D12Resource**>(command_queue_num);
   auto timestamp_query_dst_allocation = AllocateArraySystem<D3D12MA::Allocation**>(command_queue_num);
+  auto timestamp_query_dst_ptr = AllocateArraySystem<uint64_t**>(command_queue_num);
   for (uint32_t i = 0; i < command_queue_num; i++) {
     if (render_pass_num_per_queue[i] == 0) {
       timestamp_query_dst_resource[i]  = nullptr;
@@ -36,12 +37,15 @@ auto CreateTimestampQuertyDstResource(const uint32_t command_queue_num, const ui
     }
     timestamp_query_dst_resource[i]  = AllocateArraySystem<ID3D12Resource*>(kGpuTimestampDstResourceRingBufferNum);
     timestamp_query_dst_allocation[i] = AllocateArraySystem<D3D12MA::Allocation*>(kGpuTimestampDstResourceRingBufferNum);
-    const auto desc = GetBufferDesc(GetUint32(sizeof(uint64_t)) * render_pass_num_per_queue[i] * kGpuTimestampDstResourceRingBufferNum);
+    timestamp_query_dst_ptr[i] = AllocateArraySystem<uint64_t*>(kGpuTimestampDstResourceRingBufferNum);
+    const auto buffer_size = GetUint32(sizeof(uint64_t)) * render_pass_num_per_queue[i] * kGpuTimestampQueryNumPerPass;
+    const auto desc = GetBufferDesc(buffer_size);
     for (uint32_t j = 0; j < kGpuTimestampDstResourceRingBufferNum; j++) {
       CreateBuffer(D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, desc, nullptr, buffer_allocator, &timestamp_query_dst_allocation[i][j], &timestamp_query_dst_resource[i][j]);
+      timestamp_query_dst_ptr[i][j] = static_cast<uint64_t*>(MapResource(timestamp_query_dst_resource[i][j], buffer_size, 0, buffer_size));
     }
   }
-  return std::make_pair(timestamp_query_dst_resource, timestamp_query_dst_allocation);
+  return std::make_tuple(timestamp_query_dst_resource, timestamp_query_dst_allocation, timestamp_query_dst_ptr);
 }
 auto GetGpuTimestampFrequency(const uint32_t command_queue_num, D3d12CommandQueue** command_queue_list) {
   auto gpu_timestamp_frequency = AllocateArraySystem<uint64_t>(command_queue_num);
@@ -54,12 +58,13 @@ auto GetGpuTimestampFrequency(const uint32_t command_queue_num, D3d12CommandQueu
 GpuTimestampSet CreateGpuTimestampSet(const uint32_t command_queue_num, D3d12CommandQueue** command_queue_list, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t* render_pass_num_per_queue, D3d12Device* device, D3D12MA::Allocator* buffer_allocator) {
   auto gpu_timestamp_frequency = GetGpuTimestampFrequency(command_queue_num, command_queue_list);
   auto timestamp_query_heaps = CreateTimestampQueryHeaps(command_queue_num, command_queue_type, render_pass_num_per_queue, device);
-  auto [timestamp_query_dst_resource, timestamp_query_dst_allocation] = CreateTimestampQuertyDstResource(command_queue_num, render_pass_num_per_queue, buffer_allocator);
+  auto [timestamp_query_dst_resource, timestamp_query_dst_allocation, timestamp_query_dst_ptr] = CreateTimestampQuertyDstResource(command_queue_num, render_pass_num_per_queue, buffer_allocator);
   return {
     .gpu_timestamp_frequency = gpu_timestamp_frequency,
     .timestamp_query_heaps = timestamp_query_heaps,
     .timestamp_query_dst_resource = timestamp_query_dst_resource,
     .timestamp_query_dst_allocation = timestamp_query_dst_allocation,
+    .timestamp_query_dst_ptr = timestamp_query_dst_ptr,
   };
 }
 void ReleaseGpuTimestampSet(const uint32_t command_queue_num, GpuTimestampSet* gpu_timestamp_set) {
