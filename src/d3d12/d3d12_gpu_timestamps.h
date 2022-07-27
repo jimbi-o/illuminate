@@ -9,11 +9,13 @@ struct GpuTimestampSet {
   D3D12MA::Allocation*** timestamp_query_dst_allocation{};
   uint64_t*** timestamp_query_dst_ptr{};
   uint32_t timestamp_query_dst_resource_index{0};
+  uint64_t** timestamp_value{};
+  uint64_t* timestamp_prev_end_value{};
 };
 GpuTimestampSet CreateGpuTimestampSet(const uint32_t command_queue_num, D3d12CommandQueue** command_queue_list, const D3D12_COMMAND_LIST_TYPE* command_queue_type, const uint32_t* render_pass_num_per_queue, D3d12Device* device, D3D12MA::Allocator* buffer_allocator);
 void ReleaseGpuTimestampSet(const uint32_t command_queue_num, GpuTimestampSet* gpu_timestamp_set);
 void StartGpuTimestamp(const uint32_t * const render_pass_index_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
 void EndGpuTimestamp(const uint32_t * const render_pass_index_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
-void OutputGpuTimestampToCpuVisibleBuffer(const uint32_t * const render_pass_num_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
+void OutputGpuTimestampToCpuVisibleBuffer(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
 }
 #endif

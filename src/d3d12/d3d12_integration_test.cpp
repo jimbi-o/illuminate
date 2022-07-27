@@ -824,7 +824,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       const auto is_last_pass_per_queue = (last_pass_per_queue[render_pass_queue_index[k]] == k);
       if (is_last_pass_per_queue) {
         assert(render_pass.execute);
-        OutputGpuTimestampToCpuVisibleBuffer(render_pass_num_per_queue, render_pass_queue_index, k, &gpu_timestamps, command_list);
+        OutputGpuTimestampToCpuVisibleBuffer(render_graph.command_queue_num, render_pass_num_per_queue, render_pass_queue_index, k, &gpu_timestamps, command_list);
       }
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass_queue_index[k]);
