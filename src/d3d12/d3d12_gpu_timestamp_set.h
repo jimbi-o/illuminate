@@ -1,5 +1,5 @@
-#ifndef ILLUMINATE_D3D12_GPU_TIMESTAMPS_H
-#define ILLUMINATE_D3D12_GPU_TIMESTAMPS_H
+#ifndef ILLUMINATE_D3D12_GPU_TIMESTAMP_SET_H
+#define ILLUMINATE_D3D12_GPU_TIMESTAMP_SET_H
 #include "d3d12_header_common.h"
 namespace illuminate {
 struct GpuTimestampSet {

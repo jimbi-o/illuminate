@@ -10,7 +10,7 @@
 #include "d3d12_device.h"
 #include "d3d12_dxgi_core.h"
 #include "d3d12_gpu_buffer_allocator.h"
-#include "d3d12_gpu_timestamps.h"
+#include "d3d12_gpu_timestamp_set.h"
 #include "d3d12_render_graph_json_parser.h"
 #include "d3d12_resource_transfer.h"
 #include "d3d12_scene.h"
@@ -718,7 +718,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.buffer_num; i++) {
     write_to_sub[i] = AllocateArraySystem<bool>(render_graph.render_pass_num);
   }
-  auto gpu_timestamps = CreateGpuTimestampSet(render_graph.command_queue_num, command_list_set.GetCommandQueueList(), render_graph.command_queue_type, render_pass_num_per_queue, device.Get(), buffer_allocator);
+  auto gpu_timestamp_set = CreateGpuTimestampSet(render_graph.command_queue_num, command_list_set.GetCommandQueueList(), render_graph.command_queue_type, render_pass_num_per_queue, device.Get(), buffer_allocator);
   bool debug_buffer_view_enabled = false;
   int32_t debug_buffer_selected_index = 0;
   ResetAllocation(MemoryType::kFrame);
@@ -807,7 +807,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         PIXBeginEvent(command_list, 0, render_pass_name[k]); // https://devblogs.microsoft.com/pix/winpixeventruntime/
       }
 #endif
-      StartGpuTimestamp(render_pass_index_per_queue, render_pass_queue_index, k, &gpu_timestamps, command_list);
+      StartGpuTimestamp(render_pass_index_per_queue, render_pass_queue_index, k, &gpu_timestamp_set, command_list);
       if (command_list && render_graph.command_queue_type[render_pass_queue_index[k]] != D3D12_COMMAND_LIST_TYPE_COPY) {
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
@@ -820,11 +820,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         PIXEndEvent(command_list);
       }
 #endif
-      EndGpuTimestamp(render_pass_index_per_queue, render_pass_queue_index, k, &gpu_timestamps, command_list);
+      EndGpuTimestamp(render_pass_index_per_queue, render_pass_queue_index, k, &gpu_timestamp_set, command_list);
       const auto is_last_pass_per_queue = (last_pass_per_queue[render_pass_queue_index[k]] == k);
       if (is_last_pass_per_queue) {
         assert(render_pass.execute);
-        OutputGpuTimestampToCpuVisibleBuffer(render_graph.command_queue_num, render_pass_num_per_queue, render_pass_queue_index, k, &gpu_timestamps, command_list);
+        OutputGpuTimestampToCpuVisibleBuffer(render_graph.command_queue_num, render_pass_num_per_queue, render_pass_queue_index, k, &gpu_timestamp_set, command_list);
       }
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass_queue_index[k]);
@@ -842,7 +842,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   TermImgui();
   ClearResourceTransfer(render_graph.frame_buffer_num, &resource_transfer);
   ReleaseSceneData(&scene_data);
-  ReleaseGpuTimestampSet(render_graph.command_queue_num, &gpu_timestamps);
+  ReleaseGpuTimestampSet(render_graph.command_queue_num, &gpu_timestamp_set);
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     RenderPassTerm(&render_pass_function_list, i);
   }
