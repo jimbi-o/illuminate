@@ -124,7 +124,22 @@ void EndGpuTimestamp(const uint32_t * const render_pass_index_per_queue, const u
   const auto query_index = render_pass_index_per_queue[render_pass_index] * kGpuTimestampQueryNumPerPass;
   command_list->EndQuery(gpu_timestamp_set->timestamp_query_heaps[render_pass_queue_index[render_pass_index]], D3D12_QUERY_TYPE_TIMESTAMP, query_index + 1);
 }
-GpuTimeDurations GetGpuTimeDurations(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const GpuTimestampSet& gpu_timestamp_set, const MemoryType& memory_type) {
+GpuTimeDurations GetGpuTimeDurationsPerFrame(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const GpuTimestampSet& gpu_timestamp_set, const MemoryType& memory_type) {
+  auto gpu_time_durations = GetEmptyGpuTimeDurations(command_queue_num, render_pass_num_per_queue, memory_type);
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    if (gpu_time_durations.duration_num[i] == 0) { continue; }
+    {
+      const auto diff = gpu_timestamp_set.timestamp_value[i][0] - gpu_timestamp_set.timestamp_prev_end_value[i];
+      gpu_time_durations.duration_msec[i][0] = diff * gpu_timestamp_set.gpu_timestamp_frequency_inv[i];
+    }
+    for (uint32_t j = 1; j < gpu_time_durations.duration_num[i]; j++) {
+      const auto diff = gpu_timestamp_set.timestamp_value[i][j] - gpu_timestamp_set.timestamp_value[i][j - 1];
+      gpu_time_durations.duration_msec[i][j] = diff * gpu_timestamp_set.gpu_timestamp_frequency_inv[i];
+    }
+  }
+  return gpu_time_durations;
+}
+GpuTimeDurations GetEmptyGpuTimeDurations(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const MemoryType& memory_type) {
   GpuTimeDurations gpu_time_durations{
     .command_queue_num = command_queue_num,
     .total_time_msec   = 0.0f,
@@ -139,15 +154,35 @@ GpuTimeDurations GetGpuTimeDurations(const uint32_t command_queue_num, const uin
       continue;
     }
     gpu_time_durations.duration_msec[i] = AllocateArray<float>(memory_type, duration_num);
-    {
-      const auto diff = gpu_timestamp_set.timestamp_value[i][0] - gpu_timestamp_set.timestamp_prev_end_value[i];
-      gpu_time_durations.duration_msec[i][0] = diff * gpu_timestamp_set.gpu_timestamp_frequency_inv[i];
-    }
-    for (uint32_t j = 1; j < duration_num; j++) {
-      const auto diff = gpu_timestamp_set.timestamp_value[i][j] - gpu_timestamp_set.timestamp_value[i][j - 1];
-      gpu_time_durations.duration_msec[i][j] = diff * gpu_timestamp_set.gpu_timestamp_frequency_inv[i];
+    for (uint32_t j = 0; j < duration_num; j++) {
+      gpu_time_durations.duration_msec[i][j] = 0.0f;
     }
   }
   return gpu_time_durations;
+}
+void AccumulateGpuTimeDuration(const GpuTimeDurations& per_frame, GpuTimeDurations* accumulated) {
+  accumulated->total_time_msec += per_frame.total_time_msec;
+  for (uint32_t i = 0; i < accumulated->command_queue_num; i++) {
+    for (uint32_t j = 0; j < accumulated->duration_num[i]; j++) {
+      accumulated->duration_msec[i][j] += per_frame.duration_msec[i][j];
+    }
+  }
+}
+void CalcAvarageGpuTimeDuration(const GpuTimeDurations& accumulated, const uint32_t frame_num, GpuTimeDurations* average) {
+  const auto inv_frame_num = 1.0f / static_cast<float>(frame_num);
+  average->total_time_msec *= inv_frame_num;
+  for (uint32_t i = 0; i < average->command_queue_num; i++) {
+    for (uint32_t j = 0; j < average->duration_num[i]; j++) {
+      average->duration_msec[i][j] = accumulated.duration_msec[i][j] * inv_frame_num;
+    }
+  }
+}
+void ClearGpuTimeDuration(GpuTimeDurations* gpu_time_durations) {
+  gpu_time_durations->total_time_msec = 0.0f;
+  for (uint32_t i = 0; i < gpu_time_durations->command_queue_num; i++) {
+    for (uint32_t j = 0; j < gpu_time_durations->duration_num[i]; j++) {
+      gpu_time_durations->duration_msec[i][j] = 0.0f;
+    }
+  }
 }
 } // namespace illuminate

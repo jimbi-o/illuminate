@@ -23,6 +23,10 @@ struct GpuTimeDurations {
   uint32_t* duration_num{};
   float** duration_msec{};
 };
-GpuTimeDurations GetGpuTimeDurations(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const GpuTimestampSet& gpu_timestamp_set, const MemoryType& memory_type);
+GpuTimeDurations GetEmptyGpuTimeDurations(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const MemoryType& memory_type);
+GpuTimeDurations GetGpuTimeDurationsPerFrame(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const GpuTimestampSet& gpu_timestamp_set, const MemoryType& memory_type);
+void AccumulateGpuTimeDuration(const GpuTimeDurations& per_frame, GpuTimeDurations* accumulated);
+void CalcAvarageGpuTimeDuration(const GpuTimeDurations& accumulated, const uint32_t frame_num, GpuTimeDurations* average);
+void ClearGpuTimeDuration(GpuTimeDurations* gpu_time_durations);
 }
 #endif

@@ -65,17 +65,25 @@ void MoveCameraForward(float camera_pos[3], float camera_focus[3], const float m
   camera_focus[2] += direction.z;
   camera_pos[2] += direction.z;
 }
-void UpdateTimeDuration(const float frame_count_reset_time_threshold_msec, uint32_t* frame_count, std::chrono::high_resolution_clock::time_point* last_time_point, float* delta_time_msec, float* duration_msec_sum, float* prev_duration_per_frame_msec_avg) {
+void UpdateTimestamp(uint32_t* frame_count, std::chrono::high_resolution_clock::time_point* last_time_point, float* delta_time_msec, float* duration_msec_sum) {
   (*frame_count)++;
   const auto current_time_point = std::chrono::high_resolution_clock::now();
   *delta_time_msec = std::chrono::duration<float, std::milli>(current_time_point - *last_time_point).count();
   *last_time_point = current_time_point;
   *duration_msec_sum += *delta_time_msec;
+}
+void CalcTimestampAverage(uint32_t* frame_count, float* duration_msec_sum, float* prev_duration_per_frame_msec_avg) {
+  *prev_duration_per_frame_msec_avg = *duration_msec_sum / static_cast<float>(*frame_count);
+  *duration_msec_sum = 0.0f;
+  *frame_count = 0;
+}
+bool UpdateTimeDuration(const float frame_count_reset_time_threshold_msec, uint32_t* frame_count, std::chrono::high_resolution_clock::time_point* last_time_point, float* delta_time_msec, float* duration_msec_sum, float* prev_duration_per_frame_msec_avg) {
+  UpdateTimestamp(frame_count, last_time_point, delta_time_msec, duration_msec_sum);
   if (*duration_msec_sum >= frame_count_reset_time_threshold_msec) {
-    *prev_duration_per_frame_msec_avg = *duration_msec_sum / static_cast<float>(*frame_count);
-    *duration_msec_sum = 0.0f;
-    *frame_count = 0;
+    CalcTimestampAverage(frame_count, duration_msec_sum, prev_duration_per_frame_msec_avg);
+    return true;
   }
+  return false;
 }
 }
 #include "doctest/doctest.h"

@@ -730,13 +730,19 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     write_to_sub[i] = AllocateArraySystem<bool>(render_graph.render_pass_num);
   }
   auto gpu_timestamp_set = CreateGpuTimestampSet(render_graph.command_queue_num, command_list_set.GetCommandQueueList(), render_graph.command_queue_type, render_pass_num_per_queue, device.Get(), buffer_allocator);
+  auto gpu_time_durations_accumulated = GetEmptyGpuTimeDurations(render_graph.command_queue_num, render_pass_num_per_queue, MemoryType::kSystem);
+  auto gpu_time_durations_average = GetEmptyGpuTimeDurations(render_graph.command_queue_num, render_pass_num_per_queue, MemoryType::kSystem);
   bool debug_buffer_view_enabled = false;
   int32_t debug_buffer_selected_index = 0;
   ResetAllocation(MemoryType::kFrame);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
-    UpdateTimeDuration(time_duration_data_set.frame_count_reset_time_threshold_msec, &time_duration_data_set.frame_count, &time_duration_data_set.last_time_point, &time_duration_data_set.delta_time_msec, &time_duration_data_set.duration_msec_sum, &time_duration_data_set.prev_duration_per_frame_msec_avg);
-    auto gpu_time_durations = GetGpuTimeDurations(render_graph.command_queue_num, render_pass_num_per_queue, gpu_timestamp_set, MemoryType::kFrame);
+    const auto gpu_time_durations_per_frame = GetGpuTimeDurationsPerFrame(render_graph.command_queue_num, render_pass_num_per_queue, gpu_timestamp_set, MemoryType::kFrame);
+    AccumulateGpuTimeDuration(gpu_time_durations_per_frame, &gpu_time_durations_accumulated);
+    if (const auto frame_count = time_duration_data_set.frame_count; UpdateTimeDuration(time_duration_data_set.frame_count_reset_time_threshold_msec, &time_duration_data_set.frame_count, &time_duration_data_set.last_time_point, &time_duration_data_set.delta_time_msec, &time_duration_data_set.duration_msec_sum, &time_duration_data_set.prev_duration_per_frame_msec_avg)) {
+      CalcAvarageGpuTimeDuration(gpu_time_durations_accumulated, frame_count, &gpu_time_durations_average);
+      ClearGpuTimeDuration(&gpu_time_durations_accumulated);
+    }
     const auto frame_index = i % render_graph.frame_buffer_num;
     UpdateSceneBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index], scene_cbv_ptr[kSystemBufferLight][frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, render_pass_enable_flag, render_graph.buffer_num, write_to_sub);
@@ -784,7 +790,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ImGui::NewFrame();
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
