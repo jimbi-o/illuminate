@@ -359,10 +359,21 @@ struct TimeDurationDataSet {
   float duration_msec_sum{0.0f};
   float prev_duration_per_frame_msec_avg{0.0f};
 };
-auto RegisterGuiPerformance(const TimeDurationDataSet& time_duration_data_set) {
+auto RegisterGuiPerformance(const TimeDurationDataSet& time_duration_data_set, const GpuTimeDurations& gpu_time_durations) {
   ImGui::SetNextWindowSize(ImVec2{});
   if (!ImGui::Begin("performance", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return; }
-  ImGui::Text("CPU:%f", time_duration_data_set.prev_duration_per_frame_msec_avg);
+  ImGui::Text("CPU: %7.4f", time_duration_data_set.prev_duration_per_frame_msec_avg);
+  ImGui::Text("GPU: %7.4f", gpu_time_durations.total_time_msec);
+  for (uint32_t i = 0; i < gpu_time_durations.command_queue_num; i++) {
+    ImGui::Text("queue%d", i);
+    for (uint32_t j = 0; j < gpu_time_durations.duration_num[i]; j++) {
+      if ((j & 1) == 0) {
+        ImGui::Text("--: %7.4f", gpu_time_durations.duration_msec[i][j]);
+      } else {
+        ImGui::Text("%2d: %7.4f", j / 2, gpu_time_durations.duration_msec[i][j]);
+      }
+    }
+  }
   ImGui::End();
 }
 auto RegisterGuiCamera(RenderPassConfigDynamicData* dynamic_data) {
@@ -439,8 +450,8 @@ auto RegisterGuiDebugView(const uint32_t debug_viewable_buffer_num, const char* 
   }
   ImGui::End();
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index) {
-  RegisterGuiPerformance(time_duration_data_set);
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations) {
+  RegisterGuiPerformance(time_duration_data_set, gpu_time_durations);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
   RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
@@ -554,13 +565,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   auto material_list = BuildMaterialList(device.Get(), GetTestJson("material.json"));
   {
     nlohmann::json json;
-    SUBCASE("config.json") {
-      json = GetTestJson("config.json");
-      frame_loop_num = 5;
-    }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
       frame_loop_num = 100000;
+    }
+    SUBCASE("config.json") {
+      json = GetTestJson("config.json");
+      frame_loop_num = 5;
     }
     AddSystemBuffers(&json);
     ParseRenderGraphJson(json, material_list.material_num, material_list.material_hash_list, &render_graph);
@@ -725,6 +736,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
     UpdateTimeDuration(time_duration_data_set.frame_count_reset_time_threshold_msec, &time_duration_data_set.frame_count, &time_duration_data_set.last_time_point, &time_duration_data_set.delta_time_msec, &time_duration_data_set.duration_msec_sum, &time_duration_data_set.prev_duration_per_frame_msec_avg);
+    auto gpu_time_durations = GetGpuTimeDurations(render_graph.command_queue_num, render_pass_num_per_queue, gpu_timestamp_set, MemoryType::kFrame);
     const auto frame_index = i % render_graph.frame_buffer_num;
     UpdateSceneBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index], scene_cbv_ptr[kSystemBufferLight][frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, render_pass_enable_flag, render_graph.buffer_num, write_to_sub);
@@ -772,7 +784,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ImGui::NewFrame();
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
@@ -824,7 +836,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       const auto is_last_pass_per_queue = (last_pass_per_queue[render_pass_queue_index[k]] == k);
       if (is_last_pass_per_queue) {
         assert(render_pass.execute);
-        OutputGpuTimestampToCpuVisibleBuffer(render_graph.command_queue_num, render_pass_num_per_queue, render_pass_queue_index, k, &gpu_timestamp_set, command_list);
+        OutputGpuTimestampToCpuVisibleBuffer(render_pass_num_per_queue, render_pass_queue_index, k, &gpu_timestamp_set, command_list);
       }
       if (render_pass.execute) {
         command_list_set.ExecuteCommandList(render_pass_queue_index[k]);

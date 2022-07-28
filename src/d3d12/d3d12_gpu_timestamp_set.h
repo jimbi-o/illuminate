@@ -1,13 +1,13 @@
 #ifndef ILLUMINATE_D3D12_GPU_TIMESTAMP_SET_H
 #define ILLUMINATE_D3D12_GPU_TIMESTAMP_SET_H
 #include "d3d12_header_common.h"
+#include "d3d12_memory_allocators.h"
 namespace illuminate {
 struct GpuTimestampSet {
-  uint64_t* gpu_timestamp_frequency{};
+  float* gpu_timestamp_frequency_inv{};
   ID3D12QueryHeap** timestamp_query_heaps{};
   ID3D12Resource*** timestamp_query_dst_resource{};
   D3D12MA::Allocation*** timestamp_query_dst_allocation{};
-  uint64_t*** timestamp_query_dst_ptr{};
   uint32_t timestamp_query_dst_resource_index{0};
   uint64_t** timestamp_value{};
   uint64_t* timestamp_prev_end_value{};
@@ -16,6 +16,13 @@ GpuTimestampSet CreateGpuTimestampSet(const uint32_t command_queue_num, D3d12Com
 void ReleaseGpuTimestampSet(const uint32_t command_queue_num, GpuTimestampSet* gpu_timestamp_set);
 void StartGpuTimestamp(const uint32_t * const render_pass_index_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
 void EndGpuTimestamp(const uint32_t * const render_pass_index_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
-void OutputGpuTimestampToCpuVisibleBuffer(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
+void OutputGpuTimestampToCpuVisibleBuffer(const uint32_t * const render_pass_num_per_queue, const uint32_t* const render_pass_queue_index, const uint32_t render_pass_index, GpuTimestampSet* gpu_timestamp_set, D3d12CommandList* command_list);
+struct GpuTimeDurations {
+  uint32_t command_queue_num{};
+  float total_time_msec{};
+  uint32_t* duration_num{};
+  float** duration_msec{};
+};
+GpuTimeDurations GetGpuTimeDurations(const uint32_t command_queue_num, const uint32_t * const render_pass_num_per_queue, const GpuTimestampSet& gpu_timestamp_set, const MemoryType& memory_type);
 }
 #endif
