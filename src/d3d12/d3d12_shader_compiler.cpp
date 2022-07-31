@@ -242,6 +242,35 @@ struct PsoDescGraphics {
     .DepthBoundsTestEnable = false,
   };
 };
+auto GetD3d12ComparisonFunc(const std::string_view& func_name) {
+  if (func_name.compare("never") == 0) {
+    return D3D12_COMPARISON_FUNC_NEVER;
+  }
+  if (func_name.compare("less") == 0) {
+    return D3D12_COMPARISON_FUNC_LESS;
+  }
+  if (func_name.compare("equal") == 0) {
+    return D3D12_COMPARISON_FUNC_EQUAL;
+  }
+  if (func_name.compare("less_equal") == 0) {
+    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+  }
+  if (func_name.compare("greater") == 0) {
+    return D3D12_COMPARISON_FUNC_GREATER;
+  }
+  if (func_name.compare("not_equal") == 0) {
+    return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+  }
+  if (func_name.compare("greater_equal") == 0) {
+    return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+  }
+  if (func_name.compare("always") == 0) {
+    return D3D12_COMPARISON_FUNC_ALWAYS;
+  }
+  logerror("invalid D3D12_COMPARISON_FUNC found. {}", func_name);
+  assert(false && "invalid D3D12_COMPARISON_FUNC");
+  return D3D12_COMPARISON_FUNC_NEVER;
+}
 auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json& variation, const nlohmann::json& common_input_element_list) {
   if (variation.at("shaders").size() == 1 && variation.at("shaders")[0].at("target") == "cs") {
     return (PsoDescGraphics*)nullptr;
@@ -260,6 +289,12 @@ auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json
     desc->depth_stencil.DepthEnable = GetBool(depth_stencil,  "depth_enable", true);
     if (desc->depth_stencil.DepthEnable) {
       desc->depth_stencil_format = GetDxgiFormat(depth_stencil, "format");
+      if (depth_stencil.contains("comparison_func")) {
+        desc->depth_stencil.DepthFunc = GetD3d12ComparisonFunc(GetStringView(depth_stencil, "comparison_func"));
+        if (desc->depth_stencil.DepthFunc == D3D12_COMPARISON_FUNC_EQUAL) {
+          desc->depth_stencil.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        }
+      }
     }
   }
   if (variation.contains("input_element")) {
@@ -419,7 +454,7 @@ auto GetPsoName(const std::string_view& material_name, const nlohmann::json* par
   }
   return name;
 }
-auto CountRootsigNum(const nlohmann::json& json) {
+auto CreateRootsigNameList(const nlohmann::json& json) {
   const auto num = GetUint32(json.size());
   auto hash_list = AllocateArrayFrame<StrHash>(num);
   uint32_t used_hash = 0;
@@ -437,27 +472,7 @@ auto CountRootsigNum(const nlohmann::json& json) {
       used_hash++;
     }
   }
-  return used_hash;
-}
-auto CreateRootsigNameList(const uint32_t num, const nlohmann::json& json) {
-  auto hash_list = AllocateArrayFrame<StrHash>( num);
-  uint32_t next_index = 0;
-  for (uint32_t i = 0; i < num; i++) {
-    const auto rootsig_name_hash = CalcEntityStrHash(json[i], "rootsig");
-    bool found = false;
-    for (uint32_t j = 0; j < next_index; j++) {
-      if (rootsig_name_hash == hash_list[j]) {
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      hash_list[next_index] = rootsig_name_hash;
-      next_index++;
-    }
-  }
-  assert(next_index == num);
-  return hash_list;
+  return std::make_pair(used_hash, hash_list);
 }
 uint32_t GetVertexBufferTypeFlags(const nlohmann::json& variation) {
   if (!variation.contains("input_element")) { return 0; }
@@ -485,7 +500,8 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
                uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** material_pso_offset, uint32_t** vertex_buffer_type_flags) {
   const auto& common_settings = json.at("common_settings");
   const auto& material_json_list = json.at("materials");
-  *rootsig_num = CountRootsigNum(material_json_list);
+  auto [rootsig_num_counted, rootsig_name_list] = CreateRootsigNameList(material_json_list);
+  *rootsig_num = rootsig_num_counted;
   *rootsig_list = AllocateArraySystem<ID3D12RootSignature*>(*rootsig_num);
   for (uint32_t i = 0; i < *rootsig_num; i++) {
     (*rootsig_list)[i] = nullptr;
@@ -496,7 +512,6 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
   const auto material_num = GetUint32(material_json_list.size());
   *material_pso_offset = AllocateArraySystem<uint32_t>(material_num);
   *vertex_buffer_type_flags = AllocateArraySystem<uint32_t>(*pso_num);
-  auto rootsig_name_list = CreateRootsigNameList(*rootsig_num, material_json_list);
   uint32_t pso_index = 0;
   for (uint32_t i = 0; i < material_num; i++) {
     (*material_pso_offset)[i] = pso_index;

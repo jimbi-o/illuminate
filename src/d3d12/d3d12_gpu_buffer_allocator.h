@@ -41,6 +41,20 @@ constexpr inline auto GetResource(const BufferList& buffer_list, const uint32_t 
   return buffer_list.resource_list[GetBufferAllocationIndex(buffer_list, buffer_config_index, sub_index)];
 }
 ID3D12Resource** GetResourceList(const uint32_t buffer_num, const uint32_t* const buffer_allocation_index_list, const BufferList& buffer_list, const MemoryType& type);
+constexpr inline bool IsResourceStateReadOnly(const ResourceStateType& type) {
+  switch (type) {
+    case ResourceStateType::kCbv:
+    case ResourceStateType::kSrvPs:
+    case ResourceStateType::kSrvNonPs:
+    case ResourceStateType::kDsvRead:
+    case ResourceStateType::kCommon:
+    case ResourceStateType::kPresent:
+    case ResourceStateType::kGenericRead: {
+      return true;
+    }
+  }
+  return false;
+}
 constexpr inline auto GetBufferLocalIndex(const BufferConfig& buffer_config, const ResourceStateType state, const bool write_to_sub, const uint32_t frame_index) {
   if (buffer_config.pingpong) {
     const auto read_only = IsResourceStateReadOnly(state);

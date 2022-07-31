@@ -127,7 +127,6 @@
       "type": "dispatch cs",
       "enabled": true,
       "command_queue": "queue_compute",
-      "wait_pass": ["output to swapchain", "debug buffer"],
       "execute": true,
       "buffer_list": [
         {
@@ -147,7 +146,6 @@
       "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["copy resource"],
-      "execute": true,
       "buffer_list": [
         {
           "name": "camera",

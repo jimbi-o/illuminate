@@ -77,6 +77,7 @@ void DescriptorCpu::RegisterExternalHandle(const uint32_t index, const Descripto
   logtrace("handle registered. alloc:{} desc:{} ptr:{}", index, type, handles_[descriptor_type_index][index].ptr);
 }
 D3D12_CPU_DESCRIPTOR_HANDLE* DescriptorCpu::GetCpuHandleList(const uint32_t buffer_num, const uint32_t* buffer_allocation_index_list, const ResourceStateType* resource_state_list, const D3D12_CPU_DESCRIPTOR_HANDLE scene_data_cpu_handles[], const MemoryType& memory_type) const {
+  if (buffer_num == 0) { return (D3D12_CPU_DESCRIPTOR_HANDLE*)nullptr; }
   auto cpu_handles_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(memory_type, buffer_num);
   for (uint32_t i = 0; i < buffer_num; i++) {
     if (IsSceneBuffer(buffer_allocation_index_list[i])) {

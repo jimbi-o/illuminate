@@ -34,7 +34,20 @@
   },
   "buffer": [
     {
-      "name": "primary",
+      "name": "gbuffer0",
+      "initial_state": "rtv"
+    },
+    {
+      "name": "gbuffer1",
+      "initial_state": "rtv",
+      "format": "R8G8B8A8_SNORM"
+    },
+    {
+      "name": "gbuffer2",
+      "initial_state": "rtv"
+    },
+    {
+      "name": "gbuffer3",
       "initial_state": "rtv"
     },
     {
@@ -83,7 +96,7 @@
       "execute": true
     },
     {
-      "name": "forward",
+      "name": "prez",
       "type": "mesh transform",
       "enabled": true,
       "command_queue": "queue_graphics",
@@ -98,9 +111,29 @@
           "state": "srv_non_ps"
         },
         {
-          "name": "light",
-          "state": "cbv",
-          "index_offset" : 1
+          "name": "dsv",
+          "state": "dsv_write"
+        }
+      ],
+      "material": "prez",
+      "pass_vars": {
+        "clear_depth": true
+      }
+    },
+    {
+      "name": "gbuffer",
+      "type": "mesh transform",
+      "enabled": true,
+      "command_queue": "queue_graphics",
+      "material": "gbuffer geom",
+      "buffer_list": [
+        {
+          "name": "camera",
+          "state": "cbv"
+        },
+        {
+          "name": "transforms",
+          "state": "srv_non_ps"
         },
         {
           "name": "material_common_settings",
@@ -118,19 +151,28 @@
           "index_offset" : 2
         },
         {
-          "name": "primary",
+          "name": "gbuffer0",
+          "state": "rtv"
+        },
+        {
+          "name": "gbuffer1",
+          "state": "rtv"
+        },
+        {
+          "name": "gbuffer2",
+          "state": "rtv"
+        },
+        {
+          "name": "gbuffer3",
           "state": "rtv"
         },
         {
           "name": "dsv",
-          "state": "dsv_write"
+          "state": "dsv_read"
         }
       ],
       "sampler": ["scene"],
-      "material": "brdf forward",
       "pass_vars": {
-        "clear_depth": true,
-        "stencil_val": 255,
         "use_material": true
       }
     },
@@ -141,7 +183,7 @@
       "command_queue": "queue_graphics",
       "buffer_list": [
         {
-          "name": "primary",
+          "name": "gbuffer0",
           "state": "srv_ps"
         },
         {

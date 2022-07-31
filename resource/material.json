@@ -212,6 +212,40 @@
       ]
     },
     {
+      "name": "gbuffer geom",
+      "rootsig": "gbuffer geom",
+      "render_target_formats": ["R8G8B8A8_UNORM", "R8G8B8A8_SNORM", "R8G8B8A8_UNORM", "R8G8B8A8_UNORM"],
+      "depth_stencil": {
+        "format": "D24_UNORM_S8_UINT",
+        "comparison_func": "equal"
+      },
+      "variations": [
+        {
+          "input_element": ["POSITION", "NORMAL", "TANGENT", "TEXCOORD_0"],
+          "params": [
+            {
+              "name": "MESH_DEFORM_TYPE",
+              "val":  ["MESH_DEFORM_TYPE_STATIC"]
+            },
+            {
+              "name": "OPACITY_TYPE",
+              "val":  ["OPACITY_TYPE_OPAQUE", "OPACITY_TYPE_ALPHA_MASK"]
+            }
+          ],
+          "shaders": [
+            {
+              "file": "shader/mesh_transform/mesh_transform.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/brdf/gbuffer_geom.ps.hlsl",
+              "target": "ps"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "oetf",
       "rootsig": "postprocess",
       "render_target_formats": ["R8G8B8A8_UNORM"],

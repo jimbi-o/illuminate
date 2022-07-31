@@ -565,9 +565,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   auto material_list = BuildMaterialList(device.Get(), GetTestJson("material.json"));
   {
     nlohmann::json json;
+    SUBCASE("deferred.json") {
+      json = GetTestJson("deferred.json");
+      frame_loop_num = 100000;
+    }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
-      frame_loop_num = 100000;
+      frame_loop_num = 100;
     }
     SUBCASE("config.json") {
       json = GetTestJson("config.json");

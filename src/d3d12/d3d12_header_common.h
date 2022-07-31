@@ -49,7 +49,7 @@ constexpr auto ConvertToDescriptorTypeFlag(const DescriptorType& type) {
   }
   return kDescriptorTypeFlagNone;
 }
-enum class ResourceStateType : uint8_t { kCbv = 0, kSrvPs, kSrvNonPs, kUav, kRtv, kDsvWrite, kCopySrc, kCopyDst, kCommon, kPresent, kGenericRead, };
+enum class ResourceStateType : uint8_t { kCbv = 0, kSrvPs, kSrvNonPs, kUav, kRtv, kDsvWrite, kDsvRead, kCopySrc, kCopyDst, kCommon, kPresent, kGenericRead, };
 constexpr auto ConvertToD3d12ResourceState(const ResourceStateType type) {
   switch (type) {
     case ResourceStateType::kCbv:      { return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER; }
@@ -58,6 +58,7 @@ constexpr auto ConvertToD3d12ResourceState(const ResourceStateType type) {
     case ResourceStateType::kUav:      { return D3D12_RESOURCE_STATE_UNORDERED_ACCESS; }
     case ResourceStateType::kRtv:      { return D3D12_RESOURCE_STATE_RENDER_TARGET; }
     case ResourceStateType::kDsvWrite: { return D3D12_RESOURCE_STATE_DEPTH_WRITE; }
+    case ResourceStateType::kDsvRead:  { return D3D12_RESOURCE_STATE_DEPTH_READ; }
     case ResourceStateType::kCopySrc:  { return D3D12_RESOURCE_STATE_COPY_SOURCE; }
     case ResourceStateType::kCopyDst:  { return D3D12_RESOURCE_STATE_COPY_DEST; }
     case ResourceStateType::kCommon:   { return D3D12_RESOURCE_STATE_COMMON; }
@@ -74,6 +75,7 @@ constexpr auto ConvertToDescriptorType(const ResourceStateType& state) {
     case ResourceStateType::kUav:      { return DescriptorType::kUav; };
     case ResourceStateType::kRtv:      { return DescriptorType::kRtv; };
     case ResourceStateType::kDsvWrite: { return DescriptorType::kDsv; };
+    case ResourceStateType::kDsvRead:  { return DescriptorType::kDsv; };
   }
   return DescriptorType::kNum;
 }
@@ -85,21 +87,9 @@ constexpr auto ConvertToDescriptorTypeFlag(const ResourceStateType& state) {
     case ResourceStateType::kUav:      { return kDescriptorTypeFlagUav; };
     case ResourceStateType::kRtv:      { return kDescriptorTypeFlagRtv; };
     case ResourceStateType::kDsvWrite: { return kDescriptorTypeFlagDsv; };
+    case ResourceStateType::kDsvRead:  { return kDescriptorTypeFlagDsv; };
   }
   return kDescriptorTypeFlagNone;
-}
-constexpr inline bool IsResourceStateReadOnly(const ResourceStateType& type) {
-  switch (type) {
-    case ResourceStateType::kCbv:
-    case ResourceStateType::kSrvPs:
-    case ResourceStateType::kSrvNonPs:
-    case ResourceStateType::kCommon:
-    case ResourceStateType::kPresent:
-    case ResourceStateType::kGenericRead: {
-      return true;
-    }
-  }
-  return false;
 }
 enum class BufferSizeRelativeness : uint8_t { kAbsolute, kSwapchainRelative, kPrimaryBufferRelative, };
 struct Size2d {

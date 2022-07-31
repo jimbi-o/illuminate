@@ -22,13 +22,14 @@ void* RenderPassMeshTransform::Init(RenderPassFuncArgsInit* args, [[maybe_unused
   param->rtv_num = 0;
   param->dsv_index = ~0U;
   for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
-    if (args->render_pass_list[render_pass_index].buffer_list[i].state == ResourceStateType::kRtv) {
+    const auto state = args->render_pass_list[render_pass_index].buffer_list[i].state;
+    if (state == ResourceStateType::kRtv) {
       if (param->rtv_index == ~0U) {
         param->rtv_index = i;
       }
       param->rtv_num++;
     }
-    if (param->dsv_index == ~0U && args->render_pass_list[render_pass_index].buffer_list[i].state == ResourceStateType::kDsvWrite) {
+    if (param->dsv_index == ~0U && (state == ResourceStateType::kDsvWrite || state == ResourceStateType::kDsvRead)) {
       param->dsv_index = i;
     }
   }
@@ -42,12 +43,6 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
   auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
   const auto rtv_handle = pass_vars->rtv_num == 0 ? nullptr : &args_per_pass->cpu_handles[pass_vars->rtv_index];
   const auto dsv_handle = &args_per_pass->cpu_handles[pass_vars->dsv_index];
-  for (uint32_t i = 0; i < pass_vars->rtv_num; i++) {
-    // TODO remove (this is only for debug purpose).
-    float clear_color[4] = {};
-    command_list->ClearRenderTargetView(rtv_handle[i], clear_color, 0, nullptr);
-  command_list->OMSetRenderTargets(pass_vars->rtv_num, rtv_handle, true, dsv_handle);
-  }
   if (pass_vars->clear_depth) {
     command_list->ClearDepthStencilView(*dsv_handle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
   }

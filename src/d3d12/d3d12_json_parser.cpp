@@ -35,6 +35,9 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j) {
   if (format_str.compare("R8G8B8A8_UNORM") == 0) {
     return DXGI_FORMAT_R8G8B8A8_UNORM;
   }
+  if (format_str.compare("R8G8B8A8_SNORM") == 0) {
+    return DXGI_FORMAT_R8G8B8A8_SNORM;
+  }
   if (format_str.compare("D24_UNORM_S8_UINT") == 0) {
     return DXGI_FORMAT_D24_UNORM_S8_UINT;
   }
@@ -80,6 +83,9 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j) {
   }
   if (str.compare("dsv_write") == 0) {
     return ResourceStateType::kDsvWrite;
+  }
+  if (str.compare("dsv_read") == 0) {
+    return ResourceStateType::kDsvRead;
   }
   if (str.compare("copy_source") == 0) {
     return ResourceStateType::kCopySrc;
