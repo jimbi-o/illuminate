@@ -1,15 +1,18 @@
 #include "d3d12_src_common.h"
 namespace illuminate {
-void SetD3d12Name(ID3D12Object* obj, const std::string_view name) {
+void SetD3d12Name(ID3D12Object* obj, const char* name) {
   if (obj == nullptr) {
     loginfo("obj:{} is null", name);
     return;
   }
-  const auto len = GetUint32(name.size()) + 1;
-  auto hr = obj->SetPrivateData(WKPDID_D3DDebugObjectName, len, name.data());
+  const auto len = GetUint32(strlen(name)) + 1;
+  auto hr = obj->SetPrivateData(WKPDID_D3DDebugObjectName, len, name);
   if (FAILED(hr)) {
     logwarn("SetD3d12Name failed. {} {}", hr, name);
   }
+}
+void SetD3d12Name(ID3D12Object* obj, const std::string_view name) {
+  SetD3d12Name(obj, name.data());
 }
 uint32_t GetD3d12Name(ID3D12Object* obj, const uint32_t dst_size, char* dst) {
   auto retval = dst_size;

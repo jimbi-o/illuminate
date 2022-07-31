@@ -91,6 +91,7 @@ constexpr auto ConvertToDescriptorTypeFlag(const ResourceStateType& state) {
   }
   return kDescriptorTypeFlagNone;
 }
+D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags);
 enum class BufferSizeRelativeness : uint8_t { kAbsolute, kSwapchainRelative, kPrimaryBufferRelative, };
 struct Size2d {
   uint32_t width{};

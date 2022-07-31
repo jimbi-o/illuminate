@@ -8,6 +8,6 @@
 #include "illuminate/util/hash_map.h"
 #include <nlohmann/json.hpp>
 namespace illuminate {
-void ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, RenderGraph* graph);
+std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, const DXGI_FORMAT* const * rtv_format_list, const DXGI_FORMAT* dsv_format, RenderGraph* graph);
 }
 #endif

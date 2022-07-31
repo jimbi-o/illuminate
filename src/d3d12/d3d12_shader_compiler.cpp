@@ -271,24 +271,23 @@ auto GetD3d12ComparisonFunc(const std::string_view& func_name) {
   assert(false && "invalid D3D12_COMPARISON_FUNC");
   return D3D12_COMPARISON_FUNC_NEVER;
 }
-auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json& variation, const nlohmann::json& common_input_element_list) {
+auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json& variation, const nlohmann::json& common_input_element_list, const uint32_t rtv_format_num, const DXGI_FORMAT* const rtv_format_list, const DXGI_FORMAT& dsv_format) {
   if (variation.at("shaders").size() == 1 && variation.at("shaders")[0].at("target") == "cs") {
     return (PsoDescGraphics*)nullptr;
   }
   auto desc = AllocateFrame<PsoDescGraphics>();
   *desc = {};
-  if (material.contains("render_target_formats")) {
-    auto& render_target_formats = material.at("render_target_formats");
-    desc->render_target_formats.NumRenderTargets = GetUint32(render_target_formats.size());
-    for (uint32_t i = 0; i < desc->render_target_formats.NumRenderTargets; i++) {
-      desc->render_target_formats.RTFormats[i] = GetDxgiFormat(GetStringView(render_target_formats[i]).data());
+  if (rtv_format_num > 0) {
+    desc->render_target_formats.NumRenderTargets = rtv_format_num;
+    for (uint32_t i = 0; i < rtv_format_num; i++) {
+      desc->render_target_formats.RTFormats[i] = rtv_format_list[i];
     }
   }
   if (material.contains("depth_stencil")) {
     auto& depth_stencil = material.at("depth_stencil");
     desc->depth_stencil.DepthEnable = GetBool(depth_stencil,  "depth_enable", true);
     if (desc->depth_stencil.DepthEnable) {
-      desc->depth_stencil_format = GetDxgiFormat(depth_stencil, "format");
+      desc->depth_stencil_format = dsv_format;
       if (depth_stencil.contains("comparison_func")) {
         desc->depth_stencil.DepthFunc = GetD3d12ComparisonFunc(GetStringView(depth_stencil, "comparison_func"));
         if (desc->depth_stencil.DepthFunc == D3D12_COMPARISON_FUNC_EQUAL) {
@@ -495,7 +494,33 @@ uint32_t GetVertexBufferTypeFlags(const nlohmann::json& variation) {
   }
   return flags;
 }
-void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
+auto GetMaterialBufferFormat(const uint32_t material_num, const nlohmann::json& material_json_list) {
+  auto rtv_format_num = AllocateArrayFrame<uint32_t>(material_num);;
+  auto rtv_format_list = AllocateArrayFrame<DXGI_FORMAT*>(material_num);;
+  auto dsv_format = AllocateArrayFrame<DXGI_FORMAT>(material_num);;
+  for (uint32_t m = 0; m < material_num; m++) {
+    const auto& material = material_json_list[m];
+    if (material.contains("render_target_formats")) {
+      auto& render_target_formats = material.at("render_target_formats");
+      rtv_format_num[m] = GetUint32(render_target_formats.size());
+      rtv_format_list[m] = AllocateArrayFrame<DXGI_FORMAT>(rtv_format_num[m]);
+      for (uint32_t i = 0; i < rtv_format_num[m]; i++) {
+        rtv_format_list[m][i] = GetDxgiFormat(GetStringView(render_target_formats[i]).data());
+      }
+    } else {
+      rtv_format_num[m] = 0;
+      rtv_format_list[m] = nullptr;
+    }
+    if (material.contains("depth_stencil")) {
+      auto& depth_stencil = material.at("depth_stencil");
+      if (GetBool(depth_stencil,  "depth_enable", true)) {
+        dsv_format[m] = GetDxgiFormat(depth_stencil, "format");
+      }
+    }
+  }
+  return std::make_tuple(rtv_format_num, rtv_format_list, dsv_format);
+}
+auto ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeHandler* include_handler, IDxcUtils* utils, D3d12Device* device,
                uint32_t* rootsig_num, ID3D12RootSignature*** rootsig_list,
                uint32_t* pso_num, ID3D12PipelineState*** pso_list, uint32_t** material_pso_offset, uint32_t** vertex_buffer_type_flags) {
   const auto& common_settings = json.at("common_settings");
@@ -511,6 +536,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
   const auto& input_element_list = common_settings.at("input_elements");
   const auto material_num = GetUint32(material_json_list.size());
   *material_pso_offset = AllocateArraySystem<uint32_t>(material_num);
+  auto [rtv_format_num, rtv_format_list, dsv_format] = GetMaterialBufferFormat(material_num, material_json_list);
   *vertex_buffer_type_flags = AllocateArraySystem<uint32_t>(*pso_num);
   uint32_t pso_index = 0;
   for (uint32_t i = 0; i < material_num; i++) {
@@ -521,7 +547,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
     for (const auto& variation : variations) {
       const auto& shader_json = variation.at("shaders");
       const auto shader_num = GetUint32(shader_json.size());
-      const auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list);
+      const auto pso_desc_graphics = PreparePsoDescGraphics(material, variation, input_element_list, rtv_format_num[i], rtv_format_list[i], dsv_format[i]);
       const auto variation_vertex_buffer_type_flags = GetVertexBufferTypeFlags(variation);
       const auto& params_json = variation.contains("params") ? &variation.at("params") : nullptr;
       const auto params_num = params_json ? GetUint32(params_json->size()) : 1;
@@ -565,6 +591,7 @@ void ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
       }
     }
   }
+  return std::make_tuple(rtv_format_num, rtv_format_list, dsv_format);
 }
 auto CalcMaterialVariationParamsHash(const nlohmann::json& params, const uint32_t* param_index) {
   StrHash hash{};
@@ -634,12 +661,18 @@ void ShaderCompiler::Term() {
     FreeLibrary(library_);
   }
 }
-MaterialList ShaderCompiler::BuildMaterials(const nlohmann::json& material_json, D3d12Device* device) {
+MaterialPack ShaderCompiler::BuildMaterials(const nlohmann::json& material_json, D3d12Device* device) {
   MaterialList list{};
-  ParseJson(material_json, compiler_, include_handler_, utils_, device,
-            &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, &list.vertex_buffer_type_flags);
-  SetMaterialVariationValues(material_json, &list.material_num, &list.material_hash_list, &list.variation_hash_list_len, &list.variation_hash_list);
-  return list;
+  auto [rtv_format_num, rtv_format_list, dsv_format] = ParseJson(material_json, compiler_, include_handler_, utils_, device,
+                                                 &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, &list.vertex_buffer_type_flags);
+  MaterialConfigInfo config{
+    .material_hash_list = nullptr,
+    .rtv_format_num = rtv_format_num,
+    .rtv_format_list = rtv_format_list,
+    .dsv_format = dsv_format,
+  };
+  SetMaterialVariationValues(material_json, &list.material_num, &config.material_hash_list, &list.variation_hash_list_len, &list.variation_hash_list);
+  return {list, config};
 }
 void ReleasePsoAndRootsig(MaterialList* list) {
   for (uint32_t i = 0; i < list->pso_num; i++) {
@@ -661,15 +694,15 @@ uint32_t FindMaterialVariationIndex(const MaterialList& material_list, const uin
   }
   return 0;
 }
-MaterialList BuildMaterialList(D3d12Device* device, const nlohmann::json& material_json) {
+MaterialPack BuildMaterialList(D3d12Device* device, const nlohmann::json& material_json) {
   ShaderCompiler shader_compiler;
   if (!shader_compiler.Init()) {
     logwarn("shader compilation failed.");
-    return MaterialList{};
+    return MaterialPack{};
   }
-  auto material_list = shader_compiler.BuildMaterials(material_json, device);
+  auto material_pack = shader_compiler.BuildMaterials(material_json, device);
   shader_compiler.Term();
-  return material_list;
+  return material_pack;
 }
 } // namespace illuminate
 #include "doctest/doctest.h"

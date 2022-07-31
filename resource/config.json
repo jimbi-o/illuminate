@@ -5,7 +5,7 @@
   "primarybuffer_height": 300,
   "primarybuffer_format": "R8G8B8A8_UNORM",
   "window": {
-    "title": "config.json",
+    "title": "config",
     "width": 1200,
     "height" : 500
   },
@@ -38,17 +38,12 @@
     {
       "name": "uav",
       "size_type": "swapchain_relative",
-      "initial_state": "uav"
-    },
-    {
-      "name": "pingpong",
-      "pingpong": true,
-      "initial_state": "rtv"
+      "initial_state": "uav",
+      "format": "R8G8B8A8_UNORM"
     },
     {
       "name": "cbv-a",
       "frame_buffered": true,
-      "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
       "size_type": "absolute",
@@ -58,7 +53,6 @@
     {
       "name": "cbv-b",
       "frame_buffered": true,
-      "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
       "size_type": "absolute",
@@ -68,19 +62,11 @@
     {
       "name": "cbv-c",
       "frame_buffered": true,
-      "format": "UNKNOWN",
       "heap_type": "upload",
       "dimension": "buffer",
       "size_type": "absolute",
       "width": 256,
       "initial_state": "generic_read"
-    },
-    {
-      "name": "dsv",
-      "format": "D24_UNORM_S8_UINT",
-      "initial_state": "dsv_write",
-      "clear_depth": 1,
-      "clear_stencil": 0
     }
   ],
   "sampler": [

@@ -11,6 +11,7 @@
 #define logfatal spdlog::critical
 namespace illuminate {
 void SetD3d12Name(ID3D12Object* obj, const std::string_view name);
+void SetD3d12Name(ID3D12Object* obj, const char* name);
 uint32_t GetD3d12Name(ID3D12Object* obj, const uint32_t dst_size, char* dst);
 void CopyStrToWstrContainer(wchar_t** dst, const std::string_view src, const MemoryType memory_type);
 inline auto CopyStrToWstrContainer(const std::string_view src, const MemoryType memory_type) {

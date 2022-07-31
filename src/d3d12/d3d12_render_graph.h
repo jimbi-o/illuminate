@@ -17,7 +17,6 @@ struct BufferConfig {
   uint32_t sample_count{};
   uint32_t  sample_quality{};
   D3D12_TEXTURE_LAYOUT layout{};
-  D3D12_RESOURCE_FLAGS flags{};
   uint32_t mip_width{};
   uint32_t mip_height{};
   uint32_t mip_depth{};

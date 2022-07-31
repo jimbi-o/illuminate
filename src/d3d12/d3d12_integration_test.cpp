@@ -47,6 +47,10 @@ const char* kSystemBufferNames[] = {
   "camera",
   "light",
 };
+const StrHash kSystemBufferNameHash[] = {
+  SID("camera"),
+  SID("light"),
+};
 const uint32_t kSystemBufferSize[] = {
   AlignAddress(GetUint32(sizeof(shader::SceneCameraData)), 256),
   AlignAddress(GetUint32(sizeof(shader::SceneLightData)), 256),
@@ -58,6 +62,9 @@ auto GetTestJson(const char* const filename) {
   return json;
 }
 auto AddSystemBuffers(nlohmann::json* json) {
+  if (!json->contains("buffer")) {
+    (*json)["buffer"] = nlohmann::json::array();
+  }
   auto& buffer_list = json->at("buffer");
   {
     auto buffer_json = R"(
@@ -71,6 +78,7 @@ auto AddSystemBuffers(nlohmann::json* json) {
   {
     static_assert(std::size(kSystemBufferNames) == kSystemBufferNum);
     static_assert(std::size(kSystemBufferSize) == kSystemBufferNum);
+    static_assert(std::size(kSystemBufferNameHash) == kSystemBufferNum);
     auto buffer_json = R"(
     {
       "frame_buffered": true,
@@ -528,6 +536,11 @@ auto PrepareBarrierResourceList(const uint32_t render_pass_num, const uint32_t* 
   }
   return resource_list;
 }
+void PrintNames(const uint32_t num, const char* const * names) {
+  for (uint32_t i = 0; i < num; i++) {
+    logdebug("{:2}:{}", i, names[i]);
+  }
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -562,7 +575,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   char** render_pass_name{nullptr};
 #endif
   auto frame_loop_num = kFrameLoopNum;
-  auto material_list = BuildMaterialList(device.Get(), GetTestJson("material.json"));
+  auto material_pack = BuildMaterialList(device.Get(), GetTestJson("material.json"));
   {
     nlohmann::json json;
     SUBCASE("deferred.json") {
@@ -578,7 +591,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       frame_loop_num = 5;
     }
     AddSystemBuffers(&json);
-    ParseRenderGraphJson(json, material_list.material_num, material_list.material_hash_list, &render_graph);
+    auto [buffer_name_list, buffer_name_hash_list] = ParseRenderGraphJson(json,
+                                                                          material_pack.material_list.material_num,
+                                                                          material_pack.config.material_hash_list,
+                                                                          material_pack.config.rtv_format_list,
+                                                                          material_pack.config.dsv_format,
+                                                                          &render_graph);
     render_pass_function_list = PrepareRenderPassFunctions(render_graph.render_pass_num, render_graph.render_pass_list);
     CHECK_UNARY(command_list_set.Init(device.Get(),
                                       render_graph.command_queue_num,
@@ -619,38 +637,44 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         buffer_config.descriptor_type_flags = kDescriptorTypeFlagSrv;
         render_graph.descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSrv)] += GetBufferAllocationNum(buffer_config, render_graph.frame_buffer_num);
         buffer_config.descriptor_type_flags |= original_flag;
-        buffer_config.flags = buffer_config.flags & (~D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
       }
     }
 #endif
+    PrintNames(render_graph.buffer_num, buffer_name_list);
     buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator);
     CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num, render_graph.descriptor_handle_num_per_type));
     CHECK_UNARY(command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList()));
-    auto& json_buffer_list = json.at("buffer");
     for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
       const auto buffer_config_index = buffer_list.buffer_config_index[i];
       auto& buffer_config = render_graph.buffer_list[buffer_config_index];
       CHECK_UNARY(CreateCpuHandleWithView(buffer_config, i, buffer_list.resource_list[i], &descriptor_cpu, device.Get()));
-      auto str = json_buffer_list[buffer_config_index].at("name").get<std::string>();
-      if (buffer_config.pingpong) {
-        if (IsPingPongMainBuffer(buffer_list, buffer_config_index, i)) {
-          SetD3d12Name(buffer_list.resource_list[i], str + "_A");
-        } else {
-          SetD3d12Name(buffer_list.resource_list[i], str + "_B");
+      if (!buffer_config.descriptor_only) {
+        char c = '\0';
+        if (buffer_config.pingpong) {
+          c = IsPingPongMainBuffer(buffer_list, buffer_config_index, i) ? 'A' : 'B';
+        } else if (buffer_config.frame_buffered) {
+          c = static_cast<char>(GetBufferLocalIndex(buffer_list, buffer_config_index, i)) + '0';
         }
-      } else if (buffer_config.frame_buffered) {
-        SetD3d12Name(buffer_list.resource_list[i], str + std::to_string(GetBufferLocalIndex(buffer_list, buffer_config_index, i)));
-      } else if (!buffer_config.descriptor_only) {
-        SetD3d12Name(buffer_list.resource_list[i], str);
+        auto str = buffer_name_list[buffer_config_index];
+        if (c == '\0') {
+          SetD3d12Name(buffer_list.resource_list[i], str);
+        } else {
+          const uint32_t buf_len = 128;
+          char buf[buf_len];
+          snprintf(buf, buf_len, "%s_%c", str, c);
+          SetD3d12Name(buffer_list.resource_list[i], buf);
+        }
       }
-      if (str.compare("swapchain") == 0) {
+      auto strhash = buffer_name_hash_list[buffer_config_index];
+      if (strhash == SID("swapchain")) {
         swapchain_buffer_allocation_index = i;
-      }
-      for (uint32_t j = 0; j < kSystemBufferNum; j++) {
-        if (system_buffer_index_list[j] != kInvalidIndex) { continue; }
-        if (str.compare(kSystemBufferNames[j]) == 0) {
-          system_buffer_index_list[j] = buffer_config_index;
-          break;
+      } else {
+        for (uint32_t j = 0; j < kSystemBufferNum; j++) {
+          if (system_buffer_index_list[j] != kInvalidIndex) { continue; }
+          if (strhash == kSystemBufferNameHash[j]) {
+            system_buffer_index_list[j] = buffer_config_index;
+            break;
+          }
         }
       }
     }
@@ -681,7 +705,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (render_graph.render_pass_list[i].name == SID("output to swapchain")) {
         render_pass_index_output_to_swapchain = i;
         for (uint32_t j = 0; j < render_graph.render_pass_list[i].buffer_num; j++) {
-          if (json_buffer_list[j].at("name").get<std::string>().compare("primary") == 0) {
+          if (buffer_name_hash_list[j] == SID("primary")) {
             render_pass_buffer_index_primary_input = j;
             break;
           }
@@ -802,7 +826,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       .frame_index = frame_index,
       .dynamic_data = &dynamic_data,
       .render_pass_list = render_graph.render_pass_list,
-      .material_list = &material_list,
+      .material_list = &material_pack.material_list,
       .resource_transfer = &resource_transfer,
     };
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
@@ -868,7 +892,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
     RenderPassTerm(&render_pass_function_list, i);
   }
-  ReleasePsoAndRootsig(&material_list);
+  ReleasePsoAndRootsig(&material_pack.material_list);
   swapchain.Term();
   descriptor_gpu.Term();
   descriptor_cpu.Term();

@@ -142,41 +142,6 @@ DescriptorType GetDescriptorType(const  nlohmann::json& j, const char* const nam
   assert(j.contains(name));
   return GetDescriptorType(GetStringView(j, name));
 }
-D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags) {
-  D3D12_RESOURCE_FLAGS flag{D3D12_RESOURCE_FLAG_NONE};
-  if (descriptor_type_flags & kDescriptorTypeFlagRtv) {
-    flag |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-  }
-  if (descriptor_type_flags & kDescriptorTypeFlagDsv) {
-    flag |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-    if ((descriptor_type_flags & kDescriptorTypeFlagSrv) == 0) {
-      flag |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-    }
-  }
-  if (descriptor_type_flags & kDescriptorTypeFlagUav) {
-    flag |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-  }
-  return flag;
-}
-void SetClearColor(const D3D12_RESOURCE_FLAGS flag, const nlohmann::json& j, D3D12_CLEAR_VALUE* clear_value) {
-  if (flag & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
-    if (j.contains("clear_color")) {
-      auto& color = j.at("clear_color");
-      for (uint32_t i = 0; i < 4; i++) {
-        clear_value->Color[i] = color[i];
-      }
-      return;
-    }
-  }
-  if (flag & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-    clear_value->DepthStencil.Depth = GetVal<FLOAT>(j, "clear_depth", 1.0f);
-    clear_value->DepthStencil.Stencil = GetVal<UINT8>(j, "clear_stencil", 0);
-    return;
-  }
-  for (uint32_t i = 0; i < 4; i++) {
-    clear_value->Color[i] = 0.0f;
-  }
-}
 uint32_t CreateJsonStrHashList(const nlohmann::json& json, const char* const name, StrHash** hash_list_ptr, const MemoryType memory_type) {
   const auto num = GetUint32(json.size());
   auto hash_list = AllocateArray<StrHash>(memory_type, num);

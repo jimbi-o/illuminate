@@ -49,7 +49,7 @@ D3D12_RESOURCE_DESC1 ConvertToD3d12ResourceDesc1(const BufferConfig& config, con
       .Quality = config.sample_quality,
     },
     .Layout = config.layout,
-    .Flags = config.flags,
+    .Flags = GetD3d12ResourceFlags(config.descriptor_type_flags),
     .SamplerFeedbackMipRegion = {
       .Width = config.mip_width,
       .Height = config.mip_height,

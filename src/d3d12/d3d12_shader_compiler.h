@@ -7,7 +7,6 @@ namespace illuminate {
 struct MaterialList {
   static const uint32_t kInvalidIndex = ~0U;
   uint32_t material_num{0};
-  StrHash* material_hash_list{nullptr};
   uint32_t* variation_hash_list_len{nullptr};
   StrHash** variation_hash_list{nullptr};
   uint32_t rootsig_num{0};
@@ -17,11 +16,22 @@ struct MaterialList {
   uint32_t* material_pso_offset{nullptr};
   uint32_t* vertex_buffer_type_flags{nullptr}; // aligned with pso_list
 };
+struct MaterialConfigInfo {
+  // in same order as materials
+  StrHash* material_hash_list{nullptr};
+  uint32_t* rtv_format_num{nullptr};
+  DXGI_FORMAT** rtv_format_list{nullptr};
+  DXGI_FORMAT* dsv_format{nullptr};
+};
+struct MaterialPack {
+  MaterialList material_list;
+  MaterialConfigInfo config;
+};
 class ShaderCompiler {
  public:
   bool Init();
   void Term();
-  MaterialList BuildMaterials(const nlohmann::json& material_json, D3d12Device* device);
+  MaterialPack BuildMaterials(const nlohmann::json& material_json, D3d12Device* device);
  private:
   HMODULE library_{nullptr};
   IDxcCompiler3* compiler_{nullptr};
@@ -45,6 +55,6 @@ constexpr auto GetMaterialPso(const MaterialList& material_list, const uint32_t 
 }
 uint32_t FindMaterialVariationIndex(const MaterialList& material_list, const uint32_t material, const StrHash variation_hash);
 void ReleasePsoAndRootsig(MaterialList*);
-MaterialList BuildMaterialList(D3d12Device* device, const nlohmann::json& material_json);
+MaterialPack BuildMaterialList(D3d12Device* device, const nlohmann::json& material_json);
 }
 #endif

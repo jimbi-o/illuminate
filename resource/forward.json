@@ -4,7 +4,7 @@
   "primarybuffer_height": 1080,
   "primarybuffer_format": "R8G8B8A8_UNORM",
   "window": {
-    "title": "forward.json",
+    "title": "forward",
     "width": 1920,
     "height" : 1080
   },
@@ -32,19 +32,6 @@
     "command_queue": "queue_graphics",
     "format": "R8G8B8A8_UNORM"
   },
-  "buffer": [
-    {
-      "name": "primary",
-      "initial_state": "rtv"
-    },
-    {
-      "name": "dsv",
-      "format": "D24_UNORM_S8_UINT",
-      "initial_state": "dsv_write",
-      "clear_depth": 1,
-      "clear_stencil": 0
-    }
-  ],
   "gpu_handle_num_view": 32,
   "gpu_handle_num_sampler": 8,
   "sampler": [

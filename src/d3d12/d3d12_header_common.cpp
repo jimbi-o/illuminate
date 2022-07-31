@@ -37,6 +37,22 @@ uint32_t GetPhysicalHeight(const MainBufferSize& buffer_size, const BufferSizeRe
   }
   return static_cast<uint32_t>(val);
 }
+D3D12_RESOURCE_FLAGS GetD3d12ResourceFlags(const DescriptorTypeFlag descriptor_type_flags) {
+  D3D12_RESOURCE_FLAGS flag{D3D12_RESOURCE_FLAG_NONE};
+  if (descriptor_type_flags & kDescriptorTypeFlagRtv) {
+    flag |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+  }
+  if (descriptor_type_flags & kDescriptorTypeFlagDsv) {
+    flag |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    if ((descriptor_type_flags & kDescriptorTypeFlagSrv) == 0) {
+      flag |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    }
+  }
+  if (descriptor_type_flags & kDescriptorTypeFlagUav) {
+    flag |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  }
+  return flag;
+}
 uint32_t GetDxgiFormatPerPixelSizeInBytes(const DXGI_FORMAT format) {
   switch (format) {
     case DXGI_FORMAT_R32G32B32_FLOAT: return 12;

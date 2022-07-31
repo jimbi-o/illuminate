@@ -715,27 +715,27 @@ void ReleaseSceneData(SceneData* scene_data) {
   scene_data->sampler_descriptor_heap->Release();
 }
 namespace {
-static const char* scene_buffer_names[] = {
-  "transforms",
-  "material_common_settings",
-  "material_indices",
-  "textures",
-  "samplers",
+static const StrHash scene_buffer_names[] = {
+  SID("transforms"),
+  SID("material_common_settings"),
+  SID("material_indices"),
+  SID("textures"),
+  SID("samplers"),
 };
 }
-bool IsSceneBuffer(const char* const name) {
+bool IsSceneBufferName(const StrHash& hash) {
   static_assert(std::size(scene_buffer_names) == kSceneDescriptorHandleTypeNum);
   for (uint32_t i = 0; i < kSceneDescriptorHandleTypeNum; i++) {
-    if (strcmp(name, scene_buffer_names[i]) == 0) {
+    if (hash == scene_buffer_names[i]) {
       return true;
     }
   }
   return false;
 }
-uint32_t EncodeSceneBufferIndex(const char* const name) {
+uint32_t EncodeSceneBufferIndex(const StrHash& hash) {
   uint32_t index = 0;
   for (uint32_t i = 0; i < kSceneDescriptorHandleTypeNum; i++) {
-    if (strcmp(name, scene_buffer_names[i]) == 0) {
+    if (hash == scene_buffer_names[i]) {
       index = i;
       break;
     }
