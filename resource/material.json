@@ -222,16 +222,6 @@
       "variations": [
         {
           "input_element": ["POSITION", "NORMAL", "TANGENT", "TEXCOORD_0"],
-          "params": [
-            {
-              "name": "MESH_DEFORM_TYPE",
-              "val":  ["MESH_DEFORM_TYPE_STATIC"]
-            },
-            {
-              "name": "OPACITY_TYPE",
-              "val":  ["OPACITY_TYPE_OPAQUE", "OPACITY_TYPE_ALPHA_MASK"]
-            }
-          ],
           "shaders": [
             {
               "file": "shader/mesh_transform/mesh_transform.vs.hlsl",

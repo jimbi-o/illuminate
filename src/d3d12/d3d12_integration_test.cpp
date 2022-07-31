@@ -571,7 +571,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
-      frame_loop_num = 100;
+      frame_loop_num = 30;
     }
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
