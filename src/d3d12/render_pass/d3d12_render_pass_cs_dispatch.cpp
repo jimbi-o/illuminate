@@ -21,8 +21,8 @@ void RenderPassCsDispatch::Render(RenderPassFuncArgsRenderCommon* args_common, R
   args_per_pass->command_list->SetComputeRootSignature(GetRenderPassRootSig(args_common, args_per_pass));
   args_per_pass->command_list->SetPipelineState(GetRenderPassPso(args_common, args_per_pass));
   args_per_pass->command_list->SetComputeRootDescriptorTable(0, args_per_pass->gpu_handles_view[0]);
-  args_per_pass->command_list->Dispatch(args_common->main_buffer_size->swapchain.width / pass_vars->thread_group_count_x,
-                                        args_common->main_buffer_size->swapchain.width / pass_vars->thread_group_count_y,
+  args_per_pass->command_list->Dispatch(args_common->main_buffer_size->primarybuffer.width / pass_vars->thread_group_count_x,
+                                        args_common->main_buffer_size->primarybuffer.width / pass_vars->thread_group_count_y,
                                         1);
 }
 } // namespace illuminate

@@ -32,6 +32,13 @@
     "command_queue": "queue_graphics",
     "format": "R8G8B8A8_UNORM"
   },
+  "buffer": [
+    {
+      "name": "primary",
+      "initial_state": "uav",
+      "format": "R8G8B8A8_UNORM"
+    }
+  ],
   "gpu_handle_num_view": 32,
   "gpu_handle_num_sampler": 8,
   "sampler": [
@@ -98,6 +105,7 @@
       "name": "gbuffer",
       "type": "mesh transform",
       "enabled": true,
+      "execute": true,
       "command_queue": "queue_graphics",
       "material": "gbuffer geom",
       "buffer_list": [
@@ -151,13 +159,53 @@
       }
     },
     {
+      "name": "lighting",
+      "type": "dispatch cs",
+      "enabled": true,
+      "command_queue": "queue_compute",
+      "wait_pass": ["gbuffer"],
+      "execute": true,
+      "material": "brdf lighting",
+      "buffer_list": [
+        {
+          "name": "light",
+          "state": "cbv"
+        },
+        {
+          "name": "gbuffer0",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "gbuffer1",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "gbuffer2",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "gbuffer3",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "primary",
+          "state": "uav"
+        }
+      ],
+      "pass_vars": {
+        "thread_group_count_x": 32,
+        "thread_group_count_y": 32
+      }
+    },
+    {
       "name": "output to swapchain",
       "type": "postprocess",
       "enabled": true,
       "command_queue": "queue_graphics",
+      "wait_pass": ["lighting"],
       "buffer_list": [
         {
-          "name": "gbuffer0",
+          "name": "primary",
           "state": "srv_ps"
         },
         {

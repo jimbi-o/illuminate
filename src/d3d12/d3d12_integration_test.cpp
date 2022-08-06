@@ -541,6 +541,17 @@ void PrintNames(const uint32_t num, const char* const * names) {
     logdebug("{:2}:{}", i, names[i]);
   }
 }
+auto GatherRenderPassSyncInfoForBarriers(const uint32_t render_pass_num, const RenderPass* render_pass_list) {
+  auto wait_pass_num = AllocateArrayFrame<uint32_t>(render_pass_num);
+  auto signal_pass_index = AllocateArrayFrame<uint32_t*>(render_pass_num);
+  auto render_pass_command_queue_index = AllocateArrayFrame<uint32_t>(render_pass_num);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    wait_pass_num[i] = render_pass_list[i].wait_pass_num;
+    signal_pass_index[i] = render_pass_list[i].signal_pass_index;
+    render_pass_command_queue_index[i] = render_pass_list[i].command_queue_index;
+  }
+  return std::make_tuple(wait_pass_num, signal_pass_index, render_pass_command_queue_index);
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -805,8 +816,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     const auto swapchain_initial_state = ResourceStateType::kPresent;
     const auto swapchain_final_state = ResourceStateType::kPresent;
     auto render_pass_buffer_num_list = GetRenderPassBufferNumList(render_graph.render_pass_num, render_graph.render_pass_list, MemoryType::kFrame);
+    auto [render_pass_wait_pass_num, render_pass_signal_pass_index, render_pass_command_queue_index] = GatherRenderPassSyncInfoForBarriers(render_graph.render_pass_num, render_graph.render_pass_list);
     const auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(render_graph.buffer_num, render_graph.render_pass_num,
                                                                                 render_pass_buffer_num_list, render_pass_buffer_allocation_index_list, render_pass_buffer_state_list,
+                                                                                render_pass_wait_pass_num, render_pass_signal_pass_index, render_pass_command_queue_index, render_graph.command_queue_type,
                                                                                 1, &swapchain_buffer_allocation_index, &swapchain_initial_state,
                                                                                 1, &swapchain_buffer_allocation_index, &swapchain_final_state,
                                                                                 MemoryType::kFrame);

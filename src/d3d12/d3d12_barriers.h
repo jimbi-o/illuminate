@@ -18,7 +18,13 @@ struct BarrierTransitions {
   ExecuteBarrier(command_list, barrier_num[k][0], barrier_config_list[k][0], barrier_resource_list[k][0]);
   ExecuteBarrier(command_list, barrier_num[k][1], barrier_config_list[k][1], barrier_resource_list[k][1]);
 */
-BarrierTransitions ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num, const uint32_t* const * render_pass_buffer_allocation_index_list, const ResourceStateType* const * render_pass_resource_state_list, const uint32_t buffer_num_with_initial_state, const uint32_t* const buffer_allocation_index_with_initial_state, const ResourceStateType* initial_state, const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state, const MemoryType& memory_type);
+BarrierTransitions ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num,
+                                               const uint32_t* const * render_pass_buffer_allocation_index_list, const ResourceStateType* const * render_pass_resource_state_list,
+                                               const uint32_t* wait_pass_num, const uint32_t* const * signal_pass_index,
+                                               const uint32_t* const render_pass_command_queue_index, const D3D12_COMMAND_LIST_TYPE* command_queue_type,
+                                               const uint32_t buffer_num_with_initial_state, const uint32_t* const buffer_allocation_index_with_initial_state, const ResourceStateType* initial_state,
+                                               const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state,
+                                               const MemoryType& memory_type);
 static const uint32_t kBarrierExecutionTimingNum = 2;
 }
 #endif

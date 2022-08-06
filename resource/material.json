@@ -256,6 +256,20 @@
           ]
         }
       ]
+    },
+    {
+      "name": "brdf lighting",
+      "rootsig": "brdf lighting",
+      "variations": [
+        {
+          "shaders": [
+            {
+              "file": "shader/brdf/brdf_lighting.cs.hlsl",
+              "target": "cs"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -19,12 +19,68 @@ auto GetPrevState(const uint32_t num, const uint32_t* buffer_id_list, const Reso
   assert(false && "no valid bufferid found");
   return ResourceStateType::kCommon;
 }
+auto IsResourceStateValidQueue(const D3D12_COMMAND_LIST_TYPE command_queue_type, const ResourceStateType state) {
+  switch (command_queue_type) {
+    case D3D12_COMMAND_LIST_TYPE_DIRECT: {
+      return true;
+    }
+    case D3D12_COMMAND_LIST_TYPE_COMPUTE: {
+      switch (state) {
+        case ResourceStateType::kSrvPs:
+        case ResourceStateType::kRtv:
+        case ResourceStateType::kDsvWrite:
+        case ResourceStateType::kDsvRead:  {
+          return false;
+        }
+      }
+      return true;
+    }
+    case D3D12_COMMAND_LIST_TYPE_COPY: {
+      return false;
+    }
+  }
+  return false;
+}
+auto GetValidRenderPassForResourceStates(const uint32_t pass_index, const ResourceStateType prev_state, const ResourceStateType next_state,
+                                         const uint32_t* wait_pass_num, const uint32_t* const* signal_pass_index,
+                                         const uint32_t* const render_pass_command_queue_index, const D3D12_COMMAND_LIST_TYPE* command_queue_type) {
+  const auto command_queue_index = render_pass_command_queue_index[pass_index];
+  if (command_queue_type[command_queue_index] == D3D12_COMMAND_LIST_TYPE_DIRECT) {
+    return std::make_pair(pass_index, 0);
+  }
+  if (IsResourceStateValidQueue(command_queue_type[command_queue_index], prev_state) && IsResourceStateValidQueue(command_queue_type[command_queue_index], next_state)) {
+    return std::make_pair(pass_index, 0);
+  }
+  for (uint32_t i = pass_index; i != ~0U; i--) {
+    if (command_queue_index != render_pass_command_queue_index[i]) { continue; }
+    for (uint32_t j = 0; j < wait_pass_num[i]; j++) {
+      const auto signal_queue = command_queue_type[render_pass_command_queue_index[signal_pass_index[i][j]]];
+      if (!IsResourceStateValidQueue(signal_queue, prev_state)) { continue; }
+      if (!IsResourceStateValidQueue(signal_queue, next_state)) { continue; }
+      return std::make_pair(signal_pass_index[i][j], 1);
+    }
+  }
+  logerror("no valid pass for barrier found (wrong sync settings?). {} {} {} {}", pass_index, command_queue_index, prev_state, next_state);
+  assert(false && "no valid pass for barrier found");
+  return std::make_pair(pass_index, 0);
+}
+auto GetValidRenderPassForResourceStatesBeforeFrameEnd(const uint32_t pass_index, const D3D12_COMMAND_LIST_TYPE command_queue_type, const ResourceStateType prev_state, const ResourceStateType next_state, const uint32_t last_graphics_queue_render_pass_index) {
+  if (command_queue_type == D3D12_COMMAND_LIST_TYPE_DIRECT) {
+    return std::make_pair(pass_index, 1);
+  }
+  if (IsResourceStateValidQueue(command_queue_type, prev_state) && IsResourceStateValidQueue(command_queue_type, next_state)) {
+    return std::make_pair(pass_index, 1);
+  }
+  return std::make_pair(last_graphics_queue_render_pass_index, 1);
+}
 enum class BarrierFillMode :uint8_t { kNumOnly, kFillParams, };
 template <BarrierFillMode fill_mode>
 auto ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num,
                                  const uint32_t* const * render_pass_buffer_allocation_index_list, const ResourceStateType* const * render_pass_resource_state_list,
+                                 const uint32_t* wait_pass_num, const uint32_t* const * signal_pass_index,
+                                 const uint32_t* const render_pass_command_queue_index, const D3D12_COMMAND_LIST_TYPE* command_queue_type,
                                  const uint32_t buffer_num_with_initial_state, const uint32_t* const buffer_allocation_index_with_initial_state, const ResourceStateType* initial_state,
-                                 const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state, 
+                                 const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state,
                                  const MemoryType& memory_type, uint32_t** barrier_num, BarrierConfig*** barrier_config_list) {
   auto buffer_id_list = AllocateArray<uint32_t>(memory_type, buffer_num);
   auto buffer_initial_state = AllocateArray<ResourceStateType>(memory_type, buffer_num);
@@ -39,7 +95,11 @@ auto ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t rende
     last_user_pass[next_vacant_buffer_index]       = ~0U;
     next_vacant_buffer_index++;
   }
+  auto last_graphics_queue_render_pass_index = render_pass_num - 1;
   for (uint32_t i = 0; i < render_pass_num; i++) {
+    if (command_queue_type[render_pass_command_queue_index[i]] == D3D12_COMMAND_LIST_TYPE_DIRECT) {
+      last_graphics_queue_render_pass_index = i;
+    }
     barrier_index[i] = AllocateArrayFrame<uint32_t>(kBarrierExecutionTimingNum);
     barrier_index[i][0] = 0;
     barrier_index[i][1] = 0;
@@ -58,15 +118,20 @@ auto ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t rende
       last_user_pass[buffer_index] = i;
       auto prev_state = GetPrevState(next_vacant_buffer_index, buffer_id_list, buffer_prev_state, buffer_id);
       if (prev_state == render_pass_resource_state_list[i][j]) { continue; }
+      auto next_state = render_pass_resource_state_list[i][j];
+      auto [barrier_valid_pass_index, per_pass_barrier_position_index] = GetValidRenderPassForResourceStates(i, prev_state, next_state,
+                                                                                                             wait_pass_num, signal_pass_index,
+                                                                                                             render_pass_command_queue_index, command_queue_type);
       if constexpr (fill_mode == BarrierFillMode::kFillParams) {
-        barrier_config_list[i][0][barrier_index[i][0]].buffer_allocation_index = buffer_id;
-        barrier_config_list[i][0][barrier_index[i][0]].type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier_config_list[i][0][barrier_index[i][0]].flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier_config_list[i][0][barrier_index[i][0]].state_before = ConvertToD3d12ResourceState(prev_state);
-        barrier_config_list[i][0][barrier_index[i][0]].state_after  = ConvertToD3d12ResourceState(render_pass_resource_state_list[i][j]);
+        auto& barrier = barrier_config_list[barrier_valid_pass_index][per_pass_barrier_position_index][barrier_index[barrier_valid_pass_index][per_pass_barrier_position_index]];
+        barrier.buffer_allocation_index = buffer_id;
+        barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.state_before = ConvertToD3d12ResourceState(prev_state);
+        barrier.state_after  = ConvertToD3d12ResourceState(next_state);
       }
-      buffer_prev_state[buffer_index] = render_pass_resource_state_list[i][j];
-      barrier_index[i][0]++;
+      buffer_prev_state[buffer_index] = next_state;
+      barrier_index[barrier_valid_pass_index][per_pass_barrier_position_index]++;
     }
   }
   for (uint32_t i = 0; i < next_vacant_buffer_index; i++) {
@@ -80,15 +145,18 @@ auto ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t rende
       break;
     }
     if (prev_state == next_state) { continue; }
+    auto [barrier_valid_pass_index, per_pass_barrier_position_index] = GetValidRenderPassForResourceStatesBeforeFrameEnd(pass_index, command_queue_type[render_pass_command_queue_index[pass_index]],
+                                                                                                                         prev_state, next_state,
+                                                                                                                         last_graphics_queue_render_pass_index);
     if constexpr (fill_mode == BarrierFillMode::kFillParams) {
-      const auto current_barrier_index = barrier_index[pass_index][1];
-      barrier_config_list[pass_index][1][current_barrier_index].buffer_allocation_index = buffer_id;
-      barrier_config_list[pass_index][1][current_barrier_index].type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-      barrier_config_list[pass_index][1][current_barrier_index].flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-      barrier_config_list[pass_index][1][current_barrier_index].state_before = ConvertToD3d12ResourceState(prev_state);
-      barrier_config_list[pass_index][1][current_barrier_index].state_after  = ConvertToD3d12ResourceState(next_state);
+      auto& barrier = barrier_config_list[barrier_valid_pass_index][per_pass_barrier_position_index][barrier_index[barrier_valid_pass_index][per_pass_barrier_position_index]];
+      barrier.buffer_allocation_index = buffer_id;
+      barrier.type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+      barrier.flag = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+      barrier.state_before = ConvertToD3d12ResourceState(prev_state);
+      barrier.state_after  = ConvertToD3d12ResourceState(next_state);
     }
-    barrier_index[pass_index][1]++;
+    barrier_index[barrier_valid_pass_index][per_pass_barrier_position_index]++;
   }
   if constexpr (fill_mode == BarrierFillMode::kNumOnly) {
     for (uint32_t i = 0; i < render_pass_num; i++) {
@@ -101,11 +169,15 @@ auto ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t rende
 } // namespace
 BarrierTransitions ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num,
                                                const uint32_t* const * render_pass_buffer_allocation_index_list, const ResourceStateType* const * render_pass_resource_state_list,
+                                               const uint32_t* wait_pass_num, const uint32_t* const * signal_pass_index,
+                                               const uint32_t* const render_pass_command_queue_index, const D3D12_COMMAND_LIST_TYPE* command_queue_type,
                                                const uint32_t buffer_num_with_initial_state, const uint32_t* const buffer_allocation_index_with_initial_state, const ResourceStateType* initial_state,
                                                const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state, 
                                                const MemoryType& memory_type) {
   auto barrier_num = AllocateArray<uint32_t*>(memory_type, render_pass_num);
   ConfigureBarrierTransitions<BarrierFillMode::kNumOnly>(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                         wait_pass_num, signal_pass_index,
+                                                         render_pass_command_queue_index, command_queue_type,
                                                          buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
                                                          buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
                                                          MemoryType::kFrame, barrier_num, nullptr);
@@ -116,9 +188,11 @@ BarrierTransitions ConfigureBarrierTransitions(const uint32_t buffer_num, const 
     barrier_config_list[i][1] = AllocateArray<BarrierConfig>(memory_type, barrier_num[i][1]);
   }
   ConfigureBarrierTransitions<BarrierFillMode::kFillParams>(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
-                                                          buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
-                                                          buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
-                                                          MemoryType::kFrame, barrier_num, barrier_config_list);
+                                                            wait_pass_num, signal_pass_index,
+                                                            render_pass_command_queue_index, command_queue_type,
+                                                            buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
+                                                            buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
+                                                            MemoryType::kFrame, barrier_num, barrier_config_list);
   return {barrier_num, barrier_config_list};
 }
 } // namespace illuminate
@@ -142,7 +216,11 @@ TEST_CASE("barrier/swapchain") {
   const uint32_t buffer_num_with_final_state = 1;
   const uint32_t buffer_allocation_index_with_final_state[buffer_num_with_final_state] = {99};
   const ResourceStateType final_state[buffer_num_with_final_state] = {ResourceStateType::kPresent};
+  const uint32_t wait_pass_num[] = {0};
+  const uint32_t render_pass_command_queue_index[] = {0};
+  const D3D12_COMMAND_LIST_TYPE command_queue_type[] = { D3D12_COMMAND_LIST_TYPE_DIRECT };
   auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                                        wait_pass_num, nullptr, render_pass_command_queue_index, command_queue_type,
                                                                         buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
                                                                         buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
                                                                         MemoryType::kFrame);
@@ -183,7 +261,11 @@ TEST_CASE("barrier/simple") {
   const uint32_t buffer_num_with_final_state = 1;
   const uint32_t buffer_allocation_index_with_final_state[buffer_num_with_final_state] = {99};
   const ResourceStateType final_state[buffer_num_with_final_state] = {ResourceStateType::kPresent};
+  const uint32_t wait_pass_num[] = {0,0};
+  const uint32_t render_pass_command_queue_index[] = {0,0};
+  const D3D12_COMMAND_LIST_TYPE command_queue_type[] = { D3D12_COMMAND_LIST_TYPE_DIRECT };
   auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                                        wait_pass_num, nullptr, render_pass_command_queue_index, command_queue_type,
                                                                         buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
                                                                         buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
                                                                         MemoryType::kFrame);
@@ -240,7 +322,11 @@ TEST_CASE("barrier/pinpong") {
   const uint32_t buffer_num_with_final_state = 1;
   const uint32_t buffer_allocation_index_with_final_state[buffer_num_with_final_state] = {99};
   const ResourceStateType final_state[buffer_num_with_final_state] = {ResourceStateType::kPresent};
+  const uint32_t wait_pass_num[] = {0,0,0};
+  const uint32_t render_pass_command_queue_index[] = {0,0,0};
+  const D3D12_COMMAND_LIST_TYPE command_queue_type[] = { D3D12_COMMAND_LIST_TYPE_DIRECT };
   auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_num, render_pass_num, render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list,
+                                                                        wait_pass_num, nullptr, render_pass_command_queue_index, command_queue_type,
                                                                         buffer_num_with_initial_state, buffer_allocation_index_with_initial_state, initial_state,
                                                                         buffer_num_with_final_state, buffer_allocation_index_with_final_state, final_state,
                                                                         MemoryType::kFrame);
