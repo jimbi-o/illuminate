@@ -1,5 +1,6 @@
 #ifndef ILLUMINATE_RESOURCE_SHADER_MATERIAL_FUNCITONS_H
 #define ILLUMINATE_RESOURCE_SHADER_MATERIAL_FUNCITONS_H
+#include "shader/include/shader_defines.h"
 struct MaterialMisc {
   float3 normal;
   float  metallic;

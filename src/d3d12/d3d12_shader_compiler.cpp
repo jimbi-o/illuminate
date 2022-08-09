@@ -93,14 +93,17 @@ bool IsCompileSuccessful(IDxcResult* result) {
     auto error_text = GetDxcOutput<IDxcBlobUtf8>(result, DXC_OUT_ERRORS);
     if (error_text) {
       if (error_text->GetStringLength() > 0) {
-        loginfo("{}", error_text->GetStringPointer());
+        logerror("{}", error_text->GetStringPointer());
       }
       error_text->Release();
     }
   }
   HRESULT compile_result = S_FALSE;
   hr = result->GetStatus(&compile_result);
-  if (FAILED(hr) || FAILED(compile_result)) { return false; }
+  if (FAILED(hr) || FAILED(compile_result)) {
+    logerror("getting shader compile failure status failed.");
+    return false;
+  }
   return result->HasOutput(DXC_OUT_OBJECT);
 }
 ID3D12RootSignature* CreateRootSignatureLocal(D3d12Device* device, IDxcResult* result) {
@@ -341,19 +344,32 @@ auto PreparePsoDescGraphics(const nlohmann::json& material, const nlohmann::json
   }
   return desc;
 }
-auto PrepareCompileArgsFromCommonSettings(const nlohmann::json& common_settings, const uint32_t params_num) {
+auto PrepareCompileArgsFromCommonSettings(const nlohmann::json& common_settings, const nlohmann::json& material, const uint32_t params_num) {
   uint32_t args_num = 4 + params_num; // target+entry
   uint32_t entry_index = 0, target_index = 0, params_index = 0;
   if (common_settings.contains("args")) {
     args_num += GetUint32(common_settings.at("args").size());
   }
+  if (material.contains("args")) {
+    args_num += GetUint32(material.at("args").size());
+  }
   auto args = AllocateArrayFrame<wchar_t*>(args_num);
   uint32_t args_index = 0;
   if (common_settings.contains("args")) {
     const auto& args_list = common_settings.at("args");
-    for (; args_index < args_list.size(); args_index++) {
-      args[args_index] = CopyStrToWstrContainer(args_list[args_index], MemoryType::kFrame);
+    const auto list_size = GetUint32(args_list.size());
+    for (uint32_t i = 0; i < list_size; i++) {
+      args[i] = CopyStrToWstrContainer(args_list[i], MemoryType::kFrame);
     }
+    args_index += list_size;
+  }
+  if (material.contains("args")) {
+    const auto& args_list = material.at("args");
+    const auto list_size = GetUint32(args_list.size());
+    for (uint32_t i = 0; i < list_size; i++) {
+      args[args_index + i] = CopyStrToWstrContainer(args_list[i], MemoryType::kFrame);
+    }
+    args_index += list_size;
   }
   args[args_index] = CopyStrToWstrContainer("-E", MemoryType::kFrame);
   args_index++;
@@ -527,15 +543,16 @@ auto ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
   const auto& material_json_list = json.at("materials");
   auto [rootsig_num_counted, rootsig_name_list] = CreateRootsigNameList(material_json_list);
   *rootsig_num = rootsig_num_counted;
-  *rootsig_list = AllocateArraySystem<ID3D12RootSignature*>(*rootsig_num);
+  auto rootsig_list_tmp = AllocateArrayFrame<ID3D12RootSignature*>(*rootsig_num);
   for (uint32_t i = 0; i < *rootsig_num; i++) {
-    (*rootsig_list)[i] = nullptr;
+    rootsig_list_tmp[i] = nullptr;
   }
   *pso_num = CountPsoNum(material_json_list);
   *pso_list = AllocateArraySystem<ID3D12PipelineState*>(*pso_num);
   const auto& input_element_list = common_settings.at("input_elements");
   const auto material_num = GetUint32(material_json_list.size());
   *material_pso_offset = AllocateArraySystem<uint32_t>(material_num);
+  *rootsig_list = AllocateArraySystem<ID3D12RootSignature*>(material_num);
   auto [rtv_format_num, rtv_format_list, dsv_format] = GetMaterialBufferFormat(material_num, material_json_list);
   *vertex_buffer_type_flags = AllocateArraySystem<uint32_t>(*pso_num);
   uint32_t pso_index = 0;
@@ -551,7 +568,7 @@ auto ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
       const auto variation_vertex_buffer_type_flags = GetVertexBufferTypeFlags(variation);
       const auto& params_json = variation.contains("params") ? &variation.at("params") : nullptr;
       const auto params_num = params_json ? GetUint32(params_json->size()) : 1;
-      auto [compile_args_num, compile_args, entry_index, target_index, params_index] = PrepareCompileArgsFromCommonSettings(common_settings, params_num);
+      auto [compile_args_num, compile_args, entry_index, target_index, params_index] = PrepareCompileArgsFromCommonSettings(common_settings, material, params_num);
       auto param_array_size_list = AllocateArrayFrame<uint32_t>(params_num);
       auto param_index_list = AllocateArrayFrame<uint32_t>(params_num);
       SetArrayValues(0, params_num, param_index_list);
@@ -570,12 +587,13 @@ auto ParseJson(const nlohmann::json& json, IDxcCompiler3* compiler, IDxcIncludeH
           compile_unit_list[j] = CompileShaderFile(utils, compiler, include_handler, filename, args_num, (const wchar_t**)compile_args);
           shader_object_list[j] = GetShaderObject(compile_unit_list[j]);
         }
-        auto rootsig = (*rootsig_list)[rootsig_index];
+        auto rootsig = rootsig_list_tmp[rootsig_index];
         if (rootsig == nullptr) {
           rootsig = CreateRootSignatureLocal(device, compile_unit_list[shader_num - 1]);
           SetD3d12Name(rootsig, GetStringView(material, "rootsig"));
-          (*rootsig_list)[rootsig_index] = rootsig;
+          rootsig_list_tmp[rootsig_index] = rootsig;
         }
+        (*rootsig_list)[i] = rootsig;
         auto [pso_desc_size, pso_desc] = CreatePsoDesc(rootsig, shader_json, shader_num, shader_object_list, pso_desc_graphics);
         (*pso_list)[pso_index] = CreatePipelineState(device, pso_desc_size, pso_desc);
         SetD3d12Name((*pso_list)[pso_index], GetPsoName(material.at("name"), params_json, params_num, param_index_list));
@@ -664,7 +682,8 @@ void ShaderCompiler::Term() {
 MaterialPack ShaderCompiler::BuildMaterials(const nlohmann::json& material_json, D3d12Device* device) {
   MaterialList list{};
   auto [rtv_format_num, rtv_format_list, dsv_format] = ParseJson(material_json, compiler_, include_handler_, utils_, device,
-                                                 &list.rootsig_num, &list.rootsig_list, &list.pso_num, &list.pso_list, &list.material_pso_offset, &list.vertex_buffer_type_flags);
+                                                                 &list.rootsig_num, &list.rootsig_list,
+                                                                 &list.pso_num, &list.pso_list, &list.material_pso_offset, &list.vertex_buffer_type_flags);
   MaterialConfigInfo config{
     .material_hash_list = nullptr,
     .rtv_format_num = rtv_format_num,

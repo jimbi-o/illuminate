@@ -69,10 +69,10 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
     command_list->SetGraphicsRootDescriptorTable(1 + pass_vars->gpu_handle_num, args_per_pass->gpu_handles_sampler[0]);
   }
   const auto scene_data = args_common->scene_data;
-  auto prev_variation_index = MaterialList::kInvalidIndex;
   uint32_t vertex_buffer_type_num = 0;
   uint32_t vertex_buffer_type_index[kVertexBufferTypeNum]{};
   D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[kVertexBufferTypeNum]{};
+  uint32_t prev_variation_hash = 0;
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     if (scene_data->model_instance_num[i] == 0) { continue; }
     for (uint32_t j = 0; j < scene_data->model_submesh_num[i]; j++) {
@@ -86,14 +86,14 @@ void RenderPassMeshTransform::Render(RenderPassFuncArgsRenderCommon* args_common
         }
         command_list->SetGraphicsRoot32BitConstants(0, val_num, &val[0], 0);
       }
-      auto variation_index = FindMaterialVariationIndex(*args_common->material_list, material_id, scene_data->submesh_material_variation_hash[submesh_index]);
-      if (variation_index == MaterialList::kInvalidIndex) {
-        logwarn("material variation not found. pass:{} material:{} submesh:{}", GetRenderPass(args_common, args_per_pass).name, material_id, submesh_index);
-        variation_index = 0;
-      }
-      if (prev_variation_index != variation_index) {
-        logtrace("mesh transform material variation.mesh:{}-{} variation:{}->{}", i, j, prev_variation_index, variation_index);
-        prev_variation_index = variation_index;
+      if (auto variation_hash = scene_data->submesh_material_variation_hash[submesh_index]; prev_variation_hash != variation_hash) {
+        auto variation_index = FindMaterialVariationIndex(*args_common->material_list, material_id, variation_hash);
+        prev_variation_hash = variation_hash;
+        if (variation_index == MaterialList::kInvalidIndex) {
+          logwarn("material variation not found. pass:{} material:{} submesh:{} hash:{}", GetRenderPass(args_common, args_per_pass).name, material_id, submesh_index, variation_hash);
+          variation_index = 0;
+        }
+        logtrace("mesh transform material variation.mesh:{}-{} variation:{}", i, j, variation_index);
         const auto pso_index = GetMaterialPsoIndex(*args_common->material_list, material_id, variation_index);
         command_list->SetPipelineState(args_common->material_list->pso_list[pso_index]);
         const auto vertex_buffer_type_flags = args_common->material_list->vertex_buffer_type_flags[pso_index];

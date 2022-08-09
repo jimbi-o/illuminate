@@ -142,11 +142,27 @@
           "state": "srv_non_ps"
         },
         {
+          "name": "material_common_settings",
+          "state": "cbv",
+          "index_offset" : 1
+        },
+        {
+          "name": "material_indices",
+          "state": "srv_ps",
+          "index_offset" : 1
+        },
+        {
+          "name": "textures",
+          "state": "srv_ps",
+          "index_offset" : 2
+        },
+        {
           "name": "dsv",
           "state": "dsv_write"
         }
       ],
       "material": "prez",
+      "sampler": ["scene"],
       "pass_vars": {
         "clear_depth": true,
         "stencil_val": 255

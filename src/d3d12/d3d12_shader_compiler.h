@@ -38,14 +38,11 @@ class ShaderCompiler {
   IDxcUtils* utils_{nullptr};
   IDxcIncludeHandler* include_handler_{nullptr};
 };
-constexpr auto GetMaterialRootsigIndex([[maybe_unused]]const MaterialList& material_list, const uint32_t material) {
-  return material;
-}
 constexpr auto GetMaterialPsoIndex(const MaterialList& material_list, const uint32_t material, const uint32_t variation_index) {
   return material_list.material_pso_offset[material] + variation_index;
 }
 constexpr auto GetMaterialRootsig(const MaterialList& material_list, const uint32_t material) {
-  return material_list.rootsig_list[GetMaterialRootsigIndex(material_list, material)];
+  return material_list.rootsig_list[material];
 }
 constexpr auto GetMaterialPso(const MaterialList& material_list, const uint32_t material) {
   return material_list.pso_list[GetMaterialPsoIndex(material_list, material, 0)];

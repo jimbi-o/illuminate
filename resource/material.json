@@ -128,57 +128,6 @@
       ]
     },
     {
-      "name": "prez",
-      "rootsig": "prez",
-      "depth_stencil": {
-        "format": "D24_UNORM_S8_UINT"
-      },
-      "variations": [
-        {
-          "input_element": ["POSITION"],
-          "params": [
-            {
-              "name": "MESH_DEFORM_TYPE",
-              "val":  ["MESH_DEFORM_TYPE_STATIC"]
-            },
-            {
-              "name": "OPACITY_TYPE",
-              "val":  ["OPACITY_TYPE_OPAQUE"]
-            }
-          ],
-          "shaders": [
-            {
-              "file": "shader/test/prez.vs.hlsl",
-              "target": "vs"
-            }
-          ]
-        },
-        {
-          "input_element": ["POSITION", "TEXCOORD_0"],
-          "params": [
-            {
-              "name": "MESH_DEFORM_TYPE",
-              "val":  ["MESH_DEFORM_TYPE_STATIC"]
-            },
-            {
-              "name": "OPACITY_TYPE",
-              "val":  ["OPACITY_TYPE_ALPHA_MASK"]
-            }
-          ],
-          "shaders": [
-            {
-              "file": "shader/test/prez.vs.hlsl",
-              "target": "vs"
-            },
-            {
-              "file": "shader/test/prez.ps.hlsl",
-              "target": "ps"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "name": "brdf forward",
       "rootsig": "brdf forward",
       "render_target_formats": ["R8G8B8A8_UNORM"],
@@ -206,6 +155,58 @@
             {
               "file": "shader/brdf/brdf_forward.ps.hlsl",
               "target": "ps"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "prez",
+      "rootsig": "prez",
+      "depth_stencil": {
+        "format": "D24_UNORM_S8_UINT"
+      },
+      "args": ["-DPREZ"],
+      "variations": [
+        {
+          "input_element": ["POSITION", "TEXCOORD_0"],
+          "params": [
+            {
+              "name": "MESH_DEFORM_TYPE",
+              "val":  ["MESH_DEFORM_TYPE_STATIC"]
+            },
+            {
+              "name": "OPACITY_TYPE",
+              "val":  ["OPACITY_TYPE_ALPHA_MASK"]
+            }
+          ],
+          "shaders": [
+            {
+              "file": "shader/mesh_transform/mesh_transform.vs.hlsl",
+              "target": "vs"
+            },
+            {
+              "file": "shader/brdf/brdf_forward.ps.hlsl",
+              "target": "ps"
+            }
+          ]
+        },
+        {
+          "input_element": ["POSITION"],
+          "params": [
+            {
+              "name": "MESH_DEFORM_TYPE",
+              "val":  ["MESH_DEFORM_TYPE_STATIC"]
+            },
+            {
+              "name": "OPACITY_TYPE",
+              "val":  ["OPACITY_TYPE_OPAQUE"]
+            }
+          ],
+          "shaders": [
+            {
+              "file": "shader/mesh_transform/mesh_transform.vs.hlsl",
+              "target": "vs"
             }
           ]
         }
