@@ -483,6 +483,11 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
   r.buffer_list = AllocateArraySystem<BufferConfig>(r.buffer_num);
   for (uint32_t i = 0; i < r.buffer_num; i++) {
     memcpy(&r.buffer_list[i], &buffer_config_list[i], sizeof(r.buffer_list[i]));
+    auto& config = r.buffer_list[i];
+    if (config.descriptor_type_flags & kDescriptorTypeFlagDsv) {
+      config.clear_value.DepthStencil.Depth = 1.0f;
+      config.clear_value.DepthStencil.Stencil = 0;
+    }
   }
   // signals
   for (uint32_t i = 0; i < r.render_pass_num; i++) {
