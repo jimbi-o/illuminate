@@ -7,7 +7,6 @@ struct MaterialMisc {
   float3 emissive;
   float  roughness;
   float  occlusion;
-  float  occlusion_strength;
 };
 void GetColorInfo(uint material_offset, ByteAddressBuffer material_index_list, Texture2D<float4> textures[], sampler samplers[], float2 uv, out float4 color, out float alpha_cutoff) {
   AlbedoInfo albedo_info = material_index_list.Load<AlbedoInfo>(material_offset * sizeof(AlbedoInfo));
@@ -27,7 +26,7 @@ MaterialMisc GetMaterialMisc(uint material_offset, uint misc_offset, ByteAddress
   info.metallic  = metallic_roughness_tex_val.b * misc_info.metallic_factor;
   info.roughness = metallic_roughness_tex_val.g * misc_info.roughness_factor;
   info.emissive *= misc_info.emissive_factor;
-  info.occlusion_strength = misc_info.occlusion_strength;
+  info.occlusion = 1.0f + misc_info.occlusion_strength * (info.occlusion - 1.0f);
   info.roughness = clamp(info.roughness, 0.001f, 1.0f);
   return info;
 }

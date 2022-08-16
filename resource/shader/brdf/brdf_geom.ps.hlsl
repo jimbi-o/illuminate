@@ -108,12 +108,11 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   float3 bitangent = cross(normal, tangent) * input.tangent.w;
   float3x3 m = float3x3(tangent, bitangent, normal);
   float3 n = normalize(mul(material_misc.normal, m));
-  // TODO ao
 #ifdef GBUFFER
   GBuffers gbuffers;
   gbuffers.gbuffer0 = float4(color.rgb, 1.0f);
   gbuffers.gbuffer1 = float4(n, 1.0f);
-  gbuffers.gbuffer2 = float4(material_misc.metallic, material_misc.roughness, material_misc.occlusion, material_misc.occlusion_strength);
+  gbuffers.gbuffer2 = float4(material_misc.metallic, material_misc.roughness, material_misc.occlusion, 1.0f);
   gbuffers.gbuffer3 = float4(material_misc.emissive, 1.0f);
   return gbuffers;
 #else
