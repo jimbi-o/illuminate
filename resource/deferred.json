@@ -184,7 +184,7 @@
       "material": "brdf lighting",
       "buffer_list": [
         {
-          "name": "light",
+          "name": "deferred_lighting_cbuffer",
           "state": "cbv"
         },
         {
@@ -201,6 +201,10 @@
         },
         {
           "name": "gbuffer3",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "dsv",
           "state": "srv_non_ps"
         },
         {

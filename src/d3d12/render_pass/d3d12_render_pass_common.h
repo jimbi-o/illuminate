@@ -19,6 +19,7 @@ struct RenderPassFuncArgsInit {
 };
 struct RenderPassConfigDynamicData {
   DirectX::SimpleMath::Matrix view_matrix;
+  DirectX::SimpleMath::Matrix projection_matrix;
   float camera_pos[3]{};
   float camera_focus[3]{};
   float fov_vertical{40.0f};

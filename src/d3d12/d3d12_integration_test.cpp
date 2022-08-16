@@ -28,7 +28,8 @@
 #include "render_pass/d3d12_render_pass_mesh_transform.h"
 #include "render_pass/d3d12_render_pass_postprocess.h"
 #include "render_pass/d3d12_render_pass_util.h"
-#include "shader_defines.h"
+#include "shader/brdf/brdf_lighting.cs.h"
+#include "shader/include/shader_defines.h"
 #define FORCE_SRV_FOR_ALL
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
@@ -376,16 +377,24 @@ auto RegisterGuiDebugView(const uint32_t debug_viewable_buffer_num, const char* 
   }
   ImGui::End();
 }
+auto GetAspectRatio(const Size2d& buffer_size) {
+  return static_cast<float>(buffer_size.width) / buffer_size.height;
+}
 auto CalcViewMatrix(const RenderPassConfigDynamicData& dynamic_data) {
   using namespace DirectX::SimpleMath;
   return Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations) {
+auto CalcProjectionMatrix(const RenderPassConfigDynamicData& dynamic_data, const float aspect_ratio) {
+  using namespace DirectX::SimpleMath;
+  return Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
+}
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio) {
   RegisterGuiPerformance(time_duration_data_set, gpu_time_durations);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
   RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
   dynamic_data->view_matrix = CalcViewMatrix(*dynamic_data);
+  dynamic_data->projection_matrix = CalcProjectionMatrix(*dynamic_data, aspect_ratio);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData() {
   RenderPassConfigDynamicData dynamic_data{};
@@ -483,6 +492,9 @@ auto GetBufferWritableSize(const StrHash& buffer_name_hash) {
     case SID("light"): {
       return GetUint32(sizeof(shader::SceneLightData));
     }
+    case SID("deferred_lighting_cbuffer"): {
+      return GetUint32(sizeof(shader::BrdfLightingCBuffer));
+    }
     case SID("cbv-a"):
     case SID("cbv-b"):
     case SID("cbv-c"): {
@@ -519,16 +531,14 @@ auto PrepareCbvPointers(const uint32_t buffer_num, const BufferConfig* buffer_co
   }
   return cbv_ptr_list;
 }
-void SetCameraCbv(const RenderPassConfigDynamicData& dynamic_data, const MainBufferSize& buffer_size, void* dst) {
+void SetCameraCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
   using namespace DirectX::SimpleMath;
-  const auto aspect_ratio = static_cast<float>(buffer_size.primarybuffer.width) / buffer_size.primarybuffer.height;
-  const auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
   shader::SceneCameraData scene_camera{};
   CopyMatrix(dynamic_data.view_matrix.m, scene_camera.view_matrix);
-  CopyMatrix(projection_matrix.m, scene_camera.projection_matrix);
+  CopyMatrix(dynamic_data.projection_matrix.m, scene_camera.projection_matrix);
   memcpy(dst, &scene_camera, sizeof(scene_camera));
 }
-void SetLightCbv(const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+void SetLightCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
   using namespace DirectX::SimpleMath;
   auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
   light_direction.Normalize();
@@ -538,19 +548,36 @@ void SetLightCbv(const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused
   scene_light.exposure_rate = 10.0f / dynamic_data.light_intensity;
   memcpy(dst, &scene_light, sizeof(scene_light));
 }
-void SetPingpongACbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+void SetPingpongACbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, void* dst) {
   float c[4]{0.0f,1.0f,1.0f,1.0f};
   memcpy(dst, c, GetUint32(sizeof(float)) * 4);
 }
-void SetPingpongBCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+void SetPingpongBCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, void* dst) {
   float c[4]{1.0f,0.0f,1.0f,1.0f};
   memcpy(dst, c, GetUint32(sizeof(float)) * 4);
 }
-void SetPingpongCCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+void SetPingpongCCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, void* dst) {
   float c[4]{1.0f,1.0f,1.0f,1.0f};
   memcpy(dst, c, GetUint32(sizeof(float)) * 4);
 }
-using CbvUpdateFunction = void (*)(const RenderPassConfigDynamicData&, const MainBufferSize&, void*);
+void SetBrdfLightingCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
+  using namespace DirectX::SimpleMath;
+  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
+  light_direction.Normalize();
+  shader::BrdfLightingCBuffer params{};
+  // https://stackoverflow.com/questions/11277501/how-to-recover-view-space-position-given-view-space-depth-value-and-ndc-xy
+  params.zbuffer_to_linear_params = {
+    dynamic_data.projection_matrix.m[0][0],
+    dynamic_data.projection_matrix.m[1][1],
+    dynamic_data.projection_matrix.m[2][2],
+    dynamic_data.projection_matrix.m[3][2],
+  };
+  params.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
+  params.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
+  params.exposure_rate = 10.0f / dynamic_data.light_intensity;
+  memcpy(dst, &params, sizeof(params));
+}
+using CbvUpdateFunction = void (*)(const RenderPassConfigDynamicData&, void*);
 auto PrepareCbvUpdateFunctions(const uint32_t buffer_num, const StrHash* buffer_name_hash) {
   auto cbv_update_functions = AllocateArrayScene<CbvUpdateFunction>(buffer_num);
   for (uint32_t i = 0; i < buffer_num; i++) {
@@ -561,6 +588,10 @@ auto PrepareCbvUpdateFunctions(const uint32_t buffer_num, const StrHash* buffer_
       }
       case SID("light"): {
         cbv_update_functions[i] = SetLightCbv;
+        break;
+      }
+      case SID("deferred_lighting_cbuffer"): {
+        cbv_update_functions[i] = SetBrdfLightingCbv;
         break;
       }
       case SID("cbv-a"): {
@@ -851,7 +882,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ImGui::NewFrame();
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer));
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
@@ -869,7 +900,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     for (uint32_t k = 0; k < render_graph.buffer_num; k++) {
       if (cbv_update_functions[k] == nullptr) { continue; }
       const auto cbv_index = render_graph.buffer_list[k].frame_buffered ? frame_index : 0;
-      (*(cbv_update_functions[k]))(dynamic_data, main_buffer_size, cbv_ptr_list[k][cbv_index]);
+      (*(cbv_update_functions[k]))(dynamic_data, cbv_ptr_list[k][cbv_index]);
     }
     // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {

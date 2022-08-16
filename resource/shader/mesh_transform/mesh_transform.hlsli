@@ -18,7 +18,4 @@ struct ModelInfo {
   uint transform_offset;
   uint material_offset;
 };
-ConstantBuffer<ModelInfo>       model_info  : register(b0);
-ConstantBuffer<SceneCameraData> camera_data : register(b1);
-ByteAddressBuffer               transforms  : register(t0);
 #endif

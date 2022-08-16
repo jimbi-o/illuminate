@@ -2,6 +2,7 @@
 #include "shader/include/shader_defines.h"
 #include "shader/include/material_defines.hlsli"
 #include "shader/include/material_functions.hlsli"
+#include "shader/mesh_transform/mesh_transform.buffers.hlsli"
 #include "shader/mesh_transform/mesh_transform.hlsli"
 #if !defined(PREZ) && !defined(GBUFFER)
 ConstantBuffer<SceneLightData> scene_light                      : register(b2);
@@ -65,6 +66,7 @@ struct GBuffers {
                   visibility=SHADER_VISIBILITY_PIXEL),   \
 "
 [RootSignature(GBufferRootsig)]
+[earlydepthstencil]
 GBuffers main(MeshTransformVsOutput input) {
 #else
 #define BrdfForwardRootsig                               \

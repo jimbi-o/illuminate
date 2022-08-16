@@ -6,6 +6,9 @@ namespace illuminate::shader {
 #endif
 struct BrdfLightingCBuffer {
   float4 zbuffer_to_linear_params;
+  float4 light_color;
+  float3 light_direction_vs;
+  float  exposure_rate;
 };
 #ifdef __cplusplus
 } // namespace illuminate::shader
