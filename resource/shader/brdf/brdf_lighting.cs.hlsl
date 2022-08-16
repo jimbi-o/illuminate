@@ -35,5 +35,4 @@ void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_Group
   float nh = clamp(dot(n, h), 0.0f, 1.0f);
   float3 brdf = BrdfDefault(gbuffer0.rgb, gbuffer2.r, gbuffer2.g, vh, nl, nv, nh);
   primary[location.xy] = float4((brdf * nl * params.light_color.xyz * params.light_color.w) * params.exposure_rate + gbuffer3.rgb, 1.0f);
-  // TODO ao, emissive
 }
