@@ -146,7 +146,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${WinPixEventRuntime_SOURCE_DIR}/Include"
   "${DirectXTK12_SOURCE_DIR}/Inc"
   "${DirectX-Headers_SOURCE_DIR}/include/directx"
-  "resource/shader/include"
+  "resource"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
   PRIVATE
