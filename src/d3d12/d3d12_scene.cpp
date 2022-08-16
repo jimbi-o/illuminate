@@ -346,7 +346,7 @@ auto SetMaterialValues(const tinygltf::Model& model, const uint32_t frame_index,
     misc_info.normal_scale = static_cast<float>(src_material.normalTexture.scale);
     SetTextureSamplerIndex(model.textures, src_material.normalTexture.index, kDefaultNormalTextureIndex, 0, texture_offset, sampler_offset, &misc_info.normal_tex, &misc_info.normal_sampler);
     misc_info.occlusion_strength = static_cast<float>(src_material.occlusionTexture.strength);
-    SetTextureSamplerIndex(model.textures, src_material.occlusionTexture.index, kBlackTextureIndex, 0, texture_offset, sampler_offset, &misc_info.occlusion_tex, &misc_info.occlusion_sampler);
+    SetTextureSamplerIndex(model.textures, src_material.occlusionTexture.index, kWhiteTextureIndex, 0, texture_offset, sampler_offset, &misc_info.occlusion_tex, &misc_info.occlusion_sampler);
     SetTextureSamplerIndex(model.textures, src_material.emissiveTexture.index, kBlackTextureIndex, 0, texture_offset, sampler_offset, &misc_info.emissive_tex, &misc_info.emissive_sampler);
     misc_info.emissive_factor.x = static_cast<float>(src_material.emissiveFactor[0]);
     misc_info.emissive_factor.y = static_cast<float>(src_material.emissiveFactor[1]);
