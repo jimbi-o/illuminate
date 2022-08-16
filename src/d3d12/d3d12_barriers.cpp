@@ -75,17 +75,17 @@ auto GetValidRenderPassForResourceStatesBeforeFrameEnd(const uint32_t pass_index
 }
 enum class BarrierFillMode :uint8_t { kNumOnly, kFillParams, };
 template <BarrierFillMode fill_mode>
-auto ConfigureBarrierTransitions(const uint32_t buffer_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num,
+auto ConfigureBarrierTransitions(const uint32_t buffer_allocation_num, const uint32_t render_pass_num, const uint32_t* render_pass_buffer_num,
                                  const uint32_t* const * render_pass_buffer_allocation_index_list, const ResourceStateType* const * render_pass_resource_state_list,
                                  const uint32_t* wait_pass_num, const uint32_t* const * signal_pass_index,
                                  const uint32_t* const render_pass_command_queue_index, const D3D12_COMMAND_LIST_TYPE* command_queue_type,
                                  const uint32_t buffer_num_with_initial_state, const uint32_t* const buffer_allocation_index_with_initial_state, const ResourceStateType* initial_state,
                                  const uint32_t buffer_num_with_final_state, const uint32_t* const buffer_allocation_index_with_final_state, const ResourceStateType* final_state,
                                  const MemoryType& memory_type, uint32_t** barrier_num, BarrierConfig*** barrier_config_list) {
-  auto buffer_id_list = AllocateArray<uint32_t>(memory_type, buffer_num);
-  auto buffer_initial_state = AllocateArray<ResourceStateType>(memory_type, buffer_num);
-  auto buffer_prev_state = AllocateArray<ResourceStateType>(memory_type, buffer_num);
-  auto last_user_pass = AllocateArray<uint32_t>(memory_type, buffer_num);
+  auto buffer_id_list = AllocateArray<uint32_t>(memory_type, buffer_allocation_num);
+  auto buffer_initial_state = AllocateArray<ResourceStateType>(memory_type, buffer_allocation_num);
+  auto buffer_prev_state = AllocateArray<ResourceStateType>(memory_type, buffer_allocation_num);
+  auto last_user_pass = AllocateArray<uint32_t>(memory_type, buffer_allocation_num);
   auto barrier_index = AllocateArrayFrame<uint32_t*>(render_pass_num);
   uint32_t next_vacant_buffer_index = 0;
   for (uint32_t i = 0; i < buffer_num_with_initial_state; i++) {

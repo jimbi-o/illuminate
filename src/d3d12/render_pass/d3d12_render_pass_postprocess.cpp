@@ -7,24 +7,7 @@ namespace {
 struct Param {
   BufferSizeRelativeness size_type{BufferSizeRelativeness::kPrimaryBufferRelative};
   uint32_t rtv_index{0};
-  void** cbv_ptr{nullptr};
-  uint32_t cbv_size{0};
 };
-auto UpdatePingpongA(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
-  float c[4]{0.0f,1.0f,1.0f,1.0f};
-  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
-}
-auto UpdatePingpongB(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
-  float c[4]{1.0f,0.0f,1.0f,1.0f};
-  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
-}
-auto UpdatePingpongC(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);
-  float c[4]{1.0f,1.0f,1.0f,1.0f};
-  memcpy(pass_vars->cbv_ptr[args_common->frame_index],  c, GetUint32(sizeof(float)) * 4);
-}
 } // namespace anonymous
 void* RenderPassPostprocess::Init(RenderPassFuncArgsInit* args, const uint32_t render_pass_index) {
   auto param = AllocateSystem<Param>();
@@ -39,34 +22,7 @@ void* RenderPassPostprocess::Init(RenderPassFuncArgsInit* args, const uint32_t r
       break;
     }
   }
-  for (uint32_t i = 0; i < args->render_pass_list[render_pass_index].buffer_num; i++) {
-    if (buffer_list[i].state == ResourceStateType::kCbv) {
-      const auto buffer_config_index = args->render_pass_list[render_pass_index].buffer_list[i].buffer_index;
-      param->cbv_size = static_cast<uint32_t>(args->buffer_config_list[buffer_config_index].width);
-      param->cbv_ptr = AllocateArraySystem<void*>(args->frame_buffer_num);
-      for (uint32_t j = 0; j < args->frame_buffer_num; j++) {
-        param->cbv_ptr[j] = MapResource(GetResource(*args->buffer_list, buffer_config_index, j), param->cbv_size);
-      }
-      break;
-    }
-  }
   return param;
-}
-void RenderPassPostprocess::Update([[maybe_unused]]RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
-  switch (GetRenderPass(args_common, args_per_pass).name) {
-    case SID("pingpong-a"): {
-      UpdatePingpongA(args_common, args_per_pass);
-      break;
-    }
-    case SID("pingpong-b"): {
-      UpdatePingpongB(args_common, args_per_pass);
-      break;
-    }
-    case SID("pingpong-c"): {
-      UpdatePingpongC(args_common, args_per_pass);
-      break;
-    }
-  }
 }
 void RenderPassPostprocess::Render(RenderPassFuncArgsRenderCommon* args_common, RenderPassFuncArgsRenderPerPass* args_per_pass) {
   auto pass_vars = static_cast<const Param*>(args_per_pass->pass_vars_ptr);

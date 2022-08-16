@@ -38,63 +38,11 @@ static const uint32_t kInvalidIndex = ~0U;
 static const uint32_t kExtraDescriptorHandleNumCbvSrvUav = 1; // imgui font
 static const uint32_t kImguiGpuHandleIndex = 0;
 static const uint32_t kSceneGpuHandleIndex = 1;
-enum SystemBuffer : uint32_t {
-  kSystemBufferCamera = 0,
-  kSystemBufferLight,
-  kSystemBufferNum,
-};
-const char* kSystemBufferNames[] = {
-  "camera",
-  "light",
-};
-const StrHash kSystemBufferNameHash[] = {
-  SID("camera"),
-  SID("light"),
-};
-const uint32_t kSystemBufferSize[] = {
-  AlignAddress(GetUint32(sizeof(shader::SceneCameraData)), 256),
-  AlignAddress(GetUint32(sizeof(shader::SceneLightData)), 256),
-};
 auto GetTestJson(const char* const filename) {
   std::ifstream file(filename);
   nlohmann::json json;
   file >> json;
   return json;
-}
-auto AddSystemBuffers(nlohmann::json* json) {
-  if (!json->contains("buffer")) {
-    (*json)["buffer"] = nlohmann::json::array();
-  }
-  auto& buffer_list = json->at("buffer");
-  {
-    auto buffer_json = R"(
-    {
-      "name": "swapchain",
-      "descriptor_only": true
-    }
-    )"_json;
-    buffer_list.push_back(buffer_json);
-  }
-  {
-    static_assert(std::size(kSystemBufferNames) == kSystemBufferNum);
-    static_assert(std::size(kSystemBufferSize) == kSystemBufferNum);
-    static_assert(std::size(kSystemBufferNameHash) == kSystemBufferNum);
-    auto buffer_json = R"(
-    {
-      "frame_buffered": true,
-      "format": "UNKNOWN",
-      "heap_type": "upload",
-      "dimension": "buffer",
-      "size_type": "absolute",
-      "initial_state": "generic_read"
-    }
-    )"_json;
-    for (uint32_t i = 0; i < kSystemBufferNum; i++) {
-      buffer_json["name"]  = kSystemBufferNames[i];
-      buffer_json["width"] = kSystemBufferSize[i];
-      buffer_list.push_back(buffer_json);
-    }
-  }
 }
 auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass* render_pass_list) {
   RenderPassFunctionList funcs{};
@@ -126,7 +74,6 @@ auto PrepareRenderPassFunctions(const uint32_t render_pass_num, const RenderPass
       }
       case SID("postprocess"): {
         funcs.init[i]             = RenderPassPostprocess::Init;
-        funcs.update[i]           = RenderPassPostprocess::Update;
         funcs.render[i]           = RenderPassPostprocess::Render;
         break;
       }
@@ -286,35 +233,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
-auto PrepareSceneCbvBuffer(BufferList* buffer_list, const uint32_t frame_buffer_num, const uint32_t scene_cbv_buffer_config_index, const uint32_t buffer_size) {
-  auto ptr_list = AllocateArraySystem<void*>(frame_buffer_num);
-  for (uint32_t i = 0; i < frame_buffer_num; i++) {
-    ptr_list[i] = MapResource(GetResource(*buffer_list, scene_cbv_buffer_config_index, i), buffer_size);
-  }
-  return ptr_list;
-}
-auto SetValue(const DirectX::SimpleMath::Vector3& src, shader::float3* dst) {
-  dst->x = src.x;
-  dst->y = src.y;
-  dst->z = src.z;
-}
-void UpdateSceneBuffer(const RenderPassConfigDynamicData& dynamic_data, const Size2d& buffer_size, void *scene_camera_ptr, void* scene_light_ptr) {
-  using namespace DirectX::SimpleMath;
-  const auto view_matrix = Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
-  const auto aspect_ratio = static_cast<float>(buffer_size.width) / buffer_size.height;
-  const auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
-  shader::SceneCameraData scene_camera{};
-  CopyMatrix(view_matrix.m, scene_camera.view_matrix);
-  CopyMatrix(projection_matrix.m, scene_camera.projection_matrix);
-  memcpy(scene_camera_ptr, &scene_camera, sizeof(scene_camera));
-  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), view_matrix);
-  light_direction.Normalize();
-  shader::SceneLightData scene_light{};
-  scene_light.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
-  scene_light.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
-  scene_light.exposure_rate = 10.0f / dynamic_data.light_intensity;
-  memcpy(scene_light_ptr, &scene_light, sizeof(scene_light));
-}
 auto GetRenderPassQueueIndexList(const uint32_t render_pass_num, const RenderPass* render_pass_list) {
   auto render_pass_queue_index = AllocateArraySystem<uint32_t>(render_pass_num);
   for (uint32_t i = 0; i < render_pass_num; i++) {
@@ -458,11 +376,16 @@ auto RegisterGuiDebugView(const uint32_t debug_viewable_buffer_num, const char* 
   }
   ImGui::End();
 }
+auto CalcViewMatrix(const RenderPassConfigDynamicData& dynamic_data) {
+  using namespace DirectX::SimpleMath;
+  return Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
+}
 auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations) {
   RegisterGuiPerformance(time_duration_data_set, gpu_time_durations);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
   RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
+  dynamic_data->view_matrix = CalcViewMatrix(*dynamic_data);
 }
 RenderPassConfigDynamicData InitRenderPassDynamicData() {
   RenderPassConfigDynamicData dynamic_data{};
@@ -552,6 +475,114 @@ auto GatherRenderPassSyncInfoForBarriers(const uint32_t render_pass_num, const R
   }
   return std::make_tuple(wait_pass_num, signal_pass_index, render_pass_command_queue_index);
 }
+auto GetBufferWritableSize(const StrHash& buffer_name_hash) {
+  switch (buffer_name_hash) {
+    case SID("camera"): {
+      return GetUint32(sizeof(shader::SceneCameraData));
+    }
+    case SID("light"): {
+      return GetUint32(sizeof(shader::SceneLightData));
+    }
+    case SID("cbv-a"):
+    case SID("cbv-b"):
+    case SID("cbv-c"): {
+      return GetUint32(sizeof(float) * 4);
+    }
+  }
+  assert(false && "cbv not found");
+  return 0U;
+}
+auto GetBufferCreationSize(const StrHash& buffer_name_hash) {
+  return AlignAddress(GetBufferWritableSize(buffer_name_hash), 256);
+}
+auto FillCbvBufferCreationSize(const uint32_t buffer_num, const StrHash* buffer_name_hash, BufferConfig** buffer_config_list) {
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    if (((*buffer_config_list)[i].descriptor_type_flags & kDescriptorTypeFlagCbv) == 0) { continue; }
+    (*buffer_config_list)[i].width = static_cast<float>(GetBufferCreationSize(buffer_name_hash[i]));
+    (*buffer_config_list)[i].height = 1.0f;
+  }
+}
+auto PrepareCbvPointers(const uint32_t buffer_num, const BufferConfig* buffer_config_list, const StrHash* buffer_name_hash, const uint32_t frame_buffer_num, BufferList* buffer_list) {
+  auto cbv_ptr_list = AllocateArrayScene<void**>(buffer_num);
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    if ((buffer_config_list[i].descriptor_type_flags & kDescriptorTypeFlagCbv) == 0) {
+      cbv_ptr_list[i] = nullptr;
+      continue;
+    }
+    assert(buffer_config_list[i].pingpong == false && "cbv pingpong buffer not implmented");
+    const auto allocated_num = GetBufferAllocationNum(buffer_config_list[i], frame_buffer_num);
+    cbv_ptr_list[i] = AllocateArrayScene<void*>(allocated_num);
+    auto buffer_size = GetBufferWritableSize(buffer_name_hash[i]);
+    for (uint32_t j = 0; j < allocated_num; j++) {
+      cbv_ptr_list[i][j] = MapResource(GetResource(*buffer_list, i, j), buffer_size);
+    }
+  }
+  return cbv_ptr_list;
+}
+void SetCameraCbv(const RenderPassConfigDynamicData& dynamic_data, const MainBufferSize& buffer_size, void* dst) {
+  using namespace DirectX::SimpleMath;
+  const auto aspect_ratio = static_cast<float>(buffer_size.primarybuffer.width) / buffer_size.primarybuffer.height;
+  const auto projection_matrix = Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
+  shader::SceneCameraData scene_camera{};
+  CopyMatrix(dynamic_data.view_matrix.m, scene_camera.view_matrix);
+  CopyMatrix(projection_matrix.m, scene_camera.projection_matrix);
+  memcpy(dst, &scene_camera, sizeof(scene_camera));
+}
+void SetLightCbv(const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+  using namespace DirectX::SimpleMath;
+  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
+  light_direction.Normalize();
+  shader::SceneLightData scene_light{};
+  scene_light.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
+  scene_light.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
+  scene_light.exposure_rate = 10.0f / dynamic_data.light_intensity;
+  memcpy(dst, &scene_light, sizeof(scene_light));
+}
+void SetPingpongACbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+  float c[4]{0.0f,1.0f,1.0f,1.0f};
+  memcpy(dst, c, GetUint32(sizeof(float)) * 4);
+}
+void SetPingpongBCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+  float c[4]{1.0f,0.0f,1.0f,1.0f};
+  memcpy(dst, c, GetUint32(sizeof(float)) * 4);
+}
+void SetPingpongCCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, [[maybe_unused]]const MainBufferSize& buffer_size, void* dst) {
+  float c[4]{1.0f,1.0f,1.0f,1.0f};
+  memcpy(dst, c, GetUint32(sizeof(float)) * 4);
+}
+using CbvUpdateFunction = void (*)(const RenderPassConfigDynamicData&, const MainBufferSize&, void*);
+auto PrepareCbvUpdateFunctions(const uint32_t buffer_num, const StrHash* buffer_name_hash) {
+  auto cbv_update_functions = AllocateArrayScene<CbvUpdateFunction>(buffer_num);
+  for (uint32_t i = 0; i < buffer_num; i++) {
+    switch (buffer_name_hash[i]) {
+      case SID("camera"): {
+        cbv_update_functions[i] = SetCameraCbv;
+        break;
+      }
+      case SID("light"): {
+        cbv_update_functions[i] = SetLightCbv;
+        break;
+      }
+      case SID("cbv-a"): {
+        cbv_update_functions[i] = SetPingpongACbv;
+        break;
+      }
+      case SID("cbv-b"): {
+        cbv_update_functions[i] = SetPingpongBCbv;
+        break;
+      }
+      case SID("cbv-c"): {
+        cbv_update_functions[i] = SetPingpongCCbv;
+        break;
+      }
+      default: {
+        cbv_update_functions[i] = nullptr;
+        break;
+      }
+    }
+  }
+  return cbv_update_functions;
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -577,8 +608,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
-  uint32_t system_buffer_index_list[kSystemBufferNum]{};
-  std::fill(system_buffer_index_list, system_buffer_index_list + kSystemBufferNum, kInvalidIndex);
   float prev_mouse_pos[2]{};
   uint32_t render_pass_index_output_to_swapchain{};
   uint32_t render_pass_buffer_index_primary_input{};
@@ -587,6 +616,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
 #endif
   auto frame_loop_num = kFrameLoopNum;
   auto material_pack = BuildMaterialList(device.Get(), GetTestJson("material.json"));
+  void*** cbv_ptr_list{nullptr}; // [buffer_config_index][frame_index]
+  CbvUpdateFunction* cbv_update_functions{nullptr};
   {
     nlohmann::json json;
     SUBCASE("deferred.json") {
@@ -601,7 +632,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       json = GetTestJson("config.json");
       frame_loop_num = 5;
     }
-    AddSystemBuffers(&json);
     auto [buffer_name_list, buffer_name_hash_list] = ParseRenderGraphJson(json,
                                                                           material_pack.material_list.material_num,
                                                                           material_pack.config.material_hash_list,
@@ -652,7 +682,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
 #endif
     PrintNames(render_graph.buffer_num, buffer_name_list);
+    FillCbvBufferCreationSize(render_graph.buffer_num, buffer_name_hash_list, &render_graph.buffer_list);
     buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator);
+    cbv_ptr_list = PrepareCbvPointers(render_graph.buffer_num, render_graph.buffer_list, buffer_name_hash_list, render_graph.frame_buffer_num, &buffer_list);
+    cbv_update_functions = PrepareCbvUpdateFunctions(render_graph.buffer_num, buffer_name_hash_list);
     CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num, render_graph.descriptor_handle_num_per_type));
     CHECK_UNARY(command_queue_signals.Init(device.Get(), render_graph.command_queue_num, command_list_set.GetCommandQueueList()));
     for (uint32_t i = 0; i < buffer_list.buffer_allocation_num; i++) {
@@ -679,14 +712,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       auto strhash = buffer_name_hash_list[buffer_config_index];
       if (strhash == SID("swapchain")) {
         swapchain_buffer_allocation_index = i;
-      } else {
-        for (uint32_t j = 0; j < kSystemBufferNum; j++) {
-          if (system_buffer_index_list[j] != kInvalidIndex) { continue; }
-          if (strhash == kSystemBufferNameHash[j]) {
-            system_buffer_index_list[j] = buffer_config_index;
-            break;
-          }
-        }
       }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
@@ -743,10 +768,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   const auto scene_gpu_handles_sampler = descriptor_gpu.WriteToPersistentSamplerHandleRange(0, scene_data.sampler_num, scene_data.cpu_handles[kSceneDescriptorSampler], device.Get());
   auto dynamic_data = InitRenderPassDynamicData();
   TimeDurationDataSet time_duration_data_set{};
-  void** scene_cbv_ptr[kSystemBufferNum]{};
-  for (uint32_t i = 0; i < kSystemBufferNum; i++) {
-    scene_cbv_ptr[i] = PrepareSceneCbvBuffer(&buffer_list, render_graph.frame_buffer_num, system_buffer_index_list[i], kSystemBufferSize[i]);
-  }
   auto prev_command_list = AllocateArraySystem<D3d12CommandList*>(render_graph.command_queue_num);
   for (uint32_t i = 0; i < render_graph.command_queue_num; i++) {
     prev_command_list[i] = nullptr;
@@ -783,7 +804,6 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ClearGpuTimeDuration(&gpu_time_durations_accumulated);
     }
     const auto frame_index = i % render_graph.frame_buffer_num;
-    UpdateSceneBuffer(dynamic_data, main_buffer_size.primarybuffer, scene_cbv_ptr[kSystemBufferCamera][frame_index], scene_cbv_ptr[kSystemBufferLight][frame_index]);
     ConfigurePingPongBufferWriteToSubList(render_graph.render_pass_num, render_graph.render_pass_list, render_pass_enable_flag, render_graph.buffer_num, write_to_sub);
     auto [render_pass_buffer_allocation_index_list, render_pass_buffer_state_list] = ConfigureRenderPassBufferAllocationIndex(render_graph.render_pass_num, render_graph.render_pass_list, buffer_list, write_to_sub, render_graph.buffer_list, frame_index);
     command_queue_signals.WaitOnCpu(device.Get(), frame_signals[frame_index]);
@@ -817,7 +837,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     const auto swapchain_final_state = ResourceStateType::kPresent;
     auto render_pass_buffer_num_list = GetRenderPassBufferNumList(render_graph.render_pass_num, render_graph.render_pass_list, MemoryType::kFrame);
     auto [render_pass_wait_pass_num, render_pass_signal_pass_index, render_pass_command_queue_index] = GatherRenderPassSyncInfoForBarriers(render_graph.render_pass_num, render_graph.render_pass_list);
-    const auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(render_graph.buffer_num, render_graph.render_pass_num,
+    const auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_list.buffer_allocation_num, render_graph.render_pass_num,
                                                                                 render_pass_buffer_num_list, render_pass_buffer_allocation_index_list, render_pass_buffer_state_list,
                                                                                 render_pass_wait_pass_num, render_pass_signal_pass_index, render_pass_command_queue_index, render_graph.command_queue_type,
                                                                                 1, &swapchain_buffer_allocation_index, &swapchain_initial_state,
@@ -845,6 +865,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {
       if (!render_pass_enable_flag[k]) { continue; }
       RenderPassUpdate(&render_pass_function_list, &args_common, &args_per_pass[k]);
+    }
+    for (uint32_t k = 0; k < render_graph.buffer_num; k++) {
+      if (cbv_update_functions[k] == nullptr) { continue; }
+      const auto cbv_index = render_graph.buffer_list[k].frame_buffered ? frame_index : 0;
+      (*(cbv_update_functions[k]))(dynamic_data, main_buffer_size, cbv_ptr_list[k][cbv_index]);
     }
     // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {

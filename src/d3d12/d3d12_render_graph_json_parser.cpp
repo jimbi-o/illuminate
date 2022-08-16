@@ -351,6 +351,18 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
       buffer_name_hash_list[i] = CalcStrHash(buffer_name_list[i]);
     }
   }
+  {
+    // add swapchain buffer
+    const auto swapchain_index = next_vacant_buffer_index;
+    next_vacant_buffer_index++;
+    buffer_config_list[swapchain_index].buffer_index = swapchain_index;
+    buffer_config_list[swapchain_index].descriptor_only = true;
+    const char name[] = "swapchain";
+    const auto namelen = GetUint32(strlen(name)) + 1;
+    buffer_name_list[swapchain_index] = AllocateArrayFrame<char>(namelen);
+    strncpy_s(buffer_name_list[swapchain_index], namelen, name, namelen);
+    buffer_name_hash_list[swapchain_index] = CalcStrHash(name);
+  }
   if (j.contains("sampler")) {
     auto& sampler_list = j.at("sampler");
     r.sampler_num = static_cast<uint32_t>(sampler_list.size());
@@ -487,6 +499,15 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
     if (config.descriptor_type_flags & kDescriptorTypeFlagDsv) {
       config.clear_value.DepthStencil.Depth = 1.0f;
       config.clear_value.DepthStencil.Stencil = 0;
+    }
+    if (config.descriptor_type_flags & kDescriptorTypeFlagCbv) {
+      config.frame_buffered = true;
+      config.format = DXGI_FORMAT_UNKNOWN;
+      config.layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+      config.heap_type = D3D12_HEAP_TYPE_UPLOAD;
+      config.dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+      config.size_type = BufferSizeRelativeness::kAbsolute;
+      config.initial_state = ResourceStateType::kGenericRead;
     }
   }
   // signals

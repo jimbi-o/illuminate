@@ -1,5 +1,6 @@
 #ifndef ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
 #define ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
+#include "SimpleMath.h"
 namespace illuminate {
 class DescriptorCpu;
 class DescriptorGpu;
@@ -17,6 +18,7 @@ struct RenderPassFuncArgsInit {
   RenderPass* render_pass_list{nullptr};
 };
 struct RenderPassConfigDynamicData {
+  DirectX::SimpleMath::Matrix view_matrix;
   float camera_pos[3]{};
   float camera_focus[3]{};
   float fov_vertical{40.0f};

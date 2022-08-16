@@ -40,33 +40,6 @@
       "size_type": "swapchain_relative",
       "initial_state": "uav",
       "format": "R8G8B8A8_UNORM"
-    },
-    {
-      "name": "cbv-a",
-      "frame_buffered": true,
-      "heap_type": "upload",
-      "dimension": "buffer",
-      "size_type": "absolute",
-      "width": 256,
-      "initial_state": "generic_read"
-    },
-    {
-      "name": "cbv-b",
-      "frame_buffered": true,
-      "heap_type": "upload",
-      "dimension": "buffer",
-      "size_type": "absolute",
-      "width": 256,
-      "initial_state": "generic_read"
-    },
-    {
-      "name": "cbv-c",
-      "frame_buffered": true,
-      "heap_type": "upload",
-      "dimension": "buffer",
-      "size_type": "absolute",
-      "width": 256,
-      "initial_state": "generic_read"
     }
   ],
   "sampler": [
