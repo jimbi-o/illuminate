@@ -825,9 +825,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   auto gpu_time_durations_average = GetEmptyGpuTimeDurations(render_graph.command_queue_num, render_pass_num_per_queue, MemoryType::kSystem);
   bool debug_buffer_view_enabled = false;
   int32_t debug_buffer_selected_index = 0;
-  ResetAllocation(MemoryType::kFrame);
   for (uint32_t i = 0; i < frame_loop_num; i++) {
     if (!window.ProcessMessage()) { break; }
+    ResetAllocation(MemoryType::kFrame);
     const auto gpu_time_durations_per_frame = GetGpuTimeDurationsPerFrame(render_graph.command_queue_num, render_pass_num_per_queue, gpu_timestamp_set, MemoryType::kFrame);
     AccumulateGpuTimeDuration(gpu_time_durations_per_frame, &gpu_time_durations_accumulated);
     if (const auto frame_count = time_duration_data_set.frame_count; UpdateTimeDuration(time_duration_data_set.frame_count_reset_time_threshold_msec, &time_duration_data_set.frame_count, &time_duration_data_set.last_time_point, &time_duration_data_set.delta_time_msec, &time_duration_data_set.duration_msec_sum, &time_duration_data_set.prev_duration_per_frame_msec_avg)) {

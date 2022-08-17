@@ -30,13 +30,19 @@ void ClearAllAllocations() {
   ResetAllocation(MemoryType::kFrame);
 }
 void* AllocateSystem(const size_t bytes, const size_t alignment_in_bytes) {
-  return system_memory_allocator.Allocate(bytes, alignment_in_bytes);
+  auto addr = system_memory_allocator.Allocate(bytes, alignment_in_bytes);
+  assert(addr != nullptr);
+  return addr;
 }
 void* AllocateScene(const size_t bytes, const size_t alignment_in_bytes) {
-  return scene_frame_memory_allocator.AllocateLower(bytes, alignment_in_bytes);
+  auto addr = scene_frame_memory_allocator.AllocateLower(bytes, alignment_in_bytes);
+  assert(addr != nullptr);
+  return addr;
 }
 void* AllocateFrame(const size_t bytes, const size_t alignment_in_bytes) {
-  return scene_frame_memory_allocator.AllocateHigher(bytes, alignment_in_bytes);
+  auto addr = scene_frame_memory_allocator.AllocateHigher(bytes, alignment_in_bytes);
+  assert(addr != nullptr);
+  return addr;
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
