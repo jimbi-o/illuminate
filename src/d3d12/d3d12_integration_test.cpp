@@ -286,20 +286,29 @@ struct TimeDurationDataSet {
   float duration_msec_sum{0.0f};
   float prev_duration_per_frame_msec_avg{0.0f};
 };
-auto RegisterGuiPerformance(const TimeDurationDataSet& time_duration_data_set, const GpuTimeDurations& gpu_time_durations) {
+auto RegisterGuiPerformance(const TimeDurationDataSet& time_duration_data_set, const GpuTimeDurations& gpu_time_durations, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index) {
   ImGui::SetNextWindowSize(ImVec2{});
   if (!ImGui::Begin("performance", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return; }
   ImGui::Text("CPU: %7.4f", time_duration_data_set.prev_duration_per_frame_msec_avg);
   ImGui::Text("GPU: %7.4f", gpu_time_durations.total_time_msec);
-  for (uint32_t i = 0; i < gpu_time_durations.command_queue_num; i++) {
-    ImGui::Text("queue%d", i);
-    for (uint32_t j = 0; j < gpu_time_durations.duration_num[i]; j++) {
-      if ((j & 1) == 0) {
-        ImGui::Text("--: %7.4f", gpu_time_durations.duration_msec[i][j]);
-      } else {
-        ImGui::Text("%2d: %7.4f", j / 2, gpu_time_durations.duration_msec[i][j]);
+  if (ImGui::BeginTable("render pass", 2)) {
+    for (uint32_t i = 0; i < gpu_time_durations.command_queue_num; i++) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("queue%d", i);
+      for (uint32_t j = 0; j < gpu_time_durations.duration_num[i]; j++) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        if ((j & 1) == 0) {
+          ImGui::Text("-");
+        } else {
+          ImGui::Text("%s", render_pass_name[serialized_render_pass_index[i][j / 2]]);
+        }
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%7.4f", gpu_time_durations.duration_msec[i][j]);
       }
     }
+    ImGui::EndTable();
   }
   ImGui::End();
 }
@@ -388,8 +397,8 @@ auto CalcProjectionMatrix(const RenderPassConfigDynamicData& dynamic_data, const
   using namespace DirectX::SimpleMath;
   return Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio) {
-  RegisterGuiPerformance(time_duration_data_set, gpu_time_durations);
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index) {
+  RegisterGuiPerformance(time_duration_data_set, gpu_time_durations, render_pass_name, serialized_render_pass_index);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
   RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
@@ -614,6 +623,19 @@ auto PrepareCbvUpdateFunctions(const uint32_t buffer_num, const StrHash* buffer_
   }
   return cbv_update_functions;
 }
+auto GetAllQueueSeirializedRenderPassIndexInQueueArrayForm(const uint32_t command_queue_num, const uint32_t* render_pass_num_per_queue, const uint32_t render_pass_num, const uint32_t* render_pass_command_queue_index) {
+  auto serialized_render_pass_index = AllocateArrayFrame<uint32_t*>(command_queue_num);
+  auto counter = AllocateArrayFrame<uint32_t>(command_queue_num);
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    serialized_render_pass_index[i] = AllocateArrayFrame<uint32_t>(render_pass_num_per_queue[i]);
+    counter[i] = 0;
+  }
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    serialized_render_pass_index[render_pass_command_queue_index[i]][counter[render_pass_command_queue_index[i]]] = i;
+    counter[render_pass_command_queue_index[i]]++;
+  }
+  return serialized_render_pass_index;
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -642,9 +664,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   float prev_mouse_pos[2]{};
   uint32_t render_pass_index_output_to_swapchain{};
   uint32_t render_pass_buffer_index_primary_input{};
-#ifdef USE_GRAPHICS_DEBUG_SCOPE
   char** render_pass_name{nullptr};
-#endif
   auto frame_loop_num = kFrameLoopNum;
   auto material_pack = BuildMaterialList(device.Get(), GetTestJson("material.json"));
   void*** cbv_ptr_list{nullptr}; // [buffer_config_index][frame_index]
@@ -763,12 +783,10 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         .render_pass_list = render_graph.render_pass_list,
       };
       render_pass_vars[i] = RenderPassInit(&render_pass_function_list, &render_pass_func_args_init, i);
-#ifdef USE_GRAPHICS_DEBUG_SCOPE
       auto pass_name = GetStringView(render_pass_list_json[i], ("name"));
       const auto str_len = GetUint32(pass_name.size())  + 1;
       render_pass_name[i] = AllocateArraySystem<char>(str_len);
       strcpy_s(render_pass_name[i], str_len, GetStringView(pass_name).data());
-#endif
       if (render_graph.render_pass_list[i].name == SID("output to swapchain")) {
         render_pass_index_output_to_swapchain = i;
         for (uint32_t j = 0; j < render_graph.render_pass_list[i].buffer_num; j++) {
@@ -882,7 +900,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       ImGui::NewFrame();
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer));
+    auto serialized_render_pass_index = GetAllQueueSeirializedRenderPassIndexInQueueArrayForm(render_graph.command_queue_num, render_pass_num_per_queue, render_graph.render_pass_num, render_pass_command_queue_index);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer), render_pass_name, serialized_render_pass_index);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
