@@ -37,6 +37,11 @@
       "name": "primary",
       "initial_state": "uav",
       "format": "R8G8B8A8_UNORM"
+    },
+    {
+      "name": "linear depth",
+      "initial_state": "uav",
+      "format": "R32_FLOAT"
     }
   ],
   "gpu_handle_num_view": 32,
@@ -73,8 +78,7 @@
       "name": "copy resource",
       "type": "copy resource",
       "enabled": true,
-      "command_queue": "queue_copy",
-      "execute": true
+      "command_queue": "queue_copy"
     },
     {
       "name": "prez",
@@ -121,7 +125,6 @@
       "name": "gbuffer",
       "type": "mesh transform",
       "enabled": true,
-      "execute": true,
       "command_queue": "queue_graphics",
       "material": "gbuffer geom",
       "buffer_list": [
@@ -175,12 +178,37 @@
       }
     },
     {
+      "name": "linear depth",
+      "type": "dispatch cs",
+      "enabled": true,
+      "command_queue": "queue_compute",
+      "wait_pass": ["prez"],
+      "material": "linear depth",
+      "buffer_list": [
+        {
+          "name": "linear_depth_cbuffer",
+          "state": "cbv"
+        },
+        {
+          "name": "dsv",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "linear depth",
+          "state": "uav"
+        }
+      ],
+      "pass_vars": {
+        "thread_group_count_x": 16,
+        "thread_group_count_y": 16
+      }
+    },
+    {
       "name": "lighting",
       "type": "dispatch cs",
       "enabled": true,
       "command_queue": "queue_compute",
       "wait_pass": ["gbuffer"],
-      "execute": true,
       "material": "brdf lighting",
       "buffer_list": [
         {
@@ -213,8 +241,8 @@
         }
       ],
       "pass_vars": {
-        "thread_group_count_x": 32,
-        "thread_group_count_y": 32
+        "thread_group_count_x": 16,
+        "thread_group_count_y": 16
       }
     },
     {
@@ -241,7 +269,6 @@
       "type": "imgui",
       "enabled": true,
       "command_queue": "queue_graphics",
-      "execute": true,
       "buffer_list": [
         {
           "name": "swapchain",

@@ -78,15 +78,13 @@
       "name": "copy resource",
       "type": "copy resource",
       "enabled": true,
-      "command_queue": "queue_copy",
-      "execute": true
+      "command_queue": "queue_copy"
     },
     {
       "name": "dispatch cs",
       "type": "dispatch cs",
       "enabled": true,
       "command_queue": "queue_compute",
-      "execute": true,
       "buffer_list": [
         {
           "name": "uav",
@@ -211,7 +209,6 @@
       "enabled": true,
       "command_queue": "queue_graphics",
       "wait_pass": ["dispatch cs"],
-      "execute": true,
       "buffer_list": [
         {
           "name": "uav",
@@ -241,7 +238,6 @@
       "type": "imgui",
       "enabled": true,
       "command_queue": "queue_graphics",
-      "execute": true,
       "buffer_list": [
         {
           "name": "swapchain",

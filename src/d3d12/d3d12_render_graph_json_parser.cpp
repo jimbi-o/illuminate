@@ -262,7 +262,7 @@ auto InitializeBufferConfig(const uint32_t buffer_index, BufferConfig* buffer) {
   buffer->raw_buffer            = false;
 }
 } // namespace
-std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, const DXGI_FORMAT* const * rtv_format_list, const DXGI_FORMAT* dsv_format, RenderGraph* graph) {
+std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, const DXGI_FORMAT* const * rtv_format_list, const DXGI_FORMAT* dsv_format, RenderGraphConfig* graph) {
   auto& r = *graph;
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
   r.primarybuffer_width = GetNum(j, "primarybuffer_width", 1);
@@ -455,7 +455,6 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
           }
         }
       } // sampler
-      dst_pass.execute = GetBool(src_pass, "execute", false);
       if (src_pass.contains("flip_pingpong")) {
         const auto& pingpong = src_pass.at("flip_pingpong");
         dst_pass.flip_pingpong_num = static_cast<uint32_t>(pingpong.size());
@@ -555,9 +554,13 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
     const auto index_direct = GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_DIRECT);
     const auto index_compute = GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COMPUTE);
     const auto index_copy = GetCommandQueueTypeIndex(D3D12_COMMAND_LIST_TYPE_COPY);
+    // +1 for last pass execution
+    r.command_allocator_num_per_queue_type[index_direct] = 1;
+    r.command_allocator_num_per_queue_type[index_compute] = 1;
+    r.command_allocator_num_per_queue_type[index_copy] = 1;
     for (uint32_t i = 0; i < r.render_pass_num; i++) {
       const auto& pass = r.render_pass_list[i];
-      if (!pass.execute) { continue; }
+      if (!pass.sends_signal) { continue; }
       switch (r.command_queue_type[pass.command_queue_index]) {
         case D3D12_COMMAND_LIST_TYPE_DIRECT: {
           r.command_allocator_num_per_queue_type[index_direct]++;

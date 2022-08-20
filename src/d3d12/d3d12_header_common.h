@@ -50,7 +50,72 @@ constexpr auto ConvertToDescriptorTypeFlag(const DescriptorType& type) {
   return kDescriptorTypeFlagNone;
 }
 enum class ResourceStateType : uint8_t { kCbv = 0, kSrvPs, kSrvNonPs, kUav, kRtv, kDsvWrite, kDsvRead, kCopySrc, kCopyDst, kCommon, kPresent, kGenericRead, };
-constexpr auto ConvertToD3d12ResourceState(const ResourceStateType type) {
+class ResourceStateTypeFlags {
+ public:
+  using FlagType = uint32_t;
+  static const FlagType kNone        = 0;
+  static const FlagType kCbv         = 1 << 0;
+  static const FlagType kSrvPs       = 1 << 1;
+  static const FlagType kSrvNonPs    = 1 << 2;
+  static const FlagType kUav         = 1 << 3;
+  static const FlagType kRtv         = 1 << 4;
+  static const FlagType kDsvWrite    = 1 << 5;
+  static const FlagType kDsvRead     = 1 << 6;
+  static const FlagType kCopySrc     = 1 << 7;
+  static const FlagType kCopyDst     = 1 << 8;
+  static const FlagType kCommon      = 1 << 9;
+  static const FlagType kPresent     = 1 << 10;
+  static const FlagType kGenericRead = 1 << 11;
+  static inline auto GetResourceStateTypeFlag(const ResourceStateType type) {
+    const auto val = static_cast<uint32_t>(type);
+    return static_cast<FlagType>(1 << val);
+  }
+  static inline D3D12_RESOURCE_STATES ConvertToD3d12ResourceState(const FlagType type) {
+    D3D12_RESOURCE_STATES retval{};
+    if (type & kCbv) {
+      retval |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    }
+    if (type & kSrvPs) {
+      retval |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    }
+    if (type & kSrvNonPs) {
+      retval |= D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    }
+    if (type & kUav) {
+      retval |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    if (type & kRtv) {
+      retval |= D3D12_RESOURCE_STATE_RENDER_TARGET;
+    }
+    if (type & kDsvWrite) {
+      retval |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    }
+    if (type & kDsvRead) {
+      retval |= D3D12_RESOURCE_STATE_DEPTH_READ;
+    }
+    if (type & kCopySrc) {
+      retval |= D3D12_RESOURCE_STATE_COPY_SOURCE;
+    }
+    if (type & kCopyDst) {
+      retval |= D3D12_RESOURCE_STATE_COPY_DEST;
+    }
+    if (type & kCommon) {
+      retval |= D3D12_RESOURCE_STATE_COMMON;
+    }
+    if (type & kPresent) {
+      retval |= D3D12_RESOURCE_STATE_PRESENT;
+    }
+    if (type & kGenericRead) {
+      retval |= D3D12_RESOURCE_STATE_GENERIC_READ;
+    }
+    return retval;
+  }
+ private:
+  ResourceStateTypeFlags() = delete;
+  ResourceStateTypeFlags(const ResourceStateTypeFlags&) = delete;
+  void operator=(const ResourceStateTypeFlags&) = delete;
+};
+constexpr D3D12_RESOURCE_STATES ConvertToD3d12ResourceState(const ResourceStateType type) {
   switch (type) {
     case ResourceStateType::kCbv:      { return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER; }
     case ResourceStateType::kSrvPs:    { return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE; }

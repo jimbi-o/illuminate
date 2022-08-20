@@ -66,8 +66,7 @@
       "name": "copy resource",
       "type": "copy resource",
       "enabled": true,
-      "command_queue": "queue_copy",
-      "execute": true
+      "command_queue": "queue_copy"
     },
     {
       "name": "forward",
@@ -144,7 +143,6 @@
       "type": "imgui",
       "enabled": true,
       "command_queue": "queue_graphics",
-      "execute": true,
       "buffer_list": [
         {
           "name": "swapchain",

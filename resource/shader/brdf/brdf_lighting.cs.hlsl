@@ -16,7 +16,7 @@ RWTexture2D<float4> primary  : register(u0);
    UAV(u0),                                    \
    visibility=SHADER_VISIBILITY_ALL)"
 [RootSignature(BrdfLightingRootsig)]
-[numthreads(32,32,1)]
+[numthreads(16,16,1)]
 void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
   uint3 location = uint3(thread_id.xy, 0);
   float d = depth.Load(location).r;

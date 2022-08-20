@@ -1,5 +1,6 @@
 target_sources(${CMAKE_PROJECT_NAME}
   PRIVATE
+  ../../resource/misc/ArrayOf.natvis
   d3d12_dxgi_core.h
   d3d12_dxgi_core.cpp
   d3d12_device.h

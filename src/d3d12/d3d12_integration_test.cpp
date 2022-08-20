@@ -30,6 +30,8 @@
 #include "render_pass/d3d12_render_pass_util.h"
 #include "shader/brdf/brdf_lighting.cs.h"
 #include "shader/include/shader_defines.h"
+#include "shader/postprocess/linear_depth.cs.h"
+#include "d3d12_integration_test_cbuffers.inl"
 #define FORCE_SRV_FOR_ALL
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
@@ -460,18 +462,14 @@ auto GetRenderPassBufferNumList(const uint32_t render_pass_num, const RenderPass
   }
   return render_pass_buffer_num_list;
 }
-auto PrepareBarrierResourceList(const uint32_t render_pass_num, const uint32_t* const* barrier_num, const BarrierConfig* const* const* barrier_config_list, const BufferList& buffer_list, const MemoryType memory_type) {
+auto PrepareBarrierResourceList(const uint32_t render_pass_num, const BarrierConfigList* barrier_config_list, const BufferList& buffer_list, const MemoryType memory_type) {
   auto resource_list = AllocateArray<ID3D12Resource***>(memory_type, render_pass_num);
   for (uint32_t i = 0; i < render_pass_num; i++) {
-    if (barrier_num[i] == 0) {
-      resource_list[i] = nullptr;
-      continue;
-    }
     resource_list[i] = AllocateArray<ID3D12Resource**>(memory_type, kBarrierExecutionTimingNum);
     for (uint32_t j = 0; j < kBarrierExecutionTimingNum; j++) {
-      resource_list[i][j] = AllocateArray<ID3D12Resource*>(memory_type, barrier_num[i][j]);
-      for (uint32_t k = 0; k < barrier_num[i][j]; k++) {
-        resource_list[i][j][k] = GetResource(buffer_list, barrier_config_list[i][j][k].buffer_allocation_index);
+      resource_list[i][j] = AllocateArray<ID3D12Resource*>(memory_type, barrier_config_list[i][j].size);
+      for (uint32_t k = 0; k < barrier_config_list[i][j].size; k++) {
+        resource_list[i][j][k] = GetResource(buffer_list, barrier_config_list[i][j].array[k].buffer_allocation_index);
       }
     }
   }
@@ -494,20 +492,11 @@ auto GatherRenderPassSyncInfoForBarriers(const uint32_t render_pass_num, const R
   return std::make_tuple(wait_pass_num, signal_pass_index, render_pass_command_queue_index);
 }
 auto GetBufferWritableSize(const StrHash& buffer_name_hash) {
-  switch (buffer_name_hash) {
-    case SID("camera"): {
-      return GetUint32(sizeof(shader::SceneCameraData));
-    }
-    case SID("light"): {
-      return GetUint32(sizeof(shader::SceneLightData));
-    }
-    case SID("deferred_lighting_cbuffer"): {
-      return GetUint32(sizeof(shader::BrdfLightingCBuffer));
-    }
-    case SID("cbv-a"):
-    case SID("cbv-b"):
-    case SID("cbv-c"): {
-      return GetUint32(sizeof(float) * 4);
+  static_assert(countof(kCBufferNameHash) == countof(kCBufferSize));
+  constexpr auto num = countof(kCBufferNameHash);
+  for (uint32_t i = 0; i < num; i++) {
+    if (kCBufferNameHash[i] == buffer_name_hash) {
+      return (kCBufferSize[i]);
     }
   }
   assert(false && "cbv not found");
@@ -540,83 +529,15 @@ auto PrepareCbvPointers(const uint32_t buffer_num, const BufferConfig* buffer_co
   }
   return cbv_ptr_list;
 }
-void SetCameraCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  shader::SceneCameraData scene_camera{};
-  CopyMatrix(dynamic_data.view_matrix.m, scene_camera.view_matrix);
-  CopyMatrix(dynamic_data.projection_matrix.m, scene_camera.projection_matrix);
-  memcpy(dst, &scene_camera, sizeof(scene_camera));
-}
-void SetLightCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
-  light_direction.Normalize();
-  shader::SceneLightData scene_light{};
-  scene_light.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
-  scene_light.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
-  scene_light.exposure_rate = 10.0f / dynamic_data.light_intensity;
-  memcpy(dst, &scene_light, sizeof(scene_light));
-}
-void SetPingpongACbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  float c[4]{0.0f,1.0f,1.0f,1.0f};
-  memcpy(dst, c, GetUint32(sizeof(float)) * 4);
-}
-void SetPingpongBCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  float c[4]{1.0f,0.0f,1.0f,1.0f};
-  memcpy(dst, c, GetUint32(sizeof(float)) * 4);
-}
-void SetPingpongCCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  float c[4]{1.0f,1.0f,1.0f,1.0f};
-  memcpy(dst, c, GetUint32(sizeof(float)) * 4);
-}
-void SetBrdfLightingCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
-  light_direction.Normalize();
-  shader::BrdfLightingCBuffer params{};
-  // https://stackoverflow.com/questions/11277501/how-to-recover-view-space-position-given-view-space-depth-value-and-ndc-xy
-  params.zbuffer_to_linear_params = {
-    dynamic_data.projection_matrix.m[0][0],
-    dynamic_data.projection_matrix.m[1][1],
-    dynamic_data.projection_matrix.m[2][2],
-    dynamic_data.projection_matrix.m[3][2],
-  };
-  params.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
-  params.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
-  params.exposure_rate = 10.0f / dynamic_data.light_intensity;
-  memcpy(dst, &params, sizeof(params));
-}
-using CbvUpdateFunction = void (*)(const RenderPassConfigDynamicData&, void*);
 auto PrepareCbvUpdateFunctions(const uint32_t buffer_num, const StrHash* buffer_name_hash) {
+  static_assert(countof(kCBufferNameHash) == countof(kCBufferFunctions));
   auto cbv_update_functions = AllocateArrayScene<CbvUpdateFunction>(buffer_num);
+  constexpr auto name_num = countof(kCBufferNameHash);
   for (uint32_t i = 0; i < buffer_num; i++) {
-    switch (buffer_name_hash[i]) {
-      case SID("camera"): {
-        cbv_update_functions[i] = SetCameraCbv;
-        break;
-      }
-      case SID("light"): {
-        cbv_update_functions[i] = SetLightCbv;
-        break;
-      }
-      case SID("deferred_lighting_cbuffer"): {
-        cbv_update_functions[i] = SetBrdfLightingCbv;
-        break;
-      }
-      case SID("cbv-a"): {
-        cbv_update_functions[i] = SetPingpongACbv;
-        break;
-      }
-      case SID("cbv-b"): {
-        cbv_update_functions[i] = SetPingpongBCbv;
-        break;
-      }
-      case SID("cbv-c"): {
-        cbv_update_functions[i] = SetPingpongCCbv;
-        break;
-      }
-      default: {
-        cbv_update_functions[i] = nullptr;
+    cbv_update_functions[i] = nullptr;
+    for (uint32_t j = 0; j < name_num; j++) {
+      if (buffer_name_hash[i] == kCBufferNameHash[j]) {
+        cbv_update_functions[i] = kCBufferFunctions[j];
         break;
       }
     }
@@ -635,6 +556,34 @@ auto GetAllQueueSeirializedRenderPassIndexInQueueArrayForm(const uint32_t comman
     counter[render_pass_command_queue_index[i]]++;
   }
   return serialized_render_pass_index;
+}
+auto ConvertToResourceStateTypeFlags(const uint32_t render_pass_num, const uint32_t* const render_pass_buffer_num_list, const ResourceStateType* const* render_pass_buffer_state_list) {
+  auto render_pass_buffer_state_list_for_barrier = AllocateAndFillArrayFrame(render_pass_num, (ResourceStateTypeFlags::FlagType*)nullptr);
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    render_pass_buffer_state_list_for_barrier[i] = AllocateArrayFrame<ResourceStateTypeFlags::FlagType>(render_pass_buffer_num_list[i]);
+    for (uint32_t j = 0; j < render_pass_buffer_num_list[i]; j++) {
+      render_pass_buffer_state_list_for_barrier[i][j] = ResourceStateTypeFlags::GetResourceStateTypeFlag(render_pass_buffer_state_list[i][j]);
+    }
+  }
+  return render_pass_buffer_state_list_for_barrier;
+}
+auto UpdateBufferFinalState(const uint32_t render_pass_num, const BarrierConfigList * barrier_config_list, ResourceStateTypeFlags::FlagType* prev_buffer_final_state) {
+  for (uint32_t i = 0; i < render_pass_num; i++) {
+    for (uint32_t j = 0; j < kBarrierExecutionTimingNum; j++) {
+      for (uint32_t k = 0; k < barrier_config_list[i][j].size; k++) {
+        auto& barrier = barrier_config_list[i][j].array[k];
+        prev_buffer_final_state[barrier.buffer_allocation_index] = barrier.state_after;
+      }
+    }
+  }
+}
+auto GatherBufferInitialState(const uint32_t buffer_allocation_num, const BufferConfig* buffer_config_list, const BufferList& buffer_list) {
+  auto buffer_initial_state = AllocateArrayFrame<ResourceStateTypeFlags::FlagType>(buffer_allocation_num);
+  for (uint32_t i = 0; i < buffer_allocation_num; i++) {
+    const auto& buffer_config = buffer_config_list[buffer_list.buffer_config_index[i]];
+    buffer_initial_state[i] = ResourceStateTypeFlags::GetResourceStateTypeFlag(buffer_config.initial_state);
+  }
+  return buffer_initial_state;
 }
 } // namespace anonymous
 } // namespace illuminate
@@ -657,7 +606,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   DescriptorCpu descriptor_cpu;
   BufferList buffer_list;
   DescriptorGpu descriptor_gpu;
-  RenderGraph render_graph;
+  RenderGraphConfig render_graph;
   void** render_pass_vars{nullptr};
   RenderPassFunctionList render_pass_function_list{};
   uint32_t swapchain_buffer_allocation_index{kInvalidIndex};
@@ -669,6 +618,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   auto material_pack = BuildMaterialList(device.Get(), GetTestJson("material.json"));
   void*** cbv_ptr_list{nullptr}; // [buffer_config_index][frame_index]
   CbvUpdateFunction* cbv_update_functions{nullptr};
+  ResourceStateTypeFlags::FlagType* prev_buffer_final_state{nullptr};
   {
     nlohmann::json json;
     SUBCASE("deferred.json") {
@@ -735,6 +685,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     PrintNames(render_graph.buffer_num, buffer_name_list);
     FillCbvBufferCreationSize(render_graph.buffer_num, buffer_name_hash_list, &render_graph.buffer_list);
     buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator);
+    prev_buffer_final_state = GatherBufferInitialState(buffer_list.buffer_allocation_num, render_graph.buffer_list, buffer_list);
     cbv_ptr_list = PrepareCbvPointers(render_graph.buffer_num, render_graph.buffer_list, buffer_name_hash_list, render_graph.frame_buffer_num, &buffer_list);
     cbv_update_functions = PrepareCbvUpdateFunctions(render_graph.buffer_num, buffer_name_hash_list);
     CHECK_UNARY(descriptor_cpu.Init(device.Get(), buffer_list.buffer_allocation_num, render_graph.descriptor_handle_num_per_type));
@@ -763,6 +714,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       auto strhash = buffer_name_hash_list[buffer_config_index];
       if (strhash == SID("swapchain")) {
         swapchain_buffer_allocation_index = i;
+        logdebug("swapchain config:{} allocation:{}", buffer_config_index, swapchain_buffer_allocation_index);
       }
     }
     for (uint32_t i = 0; i < render_graph.sampler_num; i++) {
@@ -882,17 +834,19 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       args_per_pass[j].gpu_handles_sampler = PrepareGpuHandlesSamplerList(device.Get(), render_pass, &descriptor_cpu, &descriptor_gpu, scene_gpu_handles_sampler);
     }
     // setup barriers
-    const auto swapchain_initial_state = ResourceStateType::kPresent;
-    const auto swapchain_final_state = ResourceStateType::kPresent;
     auto render_pass_buffer_num_list = GetRenderPassBufferNumList(render_graph.render_pass_num, render_graph.render_pass_list, MemoryType::kFrame);
+    auto render_pass_buffer_state_list_for_barrier = ConvertToResourceStateTypeFlags(render_graph.render_pass_num, render_pass_buffer_num_list, render_pass_buffer_state_list);
+    auto buffer_final_state = AllocateAndFillArrayFrame(buffer_list.buffer_allocation_num, ResourceStateTypeFlags::kNone);
+    prev_buffer_final_state[swapchain_buffer_allocation_index] = ResourceStateTypeFlags::kPresent;
+    buffer_final_state[swapchain_buffer_allocation_index]      = ResourceStateTypeFlags::kPresent;
     auto [render_pass_wait_pass_num, render_pass_signal_pass_index, render_pass_command_queue_index] = GatherRenderPassSyncInfoForBarriers(render_graph.render_pass_num, render_graph.render_pass_list);
-    const auto [barrier_num, barrier_config_list] = ConfigureBarrierTransitions(buffer_list.buffer_allocation_num, render_graph.render_pass_num,
-                                                                                render_pass_buffer_num_list, render_pass_buffer_allocation_index_list, render_pass_buffer_state_list,
-                                                                                render_pass_wait_pass_num, render_pass_signal_pass_index, render_pass_command_queue_index, render_graph.command_queue_type,
-                                                                                1, &swapchain_buffer_allocation_index, &swapchain_initial_state,
-                                                                                1, &swapchain_buffer_allocation_index, &swapchain_final_state,
-                                                                                MemoryType::kFrame);
-    auto barrier_resource_list = PrepareBarrierResourceList(render_graph.render_pass_num, barrier_num, barrier_config_list, buffer_list, MemoryType::kFrame);
+    const auto [barrier_config_list, state_at_frame_end] = ConfigureBarrierTransitions(buffer_list.buffer_allocation_num, render_graph.render_pass_num,
+                                                                                       render_pass_buffer_num_list, render_pass_buffer_allocation_index_list, render_pass_buffer_state_list_for_barrier,
+                                                                                       render_pass_wait_pass_num, render_pass_signal_pass_index, render_pass_command_queue_index, render_graph.command_queue_type,
+                                                                                       prev_buffer_final_state, buffer_final_state,
+                                                                                       MemoryType::kFrame);
+    memcpy(prev_buffer_final_state, state_at_frame_end, sizeof(ResourceStateTypeFlags::FlagType) * buffer_list.buffer_allocation_num);
+    auto barrier_resource_list = PrepareBarrierResourceList(render_graph.render_pass_num, barrier_config_list, buffer_list, MemoryType::kFrame);
     {
       // imgui
       ImGui_ImplDX12_NewFrame();
@@ -928,7 +882,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       for (uint32_t l = 0; l < render_pass.wait_pass_num; l++) {
         CHECK_UNARY(command_queue_signals.RegisterWaitOnCommandQueue(render_pass.signal_queue_index[l], render_pass_queue_index[k], render_pass_signal[render_pass.signal_pass_index[l]]));
       }
-      if (barrier_num[0][k] == 0 && barrier_num[1][k] == 0 && !IsRenderPassRenderNeeded(&render_pass_function_list, &args_common, &args_per_pass[k])) { continue; }
+      if (barrier_config_list[0][k].size == 0 && barrier_config_list[1][k].size == 0 && !IsRenderPassRenderNeeded(&render_pass_function_list, &args_common, &args_per_pass[k])) { continue; }
       auto command_list = prev_command_list[render_pass_queue_index[k]];
       if (command_list == nullptr) {
         command_list = command_list_set.GetCommandList(device.Get(), render_pass_queue_index[k]); // TODO decide command list reuse policy for multi-thread
@@ -945,9 +899,9 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       if (command_list && render_graph.command_queue_type[render_pass_queue_index[k]] != D3D12_COMMAND_LIST_TYPE_COPY) {
         descriptor_gpu.SetDescriptorHeapsToCommandList(1, &command_list);
       }
-      ExecuteBarrier(command_list, barrier_num[k][0], barrier_config_list[k][0], barrier_resource_list[k][0]);
+      ExecuteBarrier(command_list, barrier_config_list[k][0].size, barrier_config_list[k][0].array, barrier_resource_list[k][0]);
       RenderPassRender(&render_pass_function_list, &args_common, &args_per_pass[k]);
-      ExecuteBarrier(command_list, barrier_num[k][1], barrier_config_list[k][1], barrier_resource_list[k][1]);
+      ExecuteBarrier(command_list, barrier_config_list[k][1].size, barrier_config_list[k][1].array, barrier_resource_list[k][1]);
 #ifdef USE_GRAPHICS_DEBUG_SCOPE
       if (!IsDebuggerPresent() || command_list && render_graph.command_queue_type[render_pass_queue_index[k]] != D3D12_COMMAND_LIST_TYPE_COPY) {
         // debugger issues an error on copy queue
@@ -957,15 +911,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       EndGpuTimestamp(render_pass_index_per_queue, render_pass_queue_index, k, &gpu_timestamp_set, command_list);
       const auto is_last_pass_per_queue = (last_pass_per_queue[render_pass_queue_index[k]] == k);
       if (is_last_pass_per_queue) {
-        assert(render_pass.execute);
         OutputGpuTimestampToCpuVisibleBuffer(render_pass_num_per_queue, render_pass_queue_index, k, &gpu_timestamp_set, command_list);
       }
-      if (render_pass.execute) {
+      if (render_pass.sends_signal || is_last_pass_per_queue) {
         command_list_set.ExecuteCommandList(render_pass_queue_index[k]);
         prev_command_list[render_pass_queue_index[k]] = nullptr;
-      }
-      if (render_pass.sends_signal || is_last_pass_per_queue) {
-        assert(render_pass.execute);
         render_pass_signal[k] = command_queue_signals.SucceedSignal(render_pass_queue_index[k]);
         frame_signals[frame_index][render_pass_queue_index[k]] = render_pass_signal[k];
       }

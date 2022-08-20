@@ -272,6 +272,20 @@
           ]
         }
       ]
+    },
+    {
+      "name": "linear depth",
+      "rootsig": "linear depth",
+      "variations": [
+        {
+          "shaders": [
+            {
+              "file": "shader/postprocess/linear_depth.cs.hlsl",
+              "target": "cs"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

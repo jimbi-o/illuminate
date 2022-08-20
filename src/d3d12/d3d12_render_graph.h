@@ -45,7 +45,6 @@ struct RenderPass {
   RenderPassBuffer* buffer_list{nullptr};
   uint32_t max_buffer_index_offset{0};
   uint32_t material{};
-  bool execute{false};
   bool sends_signal{false};
   uint32_t wait_pass_num{0};
   uint32_t* signal_queue_index{nullptr};
@@ -55,7 +54,7 @@ struct RenderPass {
   uint32_t flip_pingpong_num{0};
   uint32_t* flip_pingpong_index_list{nullptr};
 };
-struct RenderGraph {
+struct RenderGraphConfig {
   uint32_t frame_buffer_num{0};
   uint32_t primarybuffer_width{0};
   uint32_t primarybuffer_height{0};

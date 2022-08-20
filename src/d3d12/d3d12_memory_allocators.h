@@ -46,6 +46,24 @@ template <typename T>
 auto AllocateArray(const MemoryType type, const uint32_t len, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
   return new(Allocate(type, sizeof(T) * len, alignment_in_bytes)) T[len];
 }
+template <typename T>
+auto AllocateAndFillArraySystem(const uint32_t len, const T& fill_value, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  auto ptr = AllocateArraySystem<T>(len, alignment_in_bytes);
+  std::fill(ptr, ptr + len, fill_value);
+  return ptr;
+}
+template <typename T>
+auto AllocateAndFillArrayScene(const uint32_t len, const T& fill_value, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  auto ptr = AllocateArrayScene<T>(len, alignment_in_bytes);
+  std::fill(ptr, ptr + len, fill_value);
+  return ptr;
+}
+template <typename T>
+auto AllocateAndFillArrayFrame(const uint32_t len, const T& fill_value, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
+  auto ptr = AllocateArrayFrame<T>(len, alignment_in_bytes);
+  std::fill(ptr, ptr + len, fill_value);
+  return ptr;
+}
 void ResetAllocation(const MemoryType type);
 void ClearAllAllocations();
 }
