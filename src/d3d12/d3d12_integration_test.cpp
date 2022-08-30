@@ -102,8 +102,7 @@ auto GetIndexOffsetList(const RenderPass& render_pass) {
 }
 auto PrepareGpuHandlesViewList(D3d12Device* device, const uint32_t buffer_num, const ResourceStateType* resource_state_list, const uint32_t offset_num, const uint32_t* index_offset_list, const D3D12_CPU_DESCRIPTOR_HANDLE* cpu_handle_list, DescriptorGpu* const descriptor_gpu, const D3D12_CPU_DESCRIPTOR_HANDLE& texture_list_cpu_handle, const D3D12_GPU_DESCRIPTOR_HANDLE& texture_list_gpu_handle) {
   if (buffer_num == 0) { return (D3D12_GPU_DESCRIPTOR_HANDLE*)nullptr; }
-  auto desc_num_list = AllocateArrayFrame<uint32_t>(offset_num);
-  std::fill(desc_num_list, desc_num_list + offset_num, 0);
+  auto desc_num_list = AllocateAndFillArrayFrame(offset_num, 0U);
   auto copy_src_cpu_handles = AllocateArrayFrame<D3D12_CPU_DESCRIPTOR_HANDLE*>(offset_num);
   for (uint32_t i = 0; i < offset_num; i++) {
     copy_src_cpu_handles[i] = AllocateArrayFrame<D3D12_CPU_DESCRIPTOR_HANDLE>(buffer_num);
@@ -136,7 +135,6 @@ auto PrepareGpuHandlesSamplerList(D3d12Device* device, const RenderPass& render_
     }
   }
   const uint32_t sampler_list_num = (need_scene_sampler && render_pass.sampler_num > 1) ? 2 : 1;
-  auto gpu_handle_list = AllocateArrayFrame<D3D12_GPU_DESCRIPTOR_HANDLE>(sampler_list_num);
   auto cpu_handle_list = AllocateArrayFrame<D3D12_CPU_DESCRIPTOR_HANDLE>(render_pass.sampler_num);
   uint32_t sampler_index = 0;
   for (uint32_t s = 0; s < render_pass.sampler_num; s++) {
@@ -144,7 +142,7 @@ auto PrepareGpuHandlesSamplerList(D3d12Device* device, const RenderPass& render_
     cpu_handle_list[sampler_index].ptr = descriptor_cpu->GetHandle(render_pass.sampler_index_list[s], DescriptorType::kSampler).ptr;
     sampler_index++;
   }
-  std::fill(gpu_handle_list, gpu_handle_list + sampler_list_num, D3D12_GPU_DESCRIPTOR_HANDLE{});
+  auto gpu_handle_list = AllocateAndFillArrayFrame(sampler_list_num, D3D12_GPU_DESCRIPTOR_HANDLE{});
   if (sampler_index > 0) {
     gpu_handle_list[0] = descriptor_gpu->WriteToTransientSamplerHandleRange(render_pass.sampler_num, cpu_handle_list, device);
   }
@@ -244,9 +242,8 @@ auto GetRenderPassQueueIndexList(const uint32_t render_pass_num, const RenderPas
   return render_pass_queue_index;
 }
 auto GetRenderPassIndexPerQueue(const uint32_t command_queue_num, const uint32_t render_pass_num, const uint32_t* render_pass_queue_index) {
-  auto render_pass_num_per_queue = AllocateArraySystem<uint32_t>(command_queue_num);
+  auto render_pass_num_per_queue = AllocateAndFillArraySystem(command_queue_num, 0U);
   auto render_pass_index_per_queue = AllocateArraySystem<uint32_t>(render_pass_num);
-  std::fill(render_pass_num_per_queue, render_pass_num_per_queue + command_queue_num, 0);
   for (uint32_t i = 0; i < render_pass_num; i++) {
     render_pass_index_per_queue[i] = render_pass_num_per_queue[render_pass_queue_index[i]];
     render_pass_num_per_queue[render_pass_queue_index[i]]++;

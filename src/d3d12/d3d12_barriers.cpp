@@ -24,8 +24,7 @@ auto CollectStateTransitionInfo(const uint32_t render_pass_num,
     merged_state[i] = initial_state[i];
     initial_user_pass[i] = render_pass_num;
   }
-  auto max_transition_num = AllocateArrayFrame<uint32_t>(buffer_allocation_num);
-  std::fill(max_transition_num, max_transition_num + buffer_allocation_num, 1U); // +1 for transitioning back to initial_state for non-graphics queue buffers
+  auto max_transition_num = AllocateAndFillArrayFrame(buffer_allocation_num, 1U /*+1 for transitioning back to initial_state for non-graphics queue buffers*/);
   for (uint32_t i = 0; i < render_pass_num; i++) {
     for (uint32_t j = 0; j < render_pass_buffer_num[i]; j++) {
       const auto& buffer_id = render_pass_buffer_allocation_index_list[i][j];
@@ -79,8 +78,7 @@ auto GetResourceStateTransitionInfo(const uint32_t render_pass_num, const uint32
     resource_state_traisition_info_list[i].array = AllocateArrayFrame<ResourceStateTransitionInfo>(max_transition_num[i]);
   }
   uint32_t graphics_queue_last_pass = 0;
-  auto last_sync_graphics_queue_pass = AllocateArrayFrame<uint32_t>(render_pass_num);
-  std::fill(last_sync_graphics_queue_pass, last_sync_graphics_queue_pass + render_pass_num, render_pass_num);
+  auto last_sync_graphics_queue_pass = AllocateAndFillArrayFrame(render_pass_num, render_pass_num);
   // collect naive transitions
   for (uint32_t i = 0; i < render_pass_num; i++) {
     if (command_queue_type[render_pass_command_queue_index[i]] == D3D12_COMMAND_LIST_TYPE_DIRECT) {
