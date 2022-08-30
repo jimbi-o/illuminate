@@ -232,7 +232,7 @@
           "state": "srv_non_ps"
         },
         {
-          "name": "dsv",
+          "name": "linear depth",
           "state": "srv_non_ps"
         },
         {

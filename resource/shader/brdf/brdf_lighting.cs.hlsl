@@ -6,9 +6,9 @@
 #include "shader/include/material_functions.hlsli"
 #include "shader/mesh_transform/mesh_transform.hlsli"
 ConstantBuffer<BrdfLightingCBuffer> params : register(b0);
-Texture2D<float4> gbuffer[4] : register(t0);
-Texture2D<float>  depth      : register(t4);
-RWTexture2D<float4> primary  : register(u0);
+Texture2D<float4>   gbuffer[4]   : register(t0);
+Texture2D<float>    linear_depth : register(t4);
+RWTexture2D<float4> primary      : register(u0);
 #define BrdfLightingRootsig                    \
   "DescriptorTable(                            \
    CBV(b0),                                    \
@@ -19,12 +19,11 @@ RWTexture2D<float4> primary  : register(u0);
 [numthreads(16,16,1)]
 void main(uint3 thread_id: SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID) {
   uint3 location = uint3(thread_id.xy, 0);
-  float d = depth.Load(location).r;
+  float d = linear_depth.Load(location).r;
   float4 gbuffer1 = gbuffer[1].Load(location);
   float4 gbuffer0 = gbuffer[0].Load(location);
   float4 gbuffer2 = gbuffer[2].Load(location);
   float4 gbuffer3 = gbuffer[3].Load(location);
-  float linear_depth = GetLinearDepth(d, params.zbuffer_to_linear_params);
   float3 v = normalize(RecoverViewSpacePosition(thread_id.xy, d, params.zbuffer_to_linear_params));
   float3 l = params.light_direction_vs;
   float3 h = normalize(l + v); // half vector
