@@ -10,6 +10,9 @@ struct float3 {
 struct float4 {
   float x, y, z, w;
 };
+struct int2 {
+  int32_t x, y;
+};
 #endif
 struct SceneCameraData {
   matrix view_matrix;

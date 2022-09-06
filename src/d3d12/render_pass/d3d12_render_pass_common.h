@@ -28,6 +28,9 @@ struct RenderPassConfigDynamicData {
   float light_direction[3]{};
   float light_color[3]{};
   float light_intensity{};
+  uint32_t screen_space_shadow_step_num{};
+  uint32_t primarybuffer_width{};
+  uint32_t primarybuffer_height{};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};

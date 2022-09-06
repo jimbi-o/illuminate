@@ -5,7 +5,7 @@
 namespace illuminate::shader {
 #endif
 struct LinearDepthCBuffer {
-  float4 zbuffer_to_linear_params;
+  float4 compact_projection_param;
 };
 #ifdef __cplusplus
 } // namespace illuminate::shader

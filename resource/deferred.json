@@ -42,6 +42,11 @@
       "name": "linear depth",
       "initial_state": "uav",
       "format": "R32_FLOAT"
+    },
+    {
+      "name": "screen space shadow",
+      "initial_state": "uav",
+      "format": "R8_UNORM"
     }
   ],
   "gpu_handle_num_view": 32,
@@ -204,6 +209,31 @@
       }
     },
     {
+      "name": "screen space shadow",
+      "type": "dispatch cs",
+      "enabled": true,
+      "command_queue": "queue_compute",
+      "material": "screen space shadow",
+      "buffer_list": [
+        {
+          "name": "screen space shadow cbuffer",
+          "state": "cbv"
+        },
+        {
+          "name": "linear depth",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "screen space shadow",
+          "state": "uav"
+        }
+      ],
+      "pass_vars": {
+        "thread_group_count_x": 16,
+        "thread_group_count_y": 16
+      }
+    },
+    {
       "name": "lighting",
       "type": "dispatch cs",
       "enabled": true,
@@ -233,6 +263,10 @@
         },
         {
           "name": "linear depth",
+          "state": "srv_non_ps"
+        },
+        {
+          "name": "screen space shadow",
           "state": "srv_non_ps"
         },
         {

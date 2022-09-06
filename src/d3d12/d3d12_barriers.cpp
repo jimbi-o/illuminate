@@ -52,8 +52,10 @@ constexpr auto GetGraphicsQueueOnlyStateFlags() {
   return ResourceStateTypeFlags::kRtv | ResourceStateTypeFlags::kDsvWrite | ResourceStateTypeFlags::kDsvRead | ResourceStateTypeFlags::kSrvPs | ResourceStateTypeFlags::kPresent;
 }
 auto IsStateValidForQueue(const D3D12_COMMAND_LIST_TYPE command_queue_type, const ResourceStateTypeFlags::FlagType state) {
-  assert(command_queue_type != D3D12_COMMAND_LIST_TYPE_DIRECT);
   switch (command_queue_type) {
+    case D3D12_COMMAND_LIST_TYPE_DIRECT: {
+      return true;
+    }
     case D3D12_COMMAND_LIST_TYPE_COMPUTE: {
       return (state & GetGraphicsQueueOnlyStateFlags()) == 0;
     }
@@ -149,6 +151,15 @@ auto GetResourceStateTransitionInfo(const uint32_t render_pass_num, const uint32
               resource_state_traisition_info_list[i].array[j].timing = 1;
             }
           }
+          if (const auto current_pass = resource_state_traisition_info_list[i].array[j].pass;
+              !IsStateValidForQueue(command_queue_type[render_pass_command_queue_index[current_pass]], state_after)) {
+            assert(last_sync_graphics_queue_pass[current_pass] < render_pass_num);
+            if (j > 0 && resource_state_traisition_info_list[i].array[j - 1].pass >= last_sync_graphics_queue_pass[current_pass]) {
+              continue;
+            }
+            resource_state_traisition_info_list[i].array[j].pass = last_sync_graphics_queue_pass[current_pass];
+            resource_state_traisition_info_list[i].array[j].timing = 1;
+          }
           resource_state_traisition_info_list[i].size = j + 1;
           resource_state_traisition_info_list[i].array[j].state_after = state_after;
           break;
@@ -177,13 +188,15 @@ auto GetResourceStateTransitionInfo(const uint32_t render_pass_num, const uint32
     D3D12_COMMAND_LIST_TYPE initial_queue = resource_state_traisition_info_list[i].size > 0 ? command_queue_type[render_pass_command_queue_index[resource_state_traisition_info_list[i].array[0].pass]] : D3D12_COMMAND_LIST_TYPE_DIRECT;
     if (auto last_state = (resource_state_traisition_info_list[i].size == 0) ? initial_state[i] : resource_state_traisition_info_list[i].array[resource_state_traisition_info_list[i].size - 1].state_after;
         initial_queue != D3D12_COMMAND_LIST_TYPE_DIRECT && !IsStateValidForQueue(initial_queue, last_state)) {
-      auto& transition = resource_state_traisition_info_list[i].array[resource_state_traisition_info_list[i].size];
-      resource_state_traisition_info_list[i].size++;
-      assert(graphics_queue_last_pass < render_pass_num);
-      transition.pass         = graphics_queue_last_pass;
-      transition.timing       = 1;
-      transition.state_before = last_state;
-      transition.state_after  = (resource_state_traisition_info_list[i].size == 1) ? initial_state[i] : resource_state_traisition_info_list[i].array[0].state_before;
+      if (resource_state_traisition_info_list[i].size == 0 || last_sync_graphics_queue_pass[resource_state_traisition_info_list[i].array[0].pass] == render_pass_num) {
+        auto& transition = resource_state_traisition_info_list[i].array[resource_state_traisition_info_list[i].size];
+        resource_state_traisition_info_list[i].size++;
+        assert(graphics_queue_last_pass < render_pass_num);
+        transition.pass         = graphics_queue_last_pass;
+        transition.timing       = 1;
+        transition.state_before = last_state;
+        transition.state_after  = (resource_state_traisition_info_list[i].size == 1) ? initial_state[i] : resource_state_traisition_info_list[i].array[0].state_before;
+      }
     }
   }
   return resource_state_traisition_info_list;
@@ -624,6 +637,123 @@ TEST_CASE("resource state transition") {
   CHECK_EQ(resource_state_traisition_info[27].array[1].timing, 1);
   CHECK_EQ(resource_state_traisition_info[27].array[1].state_before, ResourceStateTypeFlags::kSrvPs);
   CHECK_EQ(resource_state_traisition_info[27].array[1].state_after,  ResourceStateTypeFlags::kUav);
+}
+TEST_CASE("resource state transition:uav<->srv-ps/nonps") {
+  using namespace illuminate;
+  D3D12_COMMAND_LIST_TYPE command_queue_type[] = {
+    D3D12_COMMAND_LIST_TYPE_DIRECT,
+    D3D12_COMMAND_LIST_TYPE_COMPUTE,
+    D3D12_COMMAND_LIST_TYPE_COPY,
+  };
+  // 0:copy resource, 1:prez, 2:gbuffer, 3:linear depth, 4:screen space shadow, 5:lighting, 6:output to swapchain, 7:imgui
+  uint32_t render_pass_command_queue_index[] = {2,0,0,1,1,1,0,0,};
+  uint32_t wait_pass_num[] = {0,1,0,1,0,1,1,0,};
+  uint32_t signal_pass_index_1[] = {0,};
+  uint32_t signal_pass_index_3[] = {1,};
+  uint32_t signal_pass_index_5[] = {2,};
+  uint32_t signal_pass_index_6[] = {5,};
+  uint32_t* signal_pass_index[] = {
+    nullptr,
+    signal_pass_index_1,
+    nullptr,
+    signal_pass_index_3,
+    nullptr,
+    signal_pass_index_5,
+    signal_pass_index_6,
+    nullptr,
+  };
+  ResourceStateTypeFlags::FlagType initial_state[] = {
+    /*0:*/ ResourceStateTypeFlags::kSrvNonPs,
+    /*1:*/ ResourceStateTypeFlags::kSrvPs | ResourceStateTypeFlags::kSrvNonPs,
+  };
+  ResourceStateTypeFlags::FlagType final_state[] = {
+    ResourceStateTypeFlags::kNone,
+    ResourceStateTypeFlags::kNone,
+  };
+  // pass 3: linear depth
+  uint32_t render_pass_buffer_allocation_index_list_3[] = {0,1,};
+  ResourceStateTypeFlags::FlagType render_pass_resource_state_list_3[] = {
+    /*0:*/ ResourceStateTypeFlags::kUav,
+    /*1:*/ ResourceStateTypeFlags::kUav,
+  };
+  // pass 4: screen space shadow
+  uint32_t render_pass_buffer_allocation_index_list_4[] = {0,1,};
+  ResourceStateTypeFlags::FlagType render_pass_resource_state_list_4[] = {
+    /*0:*/ ResourceStateTypeFlags::kSrvNonPs,
+    /*1:*/ ResourceStateTypeFlags::kSrvNonPs,
+  };
+  // pass 5: lighting
+  uint32_t render_pass_buffer_allocation_index_list_5[] = {0,1,};
+  ResourceStateTypeFlags::FlagType render_pass_resource_state_list_5[] = {
+    /*0:*/ ResourceStateTypeFlags::kSrvNonPs,
+    /*1:*/ ResourceStateTypeFlags::kSrvNonPs,
+  };
+  // pass 6: output to swapchain
+  uint32_t render_pass_buffer_allocation_index_list_6[] = {0,1,};
+  ResourceStateTypeFlags::FlagType render_pass_resource_state_list_6[] = {
+    /*0:*/ ResourceStateTypeFlags::kSrvPs,
+    /*1:*/ ResourceStateTypeFlags::kSrvPs,
+  };
+  uint32_t render_pass_buffer_num[] = {
+    0,
+    0,
+    0,
+    countof(render_pass_buffer_allocation_index_list_3),
+    countof(render_pass_buffer_allocation_index_list_4),
+    countof(render_pass_buffer_allocation_index_list_5),
+    countof(render_pass_buffer_allocation_index_list_6),
+    0,
+  };
+  const uint32_t* render_pass_buffer_allocation_index_list[] = {
+    nullptr,
+    nullptr,
+    nullptr,
+    render_pass_buffer_allocation_index_list_3,
+    render_pass_buffer_allocation_index_list_4,
+    render_pass_buffer_allocation_index_list_5,
+    render_pass_buffer_allocation_index_list_6,
+    nullptr,
+  };
+  ResourceStateTypeFlags::FlagType* render_pass_resource_state_list[] = {
+    nullptr,
+    nullptr,
+    nullptr,
+    render_pass_resource_state_list_3,
+    render_pass_resource_state_list_4,
+    render_pass_resource_state_list_5,
+    render_pass_resource_state_list_6,
+    nullptr,
+  };
+  auto resource_state_traisition_info = GetResourceStateTransitionInfo(countof(render_pass_command_queue_index), render_pass_command_queue_index, command_queue_type,
+                                                                       wait_pass_num, signal_pass_index,
+                                                                       countof(initial_state),
+                                                                       render_pass_buffer_num, render_pass_buffer_allocation_index_list, render_pass_resource_state_list, initial_state, final_state);
+  CHECK_EQ(resource_state_traisition_info[0].size, 3);
+  CHECK_EQ(resource_state_traisition_info[0].array[0].pass, 3);
+  CHECK_EQ(resource_state_traisition_info[0].array[0].timing, 0);
+  CHECK_EQ(resource_state_traisition_info[0].array[0].state_before, ResourceStateTypeFlags::kSrvNonPs);
+  CHECK_EQ(resource_state_traisition_info[0].array[0].state_after,  ResourceStateTypeFlags::kUav);
+  CHECK_EQ(resource_state_traisition_info[0].array[1].pass, 4);
+  CHECK_EQ(resource_state_traisition_info[0].array[1].timing, 0);
+  CHECK_EQ(resource_state_traisition_info[0].array[1].state_before, ResourceStateTypeFlags::kUav);
+  CHECK_EQ(resource_state_traisition_info[0].array[1].state_after,  ResourceStateTypeFlags::kSrvNonPs);
+  CHECK_EQ(resource_state_traisition_info[0].array[2].pass, 6);
+  CHECK_EQ(resource_state_traisition_info[0].array[2].timing, 0);
+  CHECK_EQ(resource_state_traisition_info[0].array[2].state_before, ResourceStateTypeFlags::kSrvNonPs);
+  CHECK_EQ(resource_state_traisition_info[0].array[2].state_after,  ResourceStateTypeFlags::kSrvNonPs | ResourceStateTypeFlags::kSrvPs);
+  CHECK_EQ(resource_state_traisition_info[1].size, 3);
+  CHECK_EQ(resource_state_traisition_info[1].array[0].pass, 1);
+  CHECK_EQ(resource_state_traisition_info[1].array[0].timing, 1);
+  CHECK_EQ(resource_state_traisition_info[1].array[0].state_before, ResourceStateTypeFlags::kSrvNonPs | ResourceStateTypeFlags::kSrvPs);
+  CHECK_EQ(resource_state_traisition_info[1].array[0].state_after,  ResourceStateTypeFlags::kUav);
+  CHECK_EQ(resource_state_traisition_info[1].array[1].pass, 4);
+  CHECK_EQ(resource_state_traisition_info[1].array[1].timing, 0);
+  CHECK_EQ(resource_state_traisition_info[1].array[1].state_before, ResourceStateTypeFlags::kUav);
+  CHECK_EQ(resource_state_traisition_info[1].array[1].state_after,  ResourceStateTypeFlags::kSrvNonPs);
+  CHECK_EQ(resource_state_traisition_info[1].array[2].pass, 6);
+  CHECK_EQ(resource_state_traisition_info[1].array[2].timing, 0);
+  CHECK_EQ(resource_state_traisition_info[1].array[2].state_before, ResourceStateTypeFlags::kSrvNonPs);
+  CHECK_EQ(resource_state_traisition_info[1].array[2].state_after,  ResourceStateTypeFlags::kSrvPs | ResourceStateTypeFlags::kSrvNonPs);
 }
 TEST_CASE("fill barrier list") {
   using namespace illuminate;

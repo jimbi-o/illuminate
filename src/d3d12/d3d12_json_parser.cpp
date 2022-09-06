@@ -56,6 +56,9 @@ DXGI_FORMAT GetDxgiFormat(const nlohmann::json& j) {
   if (format_str.compare("R32_FLOAT") == 0) {
     return DXGI_FORMAT_R32_FLOAT;
   }
+  if (format_str.compare("R8_UNORM") == 0) {
+    return DXGI_FORMAT_R8_UNORM;
+  }
   logerror("invalid format specified. {}", format_str.data());
   assert(false && "invalid format specified");
   return DXGI_FORMAT_UNKNOWN;

@@ -30,7 +30,6 @@
 #include "render_pass/d3d12_render_pass_util.h"
 #include "shader/brdf/brdf_lighting.cs.h"
 #include "shader/include/shader_defines.h"
-#include "shader/postprocess/linear_depth.cs.h"
 #include "d3d12_integration_test_cbuffers.inl"
 #define FORCE_SRV_FOR_ALL
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -385,6 +384,10 @@ auto RegisterGuiDebugView(const uint32_t debug_viewable_buffer_num, const char* 
   }
   ImGui::End();
 }
+auto RegisterGuiDynamicResolution(const MainBufferSize& main_buffer_size, RenderPassConfigDynamicData* dynamic_data) {
+  dynamic_data->primarybuffer_width = main_buffer_size.primarybuffer.width;
+  dynamic_data->primarybuffer_height = main_buffer_size.primarybuffer.height;
+}
 auto GetAspectRatio(const Size2d& buffer_size) {
   return static_cast<float>(buffer_size.width) / buffer_size.height;
 }
@@ -396,11 +399,12 @@ auto CalcProjectionMatrix(const RenderPassConfigDynamicData& dynamic_data, const
   using namespace DirectX::SimpleMath;
   return Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index) {
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index, const MainBufferSize& main_buffer_size) {
   RegisterGuiPerformance(time_duration_data_set, gpu_time_durations, render_pass_name, serialized_render_pass_index);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
   RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
+  RegisterGuiDynamicResolution(main_buffer_size, dynamic_data);
   dynamic_data->view_matrix = CalcViewMatrix(*dynamic_data);
   dynamic_data->projection_matrix = CalcProjectionMatrix(*dynamic_data, aspect_ratio);
 }
@@ -416,6 +420,7 @@ RenderPassConfigDynamicData InitRenderPassDynamicData() {
   dynamic_data.light_color[1] = 1.0f;
   dynamic_data.light_color[2] = 1.0f;
   dynamic_data.light_intensity = 10000.0f;
+  dynamic_data.screen_space_shadow_step_num = 4;
   return dynamic_data;
 }
 auto UpdateCameraFromUserInput(const Size2d& buffer_size, float camera_pos[3], float camera_focus[3], float prev_mouse_pos[2]) {
@@ -658,8 +663,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
         .height = swapchain.GetHeight(),
       },
       .primarybuffer = {
-        render_graph.primarybuffer_width,
-        render_graph.primarybuffer_height,
+        .width = render_graph.primarybuffer_width,
+        .height = render_graph.primarybuffer_height,
       },
     };
     main_buffer_format = MainBufferFormat{
@@ -852,7 +857,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
     auto serialized_render_pass_index = GetAllQueueSeirializedRenderPassIndexInQueueArrayForm(render_graph.command_queue_num, render_pass_num_per_queue, render_graph.render_pass_num, render_pass_command_queue_index);
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer), render_pass_name, serialized_render_pass_index);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer), render_pass_name, serialized_render_pass_index, main_buffer_size);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,

@@ -286,6 +286,20 @@
           ]
         }
       ]
+    },
+    {
+      "name": "screen space shadow",
+      "rootsig": "screen space shadow",
+      "variations": [
+        {
+          "shaders": [
+            {
+              "file": "shader/postprocess/screen_space_shadow.cs.hlsl",
+              "target": "cs"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
