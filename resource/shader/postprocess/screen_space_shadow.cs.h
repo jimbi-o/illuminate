@@ -8,6 +8,7 @@ struct ScreenSpaceShadowCBuffer {
   float4 compact_projection_param;
   int2   light_origin_location;
   uint   step_num;
+  float  thickness;
   float  light_slope_zx;
 };
 #ifdef __cplusplus

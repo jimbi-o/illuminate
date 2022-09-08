@@ -32,6 +32,126 @@
     "command_queue": "queue_graphics",
     "format": "R8G8B8A8_UNORM"
   },
+  "cbuffer": [
+    {
+      "name":"camera",
+      "params": [
+        {
+          "name":"view_matrix",
+          "need_ui":false
+        },
+        {
+          "name":"projection_matrix",
+          "need_ui":false
+        }
+      ]
+    },
+    {
+      "name":"linear depth cbuffer",
+      "params": [
+        {
+          "name":"compact_projection_param",
+          "need_ui":false
+        }
+      ]
+    },
+    {
+      "name":"screen space shadow cbuffer",
+      "params": [
+        {
+          "name": "compact_projection_param",
+          "need_ui":false
+        },
+        {
+          "name": "light_origin_location",
+          "need_ui":false
+        },
+        {
+          "name": "step num",
+          "type": "uint32",
+          "min": 0,
+          "max": 256,
+          "initial_val": 4
+        },
+        {
+          "name": "thickness",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 0.05
+        },
+        {
+          "name": "light_slope_zx",
+          "need_ui":false
+        }
+      ]
+    },
+    {
+      "name":"deferred lighting cbuffer",
+      "params": [
+        {
+          "name":"compact_projection_param",
+          "need_ui":false
+        },
+        {
+          "name": "light color(R)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light color(G)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light color(B)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light color(intensity)",
+          "type": "float",
+          "min": 0,
+          "max": 10000,
+          "initial_val": 1000
+        },
+        {
+          "name": "light direction(X)",
+          "type": "float",
+          "min": -1,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light direction(Y)",
+          "type": "float",
+          "min": -1,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light direction(Z)",
+          "type": "float",
+          "min": -1,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "exposure rate",
+          "type": "float",
+          "min": 0,
+          "max": 0.01,
+          "initial_val": 0.001
+        }
+      ]
+    }
+  ],
   "buffer": [
     {
       "name": "primary",
@@ -191,7 +311,7 @@
       "material": "linear depth",
       "buffer_list": [
         {
-          "name": "linear_depth_cbuffer",
+          "name": "linear depth cbuffer",
           "state": "cbv"
         },
         {
@@ -242,7 +362,7 @@
       "material": "brdf lighting",
       "buffer_list": [
         {
-          "name": "deferred_lighting_cbuffer",
+          "name": "deferred lighting cbuffer",
           "state": "cbv"
         },
         {

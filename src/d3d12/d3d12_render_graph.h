@@ -2,6 +2,7 @@
 #define ILLUMINATE_D3D12_RENDER_GRAPH_H
 #include "d3d12_header_common.h"
 #include "illuminate/core/strid.h"
+#include "illuminate/util/util_defines.h"
 namespace illuminate {
 struct BufferConfig {
   uint32_t buffer_index{};
@@ -53,6 +54,24 @@ struct RenderPass {
   uint32_t* sampler_index_list{nullptr};
   uint32_t flip_pingpong_num{0};
   uint32_t* flip_pingpong_index_list{nullptr};
+};
+enum CBufferParamType : uint8_t {
+  kSpecial = 0,
+  kFloat,
+  kInt,
+};
+struct CBufferParam {
+  char* name{};
+  StrHash name_hash{};
+  CBufferParamType type{};
+  float min{};
+  float max{};
+  float initial_val{};
+};
+struct CBuffer {
+  char* name;
+  uint32_t buffer_index;
+  ArrayOf<CBufferParam> params;
 };
 struct RenderGraphConfig {
   uint32_t frame_buffer_num{0};

@@ -75,11 +75,11 @@ void SetScreenSpaceShadowCbv(const RenderPassConfigDynamicData& dynamic_data, vo
 static const StrHash kCBufferNameHash[] = {
   SID("camera"),
   SID("light"),
-  SID("deferred_lighting_cbuffer"),
+  SID("deferred lighting cbuffer"),
   SID("cbv-a"),
   SID("cbv-b"),
   SID("cbv-c"),
-  SID("linear_depth_cbuffer"),
+  SID("linear depth cbuffer"),
   SID("screen space shadow cbuffer"),
 };
 static const uint32_t kCBufferSize[] = {
