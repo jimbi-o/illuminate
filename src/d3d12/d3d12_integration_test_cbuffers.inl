@@ -2,28 +2,28 @@
 #include "shader/postprocess/screen_space_shadow.cs.h"
 namespace illuminate {
 namespace {
-void SetCompactProjectionParam(const DirectX::SimpleMath::Matrix& projection_matrix, shader::float4* compact_projection_param) {
-  compact_projection_param->x = projection_matrix.m[0][0];
-  compact_projection_param->y = projection_matrix.m[1][1];
-  compact_projection_param->z = projection_matrix.m[3][2];
-  compact_projection_param->w = -projection_matrix.m[2][2];
+using namespace DirectX::SimpleMath;
+void SetFloat(const float f, void* dst) {
+  auto v = static_cast<float*>(dst);
+  *v = f;
 }
-void SetCameraCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  shader::SceneCameraData scene_camera{};
-  CopyMatrix(dynamic_data.view_matrix.m, scene_camera.view_matrix);
-  CopyMatrix(dynamic_data.projection_matrix.m, scene_camera.projection_matrix);
-  memcpy(dst, &scene_camera, sizeof(scene_camera));
+void SetCompactProjectionParam(const Matrix& projection_matrix, const uint32_t size_in_bytes, void* dst) {
+  float val[] = {
+    projection_matrix.m[0][0],
+    projection_matrix.m[1][1],
+    projection_matrix.m[3][2],
+    -projection_matrix.m[2][2],
+  };
+  memcpy(dst, val, size_in_bytes);
 }
-void SetLightCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
-  light_direction.Normalize();
-  shader::SceneLightData scene_light{};
-  scene_light.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
-  scene_light.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
-  scene_light.exposure_rate = 10.0f / dynamic_data.light_intensity;
-  memcpy(dst, &scene_light, sizeof(scene_light));
+void SetLightOriginLocationInScreenSpace(const Vector3& light_direction_vs, const Matrix& projection_matrix, const uint32_t primarybuffer_width, const uint32_t primarybuffer_height, const uint32_t size_in_bytes, void* dst) {
+  auto light_origin = Vector3::Transform(light_direction_vs * 100000.0f, projection_matrix);
+  light_origin = (light_origin + Vector3::One) * 0.5f;
+  int32_t light_origin_location[] = {
+    static_cast<int32_t>(std::round(light_origin.x * primarybuffer_width)),
+    static_cast<int32_t>(std::round(light_origin.y * primarybuffer_height))
+  };
+  memcpy(dst, light_origin_location, size_in_bytes);
 }
 void SetPingpongACbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_data, void* dst) {
   float c[4]{0.0f,1.0f,1.0f,1.0f};
@@ -37,72 +37,6 @@ void SetPingpongCCbv([[maybe_unused]]const RenderPassConfigDynamicData& dynamic_
   float c[4]{1.0f,1.0f,1.0f,1.0f};
   memcpy(dst, c, GetUint32(sizeof(float)) * 4);
 }
-void SetBrdfLightingCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
-  light_direction.Normalize();
-  shader::BrdfLightingCBuffer params{};
-  SetCompactProjectionParam(dynamic_data.projection_matrix, &params.compact_projection_param);
-  params.light_color = {dynamic_data.light_color[0], dynamic_data.light_color[1], dynamic_data.light_color[2], dynamic_data.light_intensity};
-  params.light_direction_vs = {light_direction.x, light_direction.y, light_direction.z};
-  params.exposure_rate = 10.0f / dynamic_data.light_intensity;
-  memcpy(dst, &params, sizeof(params));
-}
-void SetLinearDepthCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
-  light_direction.Normalize();
-  shader::LinearDepthCBuffer params{};
-  SetCompactProjectionParam(dynamic_data.projection_matrix, &params.compact_projection_param);
-  memcpy(dst, &params, sizeof(params));
-}
-void SetScreenSpaceShadowCbv(const RenderPassConfigDynamicData& dynamic_data, void* dst) {
-  using namespace DirectX::SimpleMath;
-  auto light_direction = Vector3::TransformNormal(Vector3(dynamic_data.light_direction), dynamic_data.view_matrix);
-  light_direction.Normalize();
-  auto light_origin = Vector3::Transform(light_direction * 100000.0f, dynamic_data.projection_matrix);
-  light_origin = (light_origin + Vector3::One) * 0.5f;
-  shader::ScreenSpaceShadowCBuffer params{};
-  SetCompactProjectionParam(dynamic_data.projection_matrix, &params.compact_projection_param);
-  params.step_num = dynamic_data.screen_space_shadow_step_num;
-  params.light_origin_location = {
-    static_cast<int32_t>(std::round(light_origin.x * dynamic_data.primarybuffer_width)),
-    static_cast<int32_t>(std::round(light_origin.y * dynamic_data.primarybuffer_height))
-  };
-  params.light_slope_zx = light_direction.z / light_direction.x;
-  memcpy(dst, &params, sizeof(params));
-}
-static const StrHash kCBufferNameHash[] = {
-  SID("camera"),
-  SID("light"),
-  SID("deferred lighting cbuffer"),
-  SID("cbv-a"),
-  SID("cbv-b"),
-  SID("cbv-c"),
-  SID("linear depth cbuffer"),
-  SID("screen space shadow cbuffer"),
-};
-static const uint32_t kCBufferSize[] = {
-  GetUint32(sizeof(shader::SceneCameraData)),
-  GetUint32(sizeof(shader::SceneLightData)),
-  GetUint32(sizeof(shader::BrdfLightingCBuffer)),
-  GetUint32(sizeof(float) * 4),
-  GetUint32(sizeof(float) * 4),
-  GetUint32(sizeof(float) * 4),
-  GetUint32(sizeof(shader::LinearDepthCBuffer)),
-  GetUint32(sizeof(shader::ScreenSpaceShadowCBuffer)),
-};
-using CbvUpdateFunction = void (*)(const RenderPassConfigDynamicData&, void*);
-static const CbvUpdateFunction kCBufferFunctions[] = {
-  SetCameraCbv,
-  SetLightCbv,
-  SetBrdfLightingCbv,
-  SetPingpongACbv,
-  SetPingpongBCbv,
-  SetPingpongCCbv,
-  SetLinearDepthCbv,
-  SetScreenSpaceShadowCbv,
-};
 auto GetCBufferParamSizeInBytes(const StrHash& cbuffer_param_name) {
   switch (cbuffer_param_name) {
     case SID("view_matrix"):
@@ -111,6 +45,9 @@ auto GetCBufferParamSizeInBytes(const StrHash& cbuffer_param_name) {
     }
     case SID("compact_projection_param"): {
       return GetUint32(sizeof(float)) * 4U;
+    }
+    case SID("light vector"): {
+      return GetUint32(sizeof(float)) * 3U;
     }
     case SID("light_origin_location"): {
       return GetUint32(sizeof(float)) * 2U;
@@ -121,6 +58,62 @@ auto GetCBufferParamSizeInBytes(const StrHash& cbuffer_param_name) {
   }
   assert(false && "no valid cbuffer param found");
   return 0U;
+}
+auto GetAspectRatio(const Size2d& buffer_size) {
+  return static_cast<float>(buffer_size.width) / buffer_size.height;
+}
+auto CalcViewMatrix(const RenderPassConfigDynamicData& dynamic_data) {
+  using namespace DirectX::SimpleMath;
+  return Matrix::CreateLookAt(Vector3(dynamic_data.camera_pos), Vector3(dynamic_data.camera_focus), Vector3::Up);
+}
+auto CalcProjectionMatrix(const RenderPassConfigDynamicData& dynamic_data, const float aspect_ratio) {
+  using namespace DirectX::SimpleMath;
+  return Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
+}
+auto CalcLightVectorVs(const float light_direction[3], const Matrix& view_matrix) {
+  auto light_direction_vs = Vector3::TransformNormal(Vector3(light_direction), view_matrix);
+  light_direction_vs.Normalize();
+  return light_direction_vs;
+}
+auto FillShaderBoundCBuffers(const RenderPassConfigDynamicData& dynamic_data, const MainBufferSize& main_buffer_size, const ArrayOf<CBuffer>& cbuffer_list, void* const * cbuffer_src_list, const uint32_t* cbuffer_writable_size, void** cbuffer_dst_list) {
+  auto view_matrix = CalcViewMatrix(dynamic_data);
+  const auto aspect_ratio = GetAspectRatio(main_buffer_size.primarybuffer);
+  auto projection_matrix = CalcProjectionMatrix(dynamic_data, aspect_ratio);
+  auto light_direction_vs = CalcLightVectorVs(dynamic_data.light_direction, view_matrix);
+  for (uint32_t i = 0; i < cbuffer_list.size; i++) {
+    auto dst = cbuffer_src_list[i];
+    for (uint32_t j = 0; j < cbuffer_list.array[i].params.size; j++) {
+      auto& param = cbuffer_list.array[i].params.array[j];
+      switch (param.name_hash) {
+        case SID("view_matrix"): {
+          memcpy(dst, view_matrix.m, param.size_in_bytes);
+          break;
+        }
+        case SID("projection_matrix"): {
+          memcpy(dst, projection_matrix.m, param.size_in_bytes);
+          break;
+        }
+        case SID("compact_projection_param"): {
+          SetCompactProjectionParam(projection_matrix, param.size_in_bytes, dst);
+          break;
+        }
+        case SID("light vector"): {
+          memcpy(dst, &light_direction_vs, param.size_in_bytes);
+          break;
+        }
+        case SID("light_origin_location"): {
+          SetLightOriginLocationInScreenSpace(light_direction_vs, projection_matrix, main_buffer_size.primarybuffer.width, main_buffer_size.primarybuffer.height, param.size_in_bytes, dst);
+          break;
+        }
+        case SID("light_slope_zx"): {
+          SetFloat(light_direction_vs.z / light_direction_vs.x, dst);
+          break;
+        }
+      }
+      dst = SucceedPtr(dst, param.size_in_bytes);
+    }
+    memcpy(cbuffer_dst_list[i], cbuffer_src_list[i], cbuffer_writable_size[i]);
+  }
 }
 } // namespace
 } // namespace illuminate

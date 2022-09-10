@@ -18,19 +18,12 @@ struct RenderPassFuncArgsInit {
   RenderPass* render_pass_list{nullptr};
 };
 struct RenderPassConfigDynamicData {
-  DirectX::SimpleMath::Matrix view_matrix;
-  DirectX::SimpleMath::Matrix projection_matrix;
   float camera_pos[3]{};
   float camera_focus[3]{};
   float fov_vertical{40.0f};
   float near_z{0.001f};
   float far_z{1000.0f};
   float light_direction[3]{};
-  float light_color[3]{};
-  float light_intensity{};
-  uint32_t screen_space_shadow_step_num{};
-  uint32_t primarybuffer_width{};
-  uint32_t primarybuffer_height{};
 };
 struct RenderPassFuncArgsRenderCommon {
   const MainBufferSize* main_buffer_size{nullptr};
