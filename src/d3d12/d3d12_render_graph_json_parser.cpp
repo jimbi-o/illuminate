@@ -537,6 +537,7 @@ std::pair<const char* const *, const StrHash*> ParseRenderGraphJson(const nlohma
         dst_cbuffer.params.array[p].min = GetFloat(src_param, "min", 0.0f);
         dst_cbuffer.params.array[p].max = GetFloat(src_param, "max", 1.0f);
         dst_cbuffer.params.array[p].initial_val = GetFloat(src_param, "initial_val", 0.0f);
+        dst_cbuffer.params.array[p].size_in_bytes = 0;
         if (dst_cbuffer.params.array[p].type != CBufferParamType::kSpecial) {
           dst_cbuffer.need_ui_param_num++;
         }

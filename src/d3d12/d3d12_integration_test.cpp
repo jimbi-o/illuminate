@@ -388,36 +388,34 @@ auto RegisterGuiDynamicResolution(const MainBufferSize& main_buffer_size, Render
   dynamic_data->primarybuffer_width = main_buffer_size.primarybuffer.width;
   dynamic_data->primarybuffer_height = main_buffer_size.primarybuffer.height;
 }
-auto RegisterGuiCBuffer(const CBuffer& cbuffer, const char* const * const buffer_name_list) {
-  ImGui::Text(buffer_name_list[cbuffer.buffer_index]);
-  for (uint32_t i = 0; i < cbuffer.params.size; i++) {
-    const auto& param = cbuffer.params.array[i];
-    if (param.type == CBufferParamType::kSpecial) {
-      continue;
-    }
+auto RegisterGuiCBufferParams(const ArrayOf<CBufferParam> cbuffer_params, void* dst) {
+  for (uint32_t i = 0; i < cbuffer_params.size; i++) {
+    const auto& param = cbuffer_params.array[i];
     switch (param.type) {
+      case CBufferParamType::kSpecial: {
+        break;
+      }
       case CBufferParamType::kUint: {
-        // TODO
-        int v = GetUint32(param.initial_val);
-        if (ImGui::SliderInt(param.name, &v, GetUint32(param.min), GetUint32(param.max))) {
-          // TODO
-        }
+        auto v = static_cast<int*>(dst);
+        ImGui::SliderInt(param.name, v, GetUint32(param.min), GetUint32(param.max));
         break;
       }
       case CBufferParamType::kFloat: {
-        float v = param.initial_val;
-        ImGui::SliderFloat(param.name, &v, param.min, param.max);
+        auto v = static_cast<float*>(dst);
+        ImGui::SliderFloat(param.name, v, param.min, param.max);
         break;
       }
     }
+    dst = SucceedPtr(dst, param.size_in_bytes);
   }
 }
-auto RegisterGuiCBufferList(const ArrayOf<CBuffer>& cbuffer_list, const char* const * const buffer_name_list) {
+auto RegisterGuiCBufferList(const ArrayOf<CBuffer>& cbuffer_list, const char* const * const buffer_name_list, void* const * cbuffer_dst_list) {
   if (!ImGui::Begin("cbuffer params", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return; }
   for (uint32_t i = 0; i < cbuffer_list.size; i++) {
     if (cbuffer_list.array[i].need_ui_param_num == 0) { continue; }
     ImGui::Separator();
-    RegisterGuiCBuffer(cbuffer_list.array[i], buffer_name_list);
+    ImGui::Text(buffer_name_list[cbuffer_list.array[i].buffer_index]);
+    RegisterGuiCBufferParams(cbuffer_list.array[i].params, cbuffer_dst_list[i]);
   }
   ImGui::End();
 }
@@ -432,13 +430,13 @@ auto CalcProjectionMatrix(const RenderPassConfigDynamicData& dynamic_data, const
   using namespace DirectX::SimpleMath;
   return Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index, const MainBufferSize& main_buffer_size, const ArrayOf<CBuffer>& cbuffer_list, const char* const * const buffer_name_list) {
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index, const MainBufferSize& main_buffer_size, const ArrayOf<CBuffer>& cbuffer_list, const char* const * const buffer_name_list, void* const * cbuffer_dst_list) {
   RegisterGuiPerformance(time_duration_data_set, gpu_time_durations, render_pass_name, serialized_render_pass_index);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
   RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
   RegisterGuiDynamicResolution(main_buffer_size, dynamic_data);
-  RegisterGuiCBufferList(cbuffer_list, buffer_name_list);
+  RegisterGuiCBufferList(cbuffer_list, buffer_name_list, cbuffer_dst_list);
   dynamic_data->view_matrix = CalcViewMatrix(*dynamic_data);
   dynamic_data->projection_matrix = CalcProjectionMatrix(*dynamic_data, aspect_ratio);
 }
@@ -621,6 +619,49 @@ auto GatherBufferInitialState(const uint32_t buffer_allocation_num, const Buffer
   }
   return buffer_initial_state;
 }
+auto FillCBufferParamSizeInBytes(ArrayOf<CBuffer>* cbuffer_list) {
+  for (uint32_t i = 0; i < cbuffer_list->size; i++) {
+    for (uint32_t j = 0; j < cbuffer_list->array[i].params.size; j++) {
+      uint32_t size_in_bytes = 4;
+      if (cbuffer_list->array[i].params.array[j].type == CBufferParamType::kSpecial) {
+        size_in_bytes = GetCBufferParamSizeInBytes(cbuffer_list->array[i].params.array[j].name_hash);
+      }
+      cbuffer_list->array[i].params.array[j].size_in_bytes = size_in_bytes;
+    }
+  }
+}
+auto CreateCBufferSrcData(const ArrayOf<CBuffer>& cbuffer_list) {
+  auto cbuffer_src_data = AllocateArrayFrame<void*>(cbuffer_list.size);
+  for (uint32_t i = 0; i < cbuffer_list.size; i++) {
+    uint32_t size_in_bytes = 0;
+    for (uint32_t j = 0; j < cbuffer_list.array[i].params.size; j++) {
+      size_in_bytes += cbuffer_list.array[i].params.array[j].size_in_bytes;
+    }
+    cbuffer_src_data[i] = AllocateFrame(size_in_bytes);
+    auto dst = cbuffer_src_data[i];
+    const auto& params = cbuffer_list.array[i].params;
+    for (uint32_t j = 0; j < params.size; j++) {
+      const auto& param = params.array[j];
+      switch (param.type) {
+        case CBufferParamType::kSpecial: {
+          break;
+        }
+        case CBufferParamType::kUint: {
+          auto v = static_cast<uint32_t*>(dst);
+          *v = static_cast<uint32_t>(param.initial_val);
+          break;
+        }
+        case CBufferParamType::kFloat: {
+          auto v = static_cast<float*>(dst);
+          *v = param.initial_val;
+          break;
+        }
+      }
+      dst = SucceedPtr(dst, param.size_in_bytes);
+    }
+  }
+  return cbuffer_src_data;
+}
 } // namespace anonymous
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -655,6 +696,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   void*** cbv_ptr_list{nullptr}; // [buffer_config_index][frame_index]
   CbvUpdateFunction* cbv_update_functions{nullptr};
   ResourceStateTypeFlags::FlagType* prev_buffer_final_state{nullptr};
+  void** cbuffer_src_data{nullptr};
   const char* const * buffer_name_list{};
   {
     nlohmann::json json;
@@ -722,6 +764,8 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     buffer_name_list = CopyStringList(MemoryType::kSystem, render_graph.buffer_num, buffer_name_list_tmp);
     PrintNames(render_graph.buffer_num, buffer_name_list);
     FillCbvBufferCreationSize(render_graph.buffer_num, buffer_name_hash_list, &render_graph.buffer_list);
+    FillCBufferParamSizeInBytes(&render_graph.cbuffer_list);
+    cbuffer_src_data = CreateCBufferSrcData(render_graph.cbuffer_list);
     buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator);
     prev_buffer_final_state = GatherBufferInitialState(buffer_list.buffer_allocation_num, render_graph.buffer_list, buffer_list);
     cbv_ptr_list = PrepareCbvPointers(render_graph.buffer_num, render_graph.buffer_list, buffer_name_hash_list, render_graph.frame_buffer_num, &buffer_list);
@@ -891,7 +935,12 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
     auto serialized_render_pass_index = GetAllQueueSeirializedRenderPassIndexInQueueArrayForm(render_graph.command_queue_num, render_pass_num_per_queue, render_graph.render_pass_num, render_pass_command_queue_index);
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer), render_pass_name, serialized_render_pass_index, main_buffer_size, render_graph.cbuffer_list, buffer_name_list);
+    auto current_frame_cbv_ptr_list = AllocateArrayFrame<void*>(render_graph.buffer_num);
+    for (uint32_t k = 0; k < render_graph.buffer_num; k++) {
+      const auto cbv_index = render_graph.buffer_list[k].frame_buffered ? frame_index : 0;
+      current_frame_cbv_ptr_list[k] = cbv_ptr_list[k] == nullptr ? nullptr : cbv_ptr_list[k][cbv_index];
+    }
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer), render_pass_name, serialized_render_pass_index, main_buffer_size, render_graph.cbuffer_list, buffer_name_list, cbuffer_src_data);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,
@@ -908,8 +957,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     for (uint32_t k = 0; k < render_graph.buffer_num; k++) {
       if (cbv_update_functions[k] == nullptr) { continue; }
-      const auto cbv_index = render_graph.buffer_list[k].frame_buffered ? frame_index : 0;
-      (*(cbv_update_functions[k]))(dynamic_data, cbv_ptr_list[k][cbv_index]);
+      (*(cbv_update_functions[k]))(dynamic_data, current_frame_cbv_ptr_list[k]);
     }
     // render
     for (uint32_t k = 0; k < render_graph.render_pass_num; k++) {

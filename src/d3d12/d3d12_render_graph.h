@@ -67,6 +67,7 @@ struct CBufferParam {
   float min{};
   float max{};
   float initial_val{};
+  uint32_t size_in_bytes;
 };
 struct CBuffer {
   uint32_t buffer_index{};

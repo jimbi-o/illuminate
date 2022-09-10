@@ -103,5 +103,24 @@ static const CbvUpdateFunction kCBufferFunctions[] = {
   SetLinearDepthCbv,
   SetScreenSpaceShadowCbv,
 };
+auto GetCBufferParamSizeInBytes(const StrHash& cbuffer_param_name) {
+  switch (cbuffer_param_name) {
+    case SID("view_matrix"):
+    case SID("projection_matrix"): {
+      return GetUint32(sizeof(float)) * 16U;
+    }
+    case SID("compact_projection_param"): {
+      return GetUint32(sizeof(float)) * 4U;
+    }
+    case SID("light_origin_location"): {
+      return GetUint32(sizeof(float)) * 2U;
+    }
+    case SID("light_slope_zx"): {
+      return GetUint32(sizeof(float));
+    }
+  }
+  assert(false && "no valid cbuffer param found");
+  return 0U;
+}
 } // namespace
 } // namespace illuminate
