@@ -41,5 +41,6 @@ ResourceStateType GetResourceStateType(const nlohmann::json& j, const char* cons
 DescriptorType GetDescriptorType(const nlohmann::json& j);
 DescriptorType GetDescriptorType(const nlohmann::json& j, const char* const name);
 uint32_t CreateJsonStrHashList(const nlohmann::json& json, const char* const name, StrHash** hash_list_ptr, const MemoryType memory_type);
+const char* CreateString(const nlohmann::json& json, const MemoryType memory_type);
 }
 #endif

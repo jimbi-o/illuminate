@@ -615,7 +615,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   float prev_mouse_pos[2]{};
   uint32_t render_pass_index_output_to_swapchain{};
   uint32_t render_pass_buffer_index_primary_input{};
-  char** render_pass_name{nullptr};
+  const char** render_pass_name{nullptr};
   auto frame_loop_num = kFrameLoopNum;
   auto material_pack = BuildMaterialList(device.Get(), GetTestJson("material.json"));
   void*** cbv_ptr_list{nullptr}; // [buffer_config_index][frame_index]
@@ -726,7 +726,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     }
     CHECK_UNARY(descriptor_gpu.Init(device.Get(), render_graph.gpu_handle_num_view + render_graph.max_material_num * kTextureNumPerMaterial, render_graph.gpu_handle_num_sampler));
     render_pass_vars = AllocateArraySystem<void*>(render_graph.render_pass_num);
-    render_pass_name = AllocateArraySystem<char*>(render_graph.render_pass_num);
+    render_pass_name = AllocateArraySystem<const char*>(render_graph.render_pass_num);
     for (uint32_t i = 0; i < render_graph.render_pass_num; i++) {
       const auto& render_pass_list_json = json.at("render_pass");
       RenderPassFuncArgsInit render_pass_func_args_init{
@@ -738,9 +738,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       };
       render_pass_vars[i] = RenderPassInit(&render_pass_function_list, &render_pass_func_args_init, i);
       auto pass_name = GetStringView(render_pass_list_json[i], ("name"));
-      const auto str_len = GetUint32(pass_name.size())  + 1;
-      render_pass_name[i] = AllocateArraySystem<char>(str_len);
-      strcpy_s(render_pass_name[i], str_len, GetStringView(pass_name).data());
+      render_pass_name[i] = CreateString(pass_name, MemoryType::kSystem);
       if (render_graph.render_pass_list[i].name == SID("output to swapchain")) {
         render_pass_index_output_to_swapchain = i;
         for (uint32_t j = 0; j < render_graph.render_pass_list[i].buffer_num; j++) {

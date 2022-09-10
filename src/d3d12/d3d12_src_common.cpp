@@ -1,4 +1,5 @@
 #include "d3d12_src_common.h"
+#include "d3d12_memory_allocators.h"
 namespace illuminate {
 void SetD3d12Name(ID3D12Object* obj, const char* name) {
   if (obj == nullptr) {
@@ -30,6 +31,12 @@ void CopyStrToWstrContainer(wchar_t** dst, const std::string_view src, const Mem
     (*dst)[i] = src[i];
   }
   (*dst)[len] = 0;
+}
+const char* CreateString(const char* const str, const MemoryType memory_type) {
+  const auto len = GetUint32(strlen(str)) + 1;
+  auto dst = AllocateArray<char>(memory_type, len);
+  strcpy_s(dst, len, str);
+  return dst;
 }
 }
 #include "doctest/doctest.h"

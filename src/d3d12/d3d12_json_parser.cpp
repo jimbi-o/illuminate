@@ -157,4 +157,7 @@ uint32_t CreateJsonStrHashList(const nlohmann::json& json, const char* const nam
   *hash_list_ptr = hash_list;
   return num;
 }
+const char* CreateString(const nlohmann::json& json, const MemoryType memory_type) {
+  return CreateString(GetStringView(json).data(), memory_type);
+}
 }

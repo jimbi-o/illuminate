@@ -22,5 +22,6 @@ inline auto CopyStrToWstrContainer(const std::string_view src, const MemoryType 
 // https://stackoverflow.com/questions/49454005/how-to-get-an-array-size-at-compile-time
 template<uint32_t N, class T>
 constexpr auto countof(T(&)[N]) { return N; }
+const char* CreateString(const char* const str, const MemoryType memory_type);
 }
 #endif

@@ -13,7 +13,7 @@ class Window {
   HWND GetHwnd() const { return hwnd_; }
   bool ProcessMessage();
  private:
-  char* title_{nullptr};
+  const char* title_{nullptr};
   HWND hwnd_{nullptr};
   bool window_closed_{false};
 };

@@ -261,8 +261,19 @@ auto InitializeBufferConfig(const uint32_t buffer_index, BufferConfig* buffer) {
   buffer->stride_bytes          = 0;
   buffer->raw_buffer            = false;
 }
+auto GetCBufferParamType(const nlohmann::json& j) {
+  if (j.contains("need_ui") && j.at("need_ui") == false) {
+    return CBufferParamType::kSpecial;
+  }
+  if (j.contains("type")) {
+    if (j.at("type") == "uint32") {
+      return CBufferParamType::kUint;
+    }
+  }
+  return CBufferParamType::kFloat;
+}
 } // namespace
-std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, const DXGI_FORMAT* const * rtv_format_list, const DXGI_FORMAT* dsv_format, RenderGraphConfig* graph) {
+std::pair<const char* const *, const StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const uint32_t material_num, StrHash* material_hash_list, const DXGI_FORMAT* const * rtv_format_list, const DXGI_FORMAT* dsv_format, RenderGraphConfig* graph) {
   auto& r = *graph;
   j.at("frame_buffer_num").get_to(r.frame_buffer_num);
   r.primarybuffer_width = GetNum(j, "primarybuffer_width", 1);
@@ -270,10 +281,7 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
   r.primarybuffer_format = GetDxgiFormat(j, "primarybuffer_format");
   {
     auto& window = j.at("window");
-    auto window_title = GetStringView(window, "title");
-    auto window_title_len = static_cast<uint32_t>(window_title.size()) + 1;
-    r.window_title = AllocateArraySystem<char>(window_title_len);
-    strcpy_s(r.window_title, window_title_len, window_title.data());
+    r.window_title = CreateString(window.at("title"), MemoryType::kSystem);
     window.at("width").get_to(r.window_width);
     window.at("height").get_to(r.window_height);
   }
@@ -334,7 +342,7 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
   const uint32_t default_buffer_num = 16;
   auto buffer_name_list_len = default_buffer_num;
   auto buffer_name_hash_list = AllocateArrayFrame<StrHash>(buffer_name_list_len);
-  auto buffer_name_list = AllocateArrayFrame<char*>(buffer_name_list_len);
+  auto buffer_name_list = AllocateArrayFrame<const char*>(buffer_name_list_len);
   uint32_t next_vacant_buffer_index = 0;
   auto buffer_config_list = AllocateArrayFrame<BufferConfig>(buffer_name_list_len);
   if (j.contains("buffer")) {
@@ -344,10 +352,7 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
     for (uint32_t i = 0; i < buffer_num; i++) {
       buffer_config_list[i].buffer_index = i;
       GetBufferConfig(buffer_list[i], &buffer_config_list[i]);
-      auto str = GetStringView(buffer_list[i], "name");
-      const auto namelen = GetUint32(str.size()) + 1;
-      buffer_name_list[i] = AllocateArrayFrame<char>(namelen);
-      strncpy_s(buffer_name_list[i], namelen, str.data(), namelen);
+      buffer_name_list[i] = CreateString(buffer_list[i].at("name"), MemoryType::kSystem);
       buffer_name_hash_list[i] = CalcStrHash(buffer_name_list[i]);
     }
   }
@@ -357,11 +362,8 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
     next_vacant_buffer_index++;
     buffer_config_list[swapchain_index].buffer_index = swapchain_index;
     buffer_config_list[swapchain_index].descriptor_only = true;
-    const char name[] = "swapchain";
-    const auto namelen = GetUint32(strlen(name)) + 1;
-    buffer_name_list[swapchain_index] = AllocateArrayFrame<char>(namelen);
-    strncpy_s(buffer_name_list[swapchain_index], namelen, name, namelen);
-    buffer_name_hash_list[swapchain_index] = CalcStrHash(name);
+    buffer_name_list[swapchain_index] = CreateString("swapchain", MemoryType::kFrame);
+    buffer_name_hash_list[swapchain_index] = CalcStrHash(buffer_name_list[swapchain_index]);
   }
   if (j.contains("sampler")) {
     auto& sampler_list = j.at("sampler");
@@ -413,17 +415,13 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
               buffer_name_hash_list = AllocateArrayFrame<StrHash>(buffer_name_list_len);
               memcpy(buffer_name_hash_list, tmp, sizeof(StrHash) * prev_buffer_name_list_len);
               auto tmp2 = buffer_name_list;
-              buffer_name_list = AllocateArrayFrame<char*>(buffer_name_list_len);
+              buffer_name_list = AllocateArrayFrame<const char*>(buffer_name_list_len);
               memcpy(buffer_name_list, tmp2, sizeof(char*) * prev_buffer_name_list_len);
             }
             graph_buffer_index = next_vacant_buffer_index;
             next_vacant_buffer_index++;
             buffer_name_hash_list[graph_buffer_index] = buffer_name_hash;
-            {
-              const auto namelen = GetUint32(buffer_name.size()) + 1;
-              buffer_name_list[graph_buffer_index] = AllocateArrayFrame<char>(namelen);
-              strncpy_s(buffer_name_list[graph_buffer_index], namelen, buffer_name.data(), namelen);
-            }
+            buffer_name_list[graph_buffer_index] = CreateString(buffer_name, MemoryType::kFrame);
             InitializeBufferConfig(graph_buffer_index, &buffer_config_list[graph_buffer_index]);
             buffer_config_list[graph_buffer_index].initial_state = dst_buffer.state;
           }
@@ -522,6 +520,25 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
       }
     }
   }
+  if (j.contains("cbuffer")) {
+    const auto& cbuffers = j.at("cbuffer");
+    r.cbuffer_num = GetUint32(cbuffers.size());
+    r.cbuffer_list = AllocateArraySystem<CBuffer>(r.cbuffer_num);
+    for (uint32_t i = 0; i < r.cbuffer_num; i++) {
+      r.cbuffer_list[i].buffer_index = FindBufferIndex(buffer_name_list_len, buffer_name_hash_list, CalcEntityStrHash(cbuffers[i], "name"));
+      const auto& cbuffer_params = cbuffers[i].at("params");
+      r.cbuffer_list[i].params = InitializeArray<CBufferParam>(GetUint32(cbuffer_params.size()), MemoryType::kSystem);
+      for (uint32_t p = 0; p < r.cbuffer_list[i].params.size; p++) {
+        const auto& src_param = cbuffer_params[p];
+        r.cbuffer_list[i].params.array[p].name = CreateString(src_param.at("name"), MemoryType::kSystem);
+        r.cbuffer_list[i].params.array[p].name_hash = CalcStrHash(r.cbuffer_list[i].params.array[p].name);
+        r.cbuffer_list[i].params.array[p].type = GetCBufferParamType(src_param);
+        r.cbuffer_list[i].params.array[p].min = GetFloat(src_param, "min", 0.0f);
+        r.cbuffer_list[i].params.array[p].max = GetFloat(src_param, "max", 1.0f);
+        r.cbuffer_list[i].params.array[p].initial_val = GetFloat(src_param, "initial_val", 0.0f);
+      }
+    }
+  }
   // descriptor num
   {
     const auto cbv_index = static_cast<uint32_t>(DescriptorType::kCbv);
@@ -577,7 +594,7 @@ std::pair<char**, StrHash*> ParseRenderGraphJson(const nlohmann::json& j, const 
       }
     }
   } // command allocator num
-  //
+  // misc.
   r.gpu_handle_num_view = GetNum(j, "gpu_handle_num_view", r.gpu_handle_num_view);
   r.gpu_handle_num_sampler = GetNum(j, "gpu_handle_num_sampler", r.gpu_handle_num_sampler);
   r.max_model_num = GetNum(j, "max_model_num", r.max_model_num);

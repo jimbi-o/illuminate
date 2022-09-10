@@ -58,10 +58,10 @@ struct RenderPass {
 enum CBufferParamType : uint8_t {
   kSpecial = 0,
   kFloat,
-  kInt,
+  kUint,
 };
 struct CBufferParam {
-  char* name{};
+  const char* name{};
   StrHash name_hash{};
   CBufferParamType type{};
   float min{};
@@ -69,16 +69,15 @@ struct CBufferParam {
   float initial_val{};
 };
 struct CBuffer {
-  char* name;
-  uint32_t buffer_index;
-  ArrayOf<CBufferParam> params;
+  uint32_t buffer_index{};
+  ArrayOf<CBufferParam> params{};
 };
 struct RenderGraphConfig {
   uint32_t frame_buffer_num{0};
   uint32_t primarybuffer_width{0};
   uint32_t primarybuffer_height{0};
   DXGI_FORMAT primarybuffer_format{};
-  char* window_title{nullptr};
+  const char* window_title{nullptr};
   uint32_t window_width{0};
   uint32_t window_height{0};
   uint32_t command_queue_num{0};
@@ -103,6 +102,8 @@ struct RenderGraphConfig {
   uint32_t max_material_num{1024};
   uint32_t max_mipmap_num{12};
   uint32_t timestamp_query_dst_resource_num{5};
+  uint32_t cbuffer_num{0};
+  CBuffer* cbuffer_list{nullptr};
 };
 }
 #endif

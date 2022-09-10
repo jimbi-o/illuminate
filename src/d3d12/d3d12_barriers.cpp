@@ -221,8 +221,7 @@ auto ConvertStateTransitionsToBarrierPerPass(const uint32_t render_pass_num, con
   for (uint32_t i = 0; i < render_pass_num; i++) {
     barrier_config_list[i] = AllocateArray<ArrayOf<BarrierConfig>>(memory_type, kBarrierExecutionTimingNum);
     for (uint32_t j = 0; j < kBarrierExecutionTimingNum; j++) {
-      barrier_config_list[i][j].size = barrier_num[i][j];
-      barrier_config_list[i][j].array = AllocateArray<BarrierConfig>(memory_type, barrier_num[i][j]);
+      barrier_config_list[i][j] = InitializeArray<BarrierConfig>(barrier_num[i][j], memory_type);
       barrier_num[i][j] = 0; // reused for barrier index
     }
   }

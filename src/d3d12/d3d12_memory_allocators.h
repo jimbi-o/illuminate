@@ -1,6 +1,7 @@
 #ifndef ILLUMINATE_D3D12_MEMORY_ALLOCATOR_H
 #define ILLUMINATE_D3D12_MEMORY_ALLOCATOR_H
 #include "illuminate/memory/memory_allocation.h"
+#include "illuminate/util/util_defines.h"
 namespace illuminate {
 enum class MemoryType : uint8_t { kSystem, kScene, kFrame, };
 void* AllocateSystem(const size_t bytes, const size_t alignment_in_bytes = kDefaultAlignmentSize);
@@ -63,6 +64,10 @@ auto AllocateAndFillArrayFrame(const uint32_t len, const T& fill_value, const si
   auto ptr = AllocateArrayFrame<T>(len, alignment_in_bytes);
   std::fill(ptr, ptr + len, fill_value);
   return ptr;
+}
+template <typename T>
+auto InitializeArray(const uint32_t size, const MemoryType& memoty_type) {
+  return CreateArray(size, AllocateArray<T>(memoty_type, size));
 }
 void ResetAllocation(const MemoryType type);
 void ClearAllAllocations();
