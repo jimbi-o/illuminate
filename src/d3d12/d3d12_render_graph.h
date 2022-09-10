@@ -70,6 +70,7 @@ struct CBufferParam {
 };
 struct CBuffer {
   uint32_t buffer_index{};
+  uint32_t need_ui_param_num{};
   ArrayOf<CBufferParam> params{};
 };
 struct RenderGraphConfig {
@@ -102,8 +103,7 @@ struct RenderGraphConfig {
   uint32_t max_material_num{1024};
   uint32_t max_mipmap_num{12};
   uint32_t timestamp_query_dst_resource_num{5};
-  uint32_t cbuffer_num{0};
-  CBuffer* cbuffer_list{nullptr};
+  ArrayOf<CBuffer> cbuffer_list{};
 };
 }
 #endif

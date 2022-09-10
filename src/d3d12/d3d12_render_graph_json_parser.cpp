@@ -522,20 +522,24 @@ std::pair<const char* const *, const StrHash*> ParseRenderGraphJson(const nlohma
   }
   if (j.contains("cbuffer")) {
     const auto& cbuffers = j.at("cbuffer");
-    r.cbuffer_num = GetUint32(cbuffers.size());
-    r.cbuffer_list = AllocateArraySystem<CBuffer>(r.cbuffer_num);
-    for (uint32_t i = 0; i < r.cbuffer_num; i++) {
-      r.cbuffer_list[i].buffer_index = FindBufferIndex(buffer_name_list_len, buffer_name_hash_list, CalcEntityStrHash(cbuffers[i], "name"));
+    r.cbuffer_list = InitializeArray<CBuffer>(GetUint32(cbuffers.size()), MemoryType::kSystem);
+    for (uint32_t i = 0; i < r.cbuffer_list.size; i++) {
+      auto& dst_cbuffer = r.cbuffer_list.array[i];
+      dst_cbuffer.buffer_index = FindBufferIndex(buffer_name_list_len, buffer_name_hash_list, CalcEntityStrHash(cbuffers[i], "name"));
+      dst_cbuffer.need_ui_param_num = 0;
       const auto& cbuffer_params = cbuffers[i].at("params");
-      r.cbuffer_list[i].params = InitializeArray<CBufferParam>(GetUint32(cbuffer_params.size()), MemoryType::kSystem);
-      for (uint32_t p = 0; p < r.cbuffer_list[i].params.size; p++) {
+      dst_cbuffer.params = InitializeArray<CBufferParam>(GetUint32(cbuffer_params.size()), MemoryType::kSystem);
+      for (uint32_t p = 0; p < dst_cbuffer.params.size; p++) {
         const auto& src_param = cbuffer_params[p];
-        r.cbuffer_list[i].params.array[p].name = CreateString(src_param.at("name"), MemoryType::kSystem);
-        r.cbuffer_list[i].params.array[p].name_hash = CalcStrHash(r.cbuffer_list[i].params.array[p].name);
-        r.cbuffer_list[i].params.array[p].type = GetCBufferParamType(src_param);
-        r.cbuffer_list[i].params.array[p].min = GetFloat(src_param, "min", 0.0f);
-        r.cbuffer_list[i].params.array[p].max = GetFloat(src_param, "max", 1.0f);
-        r.cbuffer_list[i].params.array[p].initial_val = GetFloat(src_param, "initial_val", 0.0f);
+        dst_cbuffer.params.array[p].name = CreateString(src_param.at("name"), MemoryType::kSystem);
+        dst_cbuffer.params.array[p].name_hash = CalcStrHash(dst_cbuffer.params.array[p].name);
+        dst_cbuffer.params.array[p].type = GetCBufferParamType(src_param);
+        dst_cbuffer.params.array[p].min = GetFloat(src_param, "min", 0.0f);
+        dst_cbuffer.params.array[p].max = GetFloat(src_param, "max", 1.0f);
+        dst_cbuffer.params.array[p].initial_val = GetFloat(src_param, "initial_val", 0.0f);
+        if (dst_cbuffer.params.array[p].type != CBufferParamType::kSpecial) {
+          dst_cbuffer.need_ui_param_num++;
+        }
       }
     }
   }

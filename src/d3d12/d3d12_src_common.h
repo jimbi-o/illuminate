@@ -23,5 +23,6 @@ inline auto CopyStrToWstrContainer(const std::string_view src, const MemoryType 
 template<uint32_t N, class T>
 constexpr auto countof(T(&)[N]) { return N; }
 const char* CreateString(const char* const str, const MemoryType memory_type);
+const char* const* CopyStringList(const MemoryType memory_type, const uint32_t num, const char* const * src);
 }
 #endif

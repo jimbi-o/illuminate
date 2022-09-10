@@ -388,6 +388,39 @@ auto RegisterGuiDynamicResolution(const MainBufferSize& main_buffer_size, Render
   dynamic_data->primarybuffer_width = main_buffer_size.primarybuffer.width;
   dynamic_data->primarybuffer_height = main_buffer_size.primarybuffer.height;
 }
+auto RegisterGuiCBuffer(const CBuffer& cbuffer, const char* const * const buffer_name_list) {
+  ImGui::Text(buffer_name_list[cbuffer.buffer_index]);
+  for (uint32_t i = 0; i < cbuffer.params.size; i++) {
+    const auto& param = cbuffer.params.array[i];
+    if (param.type == CBufferParamType::kSpecial) {
+      continue;
+    }
+    switch (param.type) {
+      case CBufferParamType::kUint: {
+        // TODO
+        int v = GetUint32(param.initial_val);
+        if (ImGui::SliderInt(param.name, &v, GetUint32(param.min), GetUint32(param.max))) {
+          // TODO
+        }
+        break;
+      }
+      case CBufferParamType::kFloat: {
+        float v = param.initial_val;
+        ImGui::SliderFloat(param.name, &v, param.min, param.max);
+        break;
+      }
+    }
+  }
+}
+auto RegisterGuiCBufferList(const ArrayOf<CBuffer>& cbuffer_list, const char* const * const buffer_name_list) {
+  if (!ImGui::Begin("cbuffer params", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return; }
+  for (uint32_t i = 0; i < cbuffer_list.size; i++) {
+    if (cbuffer_list.array[i].need_ui_param_num == 0) { continue; }
+    ImGui::Separator();
+    RegisterGuiCBuffer(cbuffer_list.array[i], buffer_name_list);
+  }
+  ImGui::End();
+}
 auto GetAspectRatio(const Size2d& buffer_size) {
   return static_cast<float>(buffer_size.width) / buffer_size.height;
 }
@@ -399,12 +432,13 @@ auto CalcProjectionMatrix(const RenderPassConfigDynamicData& dynamic_data, const
   using namespace DirectX::SimpleMath;
   return Matrix::CreatePerspectiveFieldOfView(ToRadian(dynamic_data.fov_vertical), aspect_ratio, dynamic_data.near_z, dynamic_data.far_z);
 }
-auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index, const MainBufferSize& main_buffer_size) {
+auto RegisterGui(RenderPassConfigDynamicData* dynamic_data, const TimeDurationDataSet& time_duration_data_set, const uint32_t debug_viewable_buffer_num, const char* const * debug_viewable_buffer_name_list, bool* debug_buffer_view_enabled, int32_t* debug_buffer_selected_index, const GpuTimeDurations& gpu_time_durations, const float aspect_ratio, const char* const * render_pass_name, const uint32_t* const* serialized_render_pass_index, const MainBufferSize& main_buffer_size, const ArrayOf<CBuffer>& cbuffer_list, const char* const * const buffer_name_list) {
   RegisterGuiPerformance(time_duration_data_set, gpu_time_durations, render_pass_name, serialized_render_pass_index);
   RegisterGuiCamera(dynamic_data);
   RegisterGuiLight(dynamic_data);
   RegisterGuiDebugView(debug_viewable_buffer_num, debug_viewable_buffer_name_list, debug_buffer_view_enabled, debug_buffer_selected_index);
   RegisterGuiDynamicResolution(main_buffer_size, dynamic_data);
+  RegisterGuiCBufferList(cbuffer_list, buffer_name_list);
   dynamic_data->view_matrix = CalcViewMatrix(*dynamic_data);
   dynamic_data->projection_matrix = CalcProjectionMatrix(*dynamic_data, aspect_ratio);
 }
@@ -621,6 +655,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
   void*** cbv_ptr_list{nullptr}; // [buffer_config_index][frame_index]
   CbvUpdateFunction* cbv_update_functions{nullptr};
   ResourceStateTypeFlags::FlagType* prev_buffer_final_state{nullptr};
+  const char* const * buffer_name_list{};
   {
     nlohmann::json json;
     SUBCASE("deferred.json") {
@@ -635,7 +670,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       json = GetTestJson("config.json");
       frame_loop_num = 5;
     }
-    auto [buffer_name_list, buffer_name_hash_list] = ParseRenderGraphJson(json,
+    auto [buffer_name_list_tmp, buffer_name_hash_list] = ParseRenderGraphJson(json,
                                                                           material_pack.material_list.material_num,
                                                                           material_pack.config.material_hash_list,
                                                                           material_pack.config.rtv_format_list,
@@ -684,6 +719,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       }
     }
 #endif
+    buffer_name_list = CopyStringList(MemoryType::kSystem, render_graph.buffer_num, buffer_name_list_tmp);
     PrintNames(render_graph.buffer_num, buffer_name_list);
     FillCbvBufferCreationSize(render_graph.buffer_num, buffer_name_hash_list, &render_graph.buffer_list);
     buffer_list = CreateBuffers(render_graph.buffer_num, render_graph.buffer_list, main_buffer_size, render_graph.frame_buffer_num, buffer_allocator);
@@ -855,7 +891,7 @@ TEST_CASE("d3d12 integration test") { // NOLINT
       UpdateCameraFromUserInput(main_buffer_size.swapchain, dynamic_data.camera_pos, dynamic_data.camera_focus, prev_mouse_pos);
     }
     auto serialized_render_pass_index = GetAllQueueSeirializedRenderPassIndexInQueueArrayForm(render_graph.command_queue_num, render_pass_num_per_queue, render_graph.render_pass_num, render_pass_command_queue_index);
-    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer), render_pass_name, serialized_render_pass_index, main_buffer_size);
+    RegisterGui(&dynamic_data, time_duration_data_set, debug_viewable_buffer_allocation_num, debug_viewable_buffer_name_list, &debug_buffer_view_enabled, &debug_buffer_selected_index, gpu_time_durations_average, GetAspectRatio(main_buffer_size.primarybuffer), render_pass_name, serialized_render_pass_index, main_buffer_size, render_graph.cbuffer_list, buffer_name_list);
     // update
     RenderPassFuncArgsRenderCommon args_common {
       .main_buffer_size = &main_buffer_size,

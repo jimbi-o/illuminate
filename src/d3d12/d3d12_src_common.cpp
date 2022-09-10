@@ -38,6 +38,13 @@ const char* CreateString(const char* const str, const MemoryType memory_type) {
   strcpy_s(dst, len, str);
   return dst;
 }
+const char* const* CopyStringList(const MemoryType memory_type, const uint32_t num, const char* const * src) {
+  auto dst = AllocateArray<const char*>(memory_type, num);
+  for (uint32_t i = 0; i < num; i++) {
+    dst[i] = CreateString(src[i], memory_type);
+  }
+  return dst;
+}
 }
 #include "doctest/doctest.h"
 TEST_CASE("CopyStrToWstrContainer") {
