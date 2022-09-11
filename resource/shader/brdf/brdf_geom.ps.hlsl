@@ -5,7 +5,12 @@
 #include "shader/mesh_transform/mesh_transform.buffers.hlsli"
 #include "shader/mesh_transform/mesh_transform.hlsli"
 #if !defined(PREZ) && !defined(GBUFFER)
-ConstantBuffer<SceneLightData> scene_light                      : register(b2);
+struct SceneLightData {
+  float4 light_color;
+  float3 light_direction_vs;
+  float  exposure_rate; // to be removed later
+};
+ConstantBuffer<SceneLightData> scene_light : register(b2);
 #endif
 ConstantBuffer<MaterialCommonSettings> material_common_settings : register(b3);
 ByteAddressBuffer  material_index_list : register(t1);

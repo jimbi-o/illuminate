@@ -1,5 +1,3 @@
-#include "shader/postprocess/linear_depth.cs.h"
-#include "shader/postprocess/screen_space_shadow.cs.h"
 namespace illuminate {
 namespace {
 using namespace DirectX::SimpleMath;

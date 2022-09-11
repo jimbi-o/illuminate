@@ -1,10 +1,15 @@
 #include "shader/brdf/brdf.hlsli"
-#include "shader/brdf/brdf_lighting.cs.h"
 #include "shader/include/shader_defines.h"
 #include "shader/include/shader_functions.h"
 #include "shader/include/material_defines.hlsli"
 #include "shader/include/material_functions.hlsli"
 #include "shader/mesh_transform/mesh_transform.hlsli"
+struct BrdfLightingCBuffer {
+  float4 compact_projection_param;
+  float4 light_color;
+  float3 light_direction_vs;
+  float  exposure_rate;
+};
 ConstantBuffer<BrdfLightingCBuffer> params : register(b0);
 Texture2D<float4>   gbuffer[4]   : register(t0);
 Texture2D<float>    linear_depth : register(t4);

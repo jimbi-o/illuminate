@@ -1,6 +1,12 @@
 #include "shader/include/shader_functions.h"
-#include "shader/postprocess/screen_space_shadow.cs.h"
 // https://panoskarabelas.com/posts/screen_space_shadows/
+struct ScreenSpaceShadowCBuffer {
+  float4 compact_projection_param;
+  int2   light_origin_location;
+  uint   step_num;
+  float  thickness;
+  float  light_slope_zx;
+};
 ConstantBuffer<ScreenSpaceShadowCBuffer> params : register(b0);
 Texture2D<float> linear_depth_tex : register(t0);
 RWTexture2D<float> shadow_tex : register(u0);

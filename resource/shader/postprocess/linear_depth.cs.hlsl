@@ -1,5 +1,7 @@
 #include "shader/include/shader_functions.h"
-#include "shader/postprocess/linear_depth.cs.h"
+struct LinearDepthCBuffer {
+  float4 compact_projection_param;
+};
 ConstantBuffer<LinearDepthCBuffer> params : register(b0);
 Texture2D<float> depth                    : register(t0);
 RWTexture2D<float> linear_depth           : register(u0);
