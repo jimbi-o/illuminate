@@ -61,6 +61,65 @@
       "max_lod": 65535
     }
   ],
+  "cbuffer": [
+    {
+      "name":"camera",
+      "params": [
+        {
+          "name":"view_matrix",
+          "need_ui":false
+        },
+        {
+          "name":"projection_matrix",
+          "need_ui":false
+        }
+      ]
+    },
+    {
+      "name":"light",
+      "params": [
+        {
+          "name": "light color(R)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light color(G)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light color(B)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "light color(intensity)",
+          "type": "float",
+          "min": 0,
+          "max": 10000,
+          "initial_val": 1000
+        },
+        {
+          "name": "light vector",
+          "need_ui": false
+        },
+        {
+          "name": "exposure rate",
+          "type": "float",
+          "min": 0,
+          "max": 0.01,
+          "initial_val": 0.001
+        }
+      ]
+    }
+  ],
   "render_pass": [
     {
       "name": "copy resource",
