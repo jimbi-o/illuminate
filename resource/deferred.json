@@ -129,8 +129,8 @@
           "name": "exposure rate",
           "type": "float",
           "min": 0,
-          "max": 0.01,
-          "initial_val": 0.001
+          "max": 0.1,
+          "initial_val": 0.01
         }
       ]
     }

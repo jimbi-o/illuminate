@@ -73,6 +73,120 @@
   "max_material_num" : 1024,
   "gpu_handle_num_view": 32,
   "gpu_handle_num_sampler": 8,
+  "cbuffer": [
+    {
+      "name":"camera",
+      "params": [
+        {
+          "name":"view_matrix",
+          "need_ui":false
+        },
+        {
+          "name":"projection_matrix",
+          "need_ui":false
+        }
+      ]
+    },
+    {
+      "name":"cbv-a",
+      "params": [
+        {
+          "name": "color(R)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(G)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(B)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(alpha)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        }
+      ]
+    },
+    {
+      "name":"cbv-b",
+      "params": [
+        {
+          "name": "color(R)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(G)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(B)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(alpha)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        }
+      ]
+    },
+    {
+      "name":"cbv-c",
+      "params": [
+        {
+          "name": "color(R)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(G)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(B)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        },
+        {
+          "name": "color(alpha)",
+          "type": "float",
+          "min": 0,
+          "max": 1,
+          "initial_val": 1
+        }
+      ]
+    }
+  ],
   "render_pass": [
     {
       "name": "copy resource",
