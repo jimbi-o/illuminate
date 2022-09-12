@@ -26,7 +26,7 @@ float GetShadowValue(uint2 start, float3 initial_pos) {
   for (uint i = 0; i < params.step_num; i++) {
     if (!all(p0 - p1)) { break; }
     int e2 = error * 2;
-    if (e2 > dxy.y) {
+    if (e2 >= dxy.y) {
       if (p0.x == p1.x) { break; }
       error += dxy.y;
       p0.x += sxy.x;
@@ -34,12 +34,13 @@ float GetShadowValue(uint2 start, float3 initial_pos) {
     if (e2 <= dxy.x) {
       if (p0.y == p1.y) { break; }
       error += dxy.x;
-      dxy.y += sxy.y;
+      p0.y += sxy.y;
     }
-    float depth = linear_depth_tex.Load(uint3(p0, 0));
-    float3 pos_viewspace = RecoverViewSpacePosition(p0, depth, params.compact_projection_param);
-    float ray_pos_depth = params.light_slope_zx * (pos_viewspace.x - initial_pos.x) + initial_pos.z;
-    if (ray_pos_depth > pos_viewspace.z) { return 0.0f; }
+    float occluder_cand_depth = linear_depth_tex.Load(uint3(p0, 0));
+    float3 occluder_cand_pos = RecoverViewSpacePosition(p0, occluder_cand_depth, params.compact_projection_param);
+    float ray_pos_depth = params.light_slope_zx * (occluder_cand_pos.x - initial_pos.x) + initial_pos.z;
+    // if (occluder_cand_pos.z < ray_pos_depth && occluder_cand_pos.z + params.thickness > ray_pos_depth) { return 0.0f; }
+    if (occluder_cand_pos.z < ray_pos_depth) { return 0.0f; }
   }
   return 1.0f;
 }

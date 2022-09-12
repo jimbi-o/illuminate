@@ -423,8 +423,8 @@ RenderPassConfigDynamicData InitRenderPassDynamicData() {
   dynamic_data.camera_focus[1] = 1.0f;
   dynamic_data.camera_pos[0] = 5.0f;
   dynamic_data.camera_pos[1] = 1.5f;
-  dynamic_data.light_direction[0] = 1.0f;
-  dynamic_data.light_direction[1] = 1.0f;
+  dynamic_data.light_direction[0] = -1.0f;
+  dynamic_data.light_direction[1] = -1.0f;
   dynamic_data.light_direction[2] = 1.0f;
   return dynamic_data;
 }
@@ -654,11 +654,11 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     nlohmann::json json;
     SUBCASE("deferred.json") {
       json = GetTestJson("deferred.json");
-      frame_loop_num = 100000;
+      frame_loop_num = 5;
     }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
-      frame_loop_num = 60;
+      frame_loop_num = 5;
     }
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
