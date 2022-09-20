@@ -79,6 +79,11 @@ CPMAddPackage(
   GITHUB_REPOSITORY "microsoft/DirectXTK12"
   GIT_TAG "3356e06c6cb7e4684bc1418b864799c098ab6704"
 )
+CPMAddPackage(
+  NAME gfxminimath
+  GITHUB_REPOSITORY "jimbi-o/gfxminimath"
+  GIT_TAG "a98cc96570a9d2269e711d06c90fdf651fb5e14f"
+)
 
 if(BUILD_WITH_TEST AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata/${TEST_MODEL_NAME}")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")

@@ -1,6 +1,5 @@
 #ifndef ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
 #define ILLUMINATE_D3D12_RENDER_PASS_COMMON_H
-#include "SimpleMath.h"
 namespace illuminate {
 class DescriptorCpu;
 class DescriptorGpu;
