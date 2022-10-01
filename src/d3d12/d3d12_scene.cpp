@@ -1,6 +1,5 @@
 #include "d3d12_scene.h"
 #include <filesystem>
-#include "SimpleMath.h"
 #include "illuminate/math/math.h"
 #include "illuminate/util/util_functions.h"
 #include "d3d12_descriptors.h"
@@ -82,46 +81,48 @@ void CountModelInstanceNum(const tinygltf::Model& model, const uint32_t node_ind
     CountModelInstanceNum(model, child, model_instance_num);
   }
 }
-void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const matrix& parent_transform, const uint32_t* transform_offset, uint32_t* transform_offset_index, matrix* transform_buffer) {
-  using namespace DirectX::SimpleMath;
-  Matrix parent;
-  CopyMatrix(parent_transform, parent.m);
-  Matrix transform{};
+void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const gfxminimath::matrix& parent_transform, const uint32_t* transform_offset, uint32_t* transform_offset_index, gfxminimath::matrix* transform_buffer) {
+  using namespace gfxminimath;
+  auto parent = parent_transform;
+  matrix transform;
   const auto& node = model.nodes[node_index];
   if (!node.matrix.empty()) {
-    FillMatrixTransposed(node.matrix.data(), transform.m);
+    float m[16]{};
+    for (uint32_t i = 0; i < 3; i++) {
+      m[i] = static_cast<float>(node.matrix[i]);
+    }
+    set_matrix_with_row_major_array(m, &transform);
   } else {
     if (!node.scale.empty()) {
       float scale[3]{};
       for (uint32_t i = 0; i < 3; i++) {
         scale[i] = static_cast<float>(node.scale[i]);
       }
-      transform *= Matrix::CreateScale(scale[0], scale[1], scale[2]);
+      transform *= matrix::scale(scale);
     }
     if (!node.rotation.empty()) {
-      float quat[4]{};
+      float rotation[4]{};
       for (uint32_t i = 0; i < 4; i++) {
-        quat[i] = static_cast<float>(node.rotation[i]);
+        rotation[i] = static_cast<float>(node.rotation[i]);
       }
-      transform *= Matrix::CreateFromQuaternion(Quaternion(&quat[0]));
+      transform *= matrix::rotation(rotation);
     }
     if (!node.translation.empty()) {
       float translation[3]{};
       for (uint32_t i = 0; i < 3; i++) {
         translation[i] = static_cast<float>(node.translation[i]);
       }
-      transform *= Matrix::CreateTranslation(translation[0], translation[1], translation[2]);
+      transform *= matrix::translation(translation);
     }
-    transform = transform * parent;
+    transform *= parent;
   }
   if (node.mesh != -1) {
     const auto index = transform_offset[node.mesh] + transform_offset_index[node.mesh];
-    memcpy(&(transform_buffer[index]), &transform.m[0][0], sizeof(transform_buffer[index]));
-    logtrace("transform index{} node{} mesh{} val{}", transform_offset_index[node.mesh], node_index, index, transform_buffer[index][0][0]);
+    transform_buffer[index] = transform;
     transform_offset_index[node.mesh]++;
   }
   for (auto& child : node.children) {
-    SetTransform(model, child, transform.m, transform_offset, transform_offset_index, transform_buffer);
+    SetTransform(model, child, transform, transform_offset, transform_offset_index, transform_buffer);
   }
 }
 auto GetModelMaterialVariationHash(const tinygltf::Material& material) {
@@ -242,7 +243,7 @@ void SetSubmeshMaterials(const tinygltf::Model& model, SceneData* scene_data) {
     }
   }
 }
-void SetTransformValues(const tinygltf::Model& model, SceneData* scene_data, const uint32_t mesh_num, ID3D12Resource* resource) {
+auto GetTransformList(const tinygltf::Model& model, SceneData* scene_data, const uint32_t mesh_num) {
   uint32_t transform_element_num = 0;
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     scene_data->transform_offset[i] = transform_element_num;
@@ -252,11 +253,18 @@ void SetTransformValues(const tinygltf::Model& model, SceneData* scene_data, con
   for (uint32_t i = 0; i < scene_data->model_num; i++) {
     transform_offset_index[i] = 0;
   }
-  auto transform_buffer = MapResource(resource, sizeof(matrix) * mesh_num);
+  auto transform_list = AllocateArrayFrame<gfxminimath::matrix>(mesh_num);
   for (const auto& node : model.scenes[0].nodes) {
-    SetTransform(model, node, DirectX::SimpleMath::Matrix::Identity.m, scene_data->transform_offset, transform_offset_index, static_cast<matrix*>(transform_buffer));
+    SetTransform(model, node, gfxminimath::matrix::identity(), scene_data->transform_offset, transform_offset_index, transform_list);
   }
-  UnmapResource(resource);
+  return transform_list;
+}
+auto ConvertMatrixToFloatArray(const gfxminimath::matrix* m, const uint32_t mesh_num) {
+  auto array = AllocateArrayFrame<float>(mesh_num * 16);
+  for (uint32_t i = 0; i < mesh_num; i++) {
+    to_array_column_major(m[i], &array[i * 16]);
+  }
+  return array;
 }
 auto GetRawBufferDesc(const uint32_t num, const uint32_t stride) {
   return D3D12_SHADER_RESOURCE_VIEW_DESC {
@@ -672,13 +680,18 @@ auto ParseTinyGltfScene(const tinygltf::Model& model, const char* const gltf_pat
   const auto descriptor_heap_head_addr = scene_data.descriptor_heap->GetCPUDescriptorHandleForHeapStart();
   uint32_t used_descriptor_num = 0;
   {
-    const auto stride_size = GetUint32(sizeof(matrix));
-    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(stride_size * mesh_num, "transform_U", "transform", frame_index, &scene_data, buffer_allocator, resource_transfer);
-    SetTransformValues(model, &scene_data, mesh_num, resource_upload);
+    const auto stride_size = GetUint32(sizeof(float) * 16);
+    const auto resource_size = stride_size * mesh_num;
+    auto [resource_upload, resource_default] = PrepareSingleBufferTransfer(resource_size, "transform_U", "transform", frame_index, &scene_data, buffer_allocator, resource_transfer);
     const auto resource_desc = GetRawBufferDesc(mesh_num, stride_size);
     const auto handle = GetDescriptorHandle(descriptor_heap_head_addr, handle_increment_size_cbv_srv_uav, used_descriptor_num);
     device->CreateShaderResourceView(resource_default, &resource_desc, handle);
     scene_data.cpu_handles[kSceneDescriptorTransform].ptr = handle.ptr;
+    auto transform_list = GetTransformList(model, &scene_data, mesh_num);
+    auto transform_list_to_array = ConvertMatrixToFloatArray(transform_list, mesh_num);
+    auto transform_buffer = MapResource(resource_upload, resource_size);
+    memcpy(transform_buffer, transform_list_to_array, resource_size);
+    UnmapResource(resource_upload);
     used_descriptor_num++;
   }
   {

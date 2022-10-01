@@ -13,6 +13,12 @@ struct float4 {
 struct int2 {
   int32_t x, y;
 };
+struct matrix {
+  float4 m0;
+  float4 m1;
+  float4 m2;
+  float4 m3;
+};
 #endif
 struct SceneCameraData {
   matrix view_matrix;

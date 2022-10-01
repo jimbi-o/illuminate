@@ -1,7 +1,7 @@
 #include <fstream>
+#include "gfxminimath/gfxminimath.h"
 #include "imgui.h"
 #include <nlohmann/json.hpp>
-#include "SimpleMath.h"
 #include "tiny_gltf.h"
 #include "d3d12_barriers.h"
 #include "d3d12_command_list.h"

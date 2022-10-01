@@ -82,7 +82,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME gfxminimath
   GITHUB_REPOSITORY "jimbi-o/gfxminimath"
-  GIT_TAG "a98cc96570a9d2269e711d06c90fdf651fb5e14f"
+  GIT_TAG "e5b289ae4f4ac97755b053c5b2a97da6e4538c56"
 )
 
 if(BUILD_WITH_TEST AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata/${TEST_MODEL_NAME}")
@@ -122,6 +122,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   "${WinPixEventRuntime_SOURCE_DIR}/bin/x64/WinPixEventRuntime.lib"
   DirectXTK12
   $<$<CONFIG:Debug>:dxguid.lib>
+  gfxminimath
 )
 
 target_compile_features(${CMAKE_PROJECT_NAME} PUBLIC cxx_std_20)
@@ -151,6 +152,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${WinPixEventRuntime_SOURCE_DIR}/Include"
   "${DirectXTK12_SOURCE_DIR}/Inc"
   "${DirectX-Headers_SOURCE_DIR}/include/directx"
+  "${gfxminimath_SOURCE_DIR}/include"
   "resource"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
@@ -174,6 +176,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${DirectXTK12_SOURCE_DIR}/Inc/DDSTextureLoader.h"
   "${DirectX-Headers_SOURCE_DIR}/include/directx/d3d12.h"
   "${DirectX-Headers_SOURCE_DIR}/include/directx/d3dx12.h"
+  "${gfxminimath_SOURCE_DIR}/include/gfxminimath/gfxminimath.h"
 )
 if(USE_D3D12_AGILITY_SDK)
   target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_D3D12_AGILITY_SDK)
