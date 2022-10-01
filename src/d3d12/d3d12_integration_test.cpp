@@ -33,7 +33,7 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 namespace {
-static const uint32_t kFrameLoopNum = 100000;
+static const uint32_t kFrameLoopNum = 5;
 static const uint32_t kInvalidIndex = ~0U;
 static const uint32_t kExtraDescriptorHandleNumCbvSrvUav = 1; // imgui font
 static const uint32_t kImguiGpuHandleIndex = 0;
@@ -654,15 +654,13 @@ TEST_CASE("d3d12 integration test") { // NOLINT
     nlohmann::json json;
     SUBCASE("deferred.json") {
       json = GetTestJson("deferred.json");
-      frame_loop_num = 5;
+      frame_loop_num = 10000;
     }
     SUBCASE("forward.json") {
       json = GetTestJson("forward.json");
-      frame_loop_num = 5;
     }
     SUBCASE("config.json") {
       json = GetTestJson("config.json");
-      frame_loop_num = 5;
     }
     auto [buffer_name_list_tmp, buffer_name_hash_list] = ParseRenderGraphJson(json,
                                                                           material_pack.material_list.material_num,

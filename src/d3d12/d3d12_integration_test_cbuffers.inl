@@ -38,7 +38,7 @@ void GetCompactProjectionParam(const float fov_vertical_radian, const float aspe
 auto GetProjectionMatrix(const float compact_projection_param[4]) {
   return matrix(compact_projection_param[1], 0.0f,  0.0f,  0.0f,
                 0.0f, compact_projection_param[0],  0.0f,  0.0f,
-                0.0f, 0.0f, compact_projection_param[2], compact_projection_param[1],
+                0.0f, 0.0f, compact_projection_param[2], compact_projection_param[3],
                 0.0f,  0.0f,  1.0f, 0.0f);
 }
 auto CalcViewMatrix(const RenderPassConfigDynamicData& dynamic_data) {
@@ -56,7 +56,7 @@ struct Params {
 auto PrepareParams(const RenderPassConfigDynamicData& dynamic_data, const MainBufferSize& main_buffer_size) {
   auto params = AllocateFrame<Params>();
   const auto view_matrix = CalcViewMatrix(dynamic_data);
-  GetCompactProjectionParam(dynamic_data.fov_vertical * gfxminimath::kDegreeToRadian, GetAspectRatio(main_buffer_size.primarybuffer), dynamic_data.near_z, dynamic_data.near_z, params->compact_projection_param);
+  GetCompactProjectionParam(dynamic_data.fov_vertical * gfxminimath::kDegreeToRadian, GetAspectRatio(main_buffer_size.primarybuffer), dynamic_data.near_z, dynamic_data.far_z, params->compact_projection_param);
   const auto projection_matrix = GetProjectionMatrix(params->compact_projection_param);
   const auto light_direction_vs = CalcLightVectorVs(dynamic_data.light_direction, view_matrix);
   GetLightOriginLocationInScreenSpace(light_direction_vs, projection_matrix, main_buffer_size.primarybuffer.width, main_buffer_size.primarybuffer.height, params->light_origin_location_in_screen_space);

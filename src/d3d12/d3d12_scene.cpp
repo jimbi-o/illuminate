@@ -84,7 +84,7 @@ void CountModelInstanceNum(const tinygltf::Model& model, const uint32_t node_ind
 void SetTransform(const tinygltf::Model& model, const uint32_t node_index, const gfxminimath::matrix& parent_transform, const uint32_t* transform_offset, uint32_t* transform_offset_index, gfxminimath::matrix* transform_buffer) {
   using namespace gfxminimath;
   auto parent = parent_transform;
-  matrix transform;
+  auto transform = matrix::identity();
   const auto& node = model.nodes[node_index];
   if (!node.matrix.empty()) {
     float m[16]{};
