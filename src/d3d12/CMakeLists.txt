@@ -43,6 +43,8 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_texture_util.cpp
   d3d12_gpu_timestamp_set.h
   d3d12_gpu_timestamp_set.cpp
+  d3d12_scene_loader.h
+  d3d12_scene_loader.cpp
 )
 if(USE_D3D12_AGILITY_SDK)
   target_sources(${CMAKE_PROJECT_NAME} PRIVATE d3d12_core_dll_version.cpp)
