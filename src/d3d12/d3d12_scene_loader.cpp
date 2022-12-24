@@ -31,12 +31,17 @@ struct ModelResources {
   ID3D12Resource* mesh_resources[kMeshResourceTypeNum]{};
 };
 struct MaterialSettings {
-  StrHash*  material_variation_hash{nullptr};
+  StrHash* material_variation_hash{};
+};
+struct MaterialResources {
+  D3D12MA::Allocation* material_allocations{};
+  ID3D12Resource* material_resources{};
 };
 struct ModelDataSet {
   ModelData model_data{};
   ModelResources model_resources{};
   MaterialSettings material_settings{};
+  MaterialResources material_resources{};
 };
 namespace {
 nlohmann::json LoadJson(const char* const filename) {
@@ -94,7 +99,6 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
   auto json = LoadJson(filename);
   ModelData model_data{};
   ModelResources model_resources{};
-  MaterialSettings material_settings{};
   const auto& json_meshes = json.at("meshes");
   model_data.mesh_num = GetUint32(json_meshes.size());
   // per model data
@@ -173,7 +177,7 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
       model_resources.mesh_resources[mesh_resource_type] = resource_default;
     }
   }
-  // parse model data
+  // parse model(mesh) data
   for (uint32_t i = 0; i < model_data.mesh_num; i++) {
     const auto& json_mesh = json_meshes[i];
     {
@@ -189,11 +193,18 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
     model_data.vertex_buffer_offset[i] = json_mesh.at("vertex_buffer_index_offset");
     model_data.material_setting_index[i] = json_mesh.at("material_index");
   }
-  // TODO
   // parse material data
-  // const auto& json_material_settings = json.at("material_settings");
-  // const auto& json_materials = json_material_settings.at("materials");
-  // model_data.material_variation_hash = AllocateArrayScene<StrHash>(model_data.mesh_num);
+  MaterialSettings material_settings{};
+  MaterialResources material_resources{};
+  const auto& json_material_settings = json.at("material_settings");
+  const auto& json_materials = json_material_settings.at("materials");
+  const uint32_t material_num = GetUint32(json_materials.size());
+  material_settings.material_variation_hash = AllocateArrayScene<StrHash>(material_num);
+  for (uint32_t i = 0; i < material_num; i++) {
+    const auto& json_material = json_materials[i];
+    material_settings.material_variation_hash[i] = GetMaterialHash(json_material);
+  }
+  // TODO
   // const auto& json_textures = json_material_settings.at("textures");
   // const auto& json_samplers = json_material_settings.at("samplers");
   // model_data.texture_num = GetUint32(json_textures.size());
@@ -202,8 +213,7 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
   // ID3D12Resource** texture_resources{};
   // ID3D12DescriptorHeap* descriptor_heap{nullptr};
   // ID3D12DescriptorHeap* sampler_descriptor_heap{nullptr};
-  // model_data.material_variation_hash[i] = GetMaterialHash(json_mesh);
-  return {model_data, model_resources, material_settings};
+  return {model_data, model_resources, material_settings, material_resources};
 }
 void ReleaseModelResources(ModelResources* model_resources) {
   for (uint32_t i = 0; i < kMeshResourceTypeNum; i++) {
