@@ -107,7 +107,7 @@ float4 main(MeshTransformVsOutput input) : SV_TARGET0 {
   if (color.a < alpha_cutoff) { discard; }
 #endif
 #ifndef PREZ
-  MaterialMisc material_misc = GetMaterialMisc(model_info.material_offset, material_common_settings. misc_offset, material_index_list, textures, samplers, input.uv0);
+  MaterialMisc material_misc = GetMaterialMisc(model_info.material_offset, material_common_settings.misc_offset, material_index_list, textures, samplers, input.uv0);
   float3 normal    = normalize(input.normal);
   float3 tangent   = normalize(input.tangent.xyz);
   float3 bitangent = cross(normal, tangent) * input.tangent.w;
