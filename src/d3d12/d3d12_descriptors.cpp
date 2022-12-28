@@ -263,4 +263,10 @@ bool IsGpuHandleAvailableType(const ResourceStateType& type) {
   }
   return false;
 }
+DescriptorHeapSet CreateDescriptorHeapSet(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags) {
+  auto heap = CreateDescriptorHeap(device, type, descriptor_num, flags);
+  const auto head = heap->GetCPUDescriptorHandleForHeapStart();
+  const auto increment_size = device->GetDescriptorHandleIncrementSize(type);
+  return {heap, head, increment_size};
+}
 }

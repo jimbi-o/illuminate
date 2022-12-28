@@ -68,6 +68,12 @@ class DescriptorGpu {
   DescriptorHeapSetGpu descriptor_sampler_;
 };
 ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+struct DescriptorHeapSet {
+  ID3D12DescriptorHeap* heap{};
+  D3D12_CPU_DESCRIPTOR_HANDLE heap_head_addr{};
+  uint32_t handle_increment_size{};
+};
+DescriptorHeapSet CreateDescriptorHeapSet(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle(const D3D12_CPU_DESCRIPTOR_HANDLE heap_head, const uint32_t increment_size, const uint32_t index);
 bool IsGpuHandleAvailableType(const ResourceStateType& type);
 }
