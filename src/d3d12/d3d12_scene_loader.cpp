@@ -35,6 +35,7 @@ struct MaterialData {
   StrHash* material_variation_hash{};
 };
 struct MaterialViews {
+  DescriptorHeapSet material_descriptor_heap_set{};
   DescriptorHeapSet texture_descriptor_heap_set{};
   DescriptorHeapSet sampler_descriptor_heap_set{};
 };
@@ -362,10 +363,29 @@ auto ParseSamplerResources(const nlohmann::json& json_material_settings, D3d12De
   }
   return sampler_descriptor_heap_set;
 }
-auto CreateMaterialInfoResources(const uint32_t material_num, const shader::AlbedoInfo* const albedo_infos, const shader::MaterialMiscInfo* const material_misc_infos, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
-  auto [albedo_allocation, albedo_resource] = ReserveBufferTransfer(GetUint32(sizeof(shader::AlbedoInfo)) * material_num, albedo_infos, "albedo", frame_index, buffer_allocator, resource_transfer);
-  auto [material_misc_allocation, material_misc_resource] = ReserveBufferTransfer(GetUint32(sizeof(shader::MaterialMiscInfo)) * material_num, material_misc_infos, "material_misc", frame_index, buffer_allocator, resource_transfer);
-  return std::make_tuple(albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource);
+auto GetConstantBufferDesc(const D3D12_GPU_VIRTUAL_ADDRESS&  addr, const uint32_t size) {
+  return D3D12_CONSTANT_BUFFER_VIEW_DESC{
+    .BufferLocation = addr,
+    .SizeInBytes = size,
+  };
+}
+auto CreateCbv(ID3D12Resource* resource, const uint32_t buffer_size, const DescriptorHeapSet& descriptor_heap_set, const uint32_t index, D3d12Device* device) {
+  const auto resource_desc = GetConstantBufferDesc(resource->GetGPUVirtualAddress(), buffer_size);
+  const auto handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, index);
+  device->CreateConstantBufferView(&resource_desc, handle);
+}
+template <typename T, uint32_t index>
+auto CreateConstantBufer(const uint32_t num, const void* buffer, const char* const name, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer,  const DescriptorHeapSet& descriptor_heap_set) {
+  const auto size = AlignAddress(GetUint32(sizeof(T)) * num, 256); // cbv size must be multiple of 256
+  auto [allocation, resource] = ReserveBufferTransfer(size, buffer, name, frame_index, buffer_allocator, resource_transfer);
+  CreateCbv(resource, size, descriptor_heap_set, index, device);
+  return std::make_pair(allocation, resource);
+}
+auto CreateMaterialInfoResources(const uint32_t material_num, const shader::AlbedoInfo* const albedo_infos, const shader::MaterialMiscInfo* const material_misc_infos, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+  auto descriptor_heap_set = CreateDescriptorHeapSet(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2);
+  auto [albedo_allocation, albedo_resource] = CreateConstantBufer<shader::AlbedoInfo, 0>(material_num, albedo_infos, "albedo", frame_index, device, buffer_allocator, resource_transfer, descriptor_heap_set);
+  auto [material_misc_allocation, material_misc_resource] = CreateConstantBufer<shader::MaterialMiscInfo, 1>(material_num, material_misc_infos, "material_misc", frame_index, device, buffer_allocator, resource_transfer, descriptor_heap_set);
+  return std::make_tuple(albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource, descriptor_heap_set);
 }
 } // namespace
 ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
@@ -377,7 +397,7 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
   const auto [material_data, material_albedo_infos, material_misc_infos] = ParseMaterials(json_material_settings);
   const auto [texture_num, texture_allocations, texture_resources, texture_descriptor_heap_set] = ParseTextureResources(json_material_settings, filename, frame_index, device, buffer_allocator, resource_transfer);
   const auto sampler_descriptor_heap_set = ParseSamplerResources(json_material_settings, device);
-  auto [albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource] = CreateMaterialInfoResources(material_data.material_num, material_albedo_infos, material_misc_infos, frame_index, buffer_allocator, resource_transfer);
+  auto [albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource, material_descriptor_heap_set] = CreateMaterialInfoResources(material_data.material_num, material_albedo_infos, material_misc_infos, frame_index, device, buffer_allocator, resource_transfer);
   // TODO create albedo_infos, material_misc_infos views
   const uint32_t resource_num = model_data.mesh_num * kMeshResourceTypeNum + texture_num + 2/*material_albedo_infos+material_misc_infos*/;
   auto allocations = AllocateArrayScene<D3D12MA::Allocation*>(resource_num);
@@ -404,6 +424,7 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
     .mesh_views = mesh_views,
     .material_data = material_data,
     .material_views = {
+      .material_descriptor_heap_set = std::move(material_descriptor_heap_set),
       .texture_descriptor_heap_set = std::move(texture_descriptor_heap_set),
       .sampler_descriptor_heap_set = std::move(sampler_descriptor_heap_set),
     },
@@ -424,6 +445,11 @@ void ReleaseModelResources(ResourceSet* resource_set) {
     }
   }
 }
+void ReleaseMaterialViewDescriptorHeaps(MaterialViews* material_views) {
+  material_views->material_descriptor_heap_set.heap->Release();
+  material_views->texture_descriptor_heap_set.heap->Release();
+  material_views->sampler_descriptor_heap_set.heap->Release();
+}
 } // namespace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_dxgi_core.h"
@@ -441,8 +467,7 @@ TEST_CASE("scene loader") { // NOLINT
   auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", frame_index, device.Get(), buffer_allocator, &resource_transfer);
   ClearResourceTransfer(frame_num, &resource_transfer);
   ReleaseModelResources(&model_data_set.resource_set);
-  model_data_set.material_views.texture_descriptor_heap_set.heap->Release();
-  model_data_set.material_views.sampler_descriptor_heap_set.heap->Release();
+  ReleaseMaterialViewDescriptorHeaps(&model_data_set.material_views);
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
