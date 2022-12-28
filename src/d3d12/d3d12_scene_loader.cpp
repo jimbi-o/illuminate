@@ -26,32 +26,29 @@ struct ModelData {
   uint32_t* vertex_buffer_offset{nullptr};
   uint32_t* material_setting_index{nullptr};
 };
-struct ModelResources {
+struct MeshViews {
   D3D12_INDEX_BUFFER_VIEW index_buffer_view{};
   D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[kMeshResourceTypeNum]{};
-  D3D12MA::Allocation* mesh_allocations[kMeshResourceTypeNum]{};
-  ID3D12Resource* mesh_resources[kMeshResourceTypeNum]{};
 };
 struct MaterialData {
   uint32_t material_num{};
   StrHash* material_variation_hash{};
 };
-struct MaterialResources {
-  D3D12MA::Allocation* albedo_allocation{};
-  ID3D12Resource* albedo_resource{};
-  D3D12MA::Allocation* material_misc_allocation{};
-  ID3D12Resource* material_misc_resource{};
-  uint32_t texture_num;
-  D3D12MA::Allocation** texture_allocations{};
-  ID3D12Resource** texture_resources{};
+struct MaterialViews {
   DescriptorHeapSet texture_descriptor_heap_set{};
   DescriptorHeapSet sampler_descriptor_heap_set{};
 };
+struct ResourceSet {
+  uint32_t resource_num{};
+  D3D12MA::Allocation** allocations{};
+  ID3D12Resource** resources{};
+};
 struct ModelDataSet {
   ModelData model_data{};
-  ModelResources model_resources{};
+  MeshViews mesh_views{};
   MaterialData material_data{};
-  MaterialResources material_resources{};
+  MaterialViews material_views{};
+  ResourceSet resource_set{};
 };
 static const uint32_t kDefaultTextureIndexBlack = 0;
 static const uint32_t kDefaultTextureIndexWhite = 1;
@@ -94,7 +91,7 @@ constexpr auto ConvertToVertexBufferType(const MeshResourceType type) {
   }
   return kVertexBufferTypeNum;
 }
-auto ReserveResourceTransfer(const uint32_t buffer_size, const void* buffer_data, const char* const buffer_name, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+auto ReserveBufferTransfer(const uint32_t buffer_size, const void* buffer_data, const char* const buffer_name, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   D3D12MA::Allocation *allocation_default{nullptr}, *allocation_upload{nullptr}; 
   ID3D12Resource *resource_default{nullptr}, *resource_upload{nullptr};
   {
@@ -120,8 +117,10 @@ auto ReserveResourceTransfer(const uint32_t buffer_size, const void* buffer_data
   ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, resource_default, resource_transfer);
   return std::make_pair(allocation_default, resource_default);
 }
-auto ParseModelResources(const nlohmann::json& json, const char* const filename, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
-  ModelResources model_resources{};
+auto ParseMeshViews(const nlohmann::json& json, const char* const filename, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+  MeshViews mesh_views{};
+  auto mesh_allocations = AllocateArrayFrame<D3D12MA::Allocation*>(kMeshResourceTypeNum);
+  auto mesh_resources = AllocateArrayFrame<ID3D12Resource*>(kMeshResourceTypeNum);
   const uint32_t binary_path_len = 128;
   char binary_path[binary_path_len];
   SwapFilename(filename, json.at("binary_filename").get<std::string>().c_str(), binary_path_len, binary_path);
@@ -143,30 +142,30 @@ auto ParseModelResources(const nlohmann::json& json, const char* const filename,
     char buffer_name[buffer_name_len];
     snprintf(buffer_name, buffer_name_len, "%s_%s", filename, mesh_type_name[mesh_resource_type]);
     const uint32_t offset_in_bytes = mesh_binary_info.at("offset_in_bytes");
-    auto [allocation_default, resource_default] = ReserveResourceTransfer(buffer_size, &mesh_binary_buffer[offset_in_bytes], buffer_name, frame_index, buffer_allocator, resource_transfer);
+    auto [allocation_default, resource_default] = ReserveBufferTransfer(buffer_size, &mesh_binary_buffer[offset_in_bytes], buffer_name, frame_index, buffer_allocator, resource_transfer);
     const auto addr = resource_default->GetGPUVirtualAddress();
     const uint32_t stride_in_bytes = mesh_binary_info.at("stride_in_bytes");
     switch (mesh_resource_type) {
       case kMeshResourceTypeTransform:
         break;
       case kMeshResourceTypeIndex:
-        model_resources.index_buffer_view = {
+        mesh_views.index_buffer_view = {
           .BufferLocation = addr,
           .SizeInBytes    = buffer_size,
           .Format         = stride_in_bytes == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT,
         };
         break;
       default:
-        model_resources.vertex_buffer_view[ConvertToVertexBufferType(static_cast<MeshResourceType>(mesh_resource_type))] = {
+        mesh_views.vertex_buffer_view[ConvertToVertexBufferType(static_cast<MeshResourceType>(mesh_resource_type))] = {
           .BufferLocation = addr,
           .SizeInBytes    = buffer_size,
           .StrideInBytes  = stride_in_bytes,
         };
     }
-    model_resources.mesh_allocations[mesh_resource_type] = allocation_default;
-    model_resources.mesh_resources[mesh_resource_type] = resource_default;
+    mesh_allocations[mesh_resource_type] = allocation_default;
+    mesh_resources[mesh_resource_type] = resource_default;
   }
-  return model_resources;
+  return std::make_tuple(mesh_views, mesh_allocations, mesh_resources);
 }
 auto ParseModelData(const nlohmann::json& json) {
   ModelData model_data{};
@@ -214,7 +213,6 @@ auto SetTexture(const nlohmann::json& json, uint32_t* texture, uint32_t* sampler
 }
 auto ParseMaterials(const nlohmann::json& json_material_settings) {
   MaterialData material_data{};
-  MaterialResources material_resources{};
   const auto& json_materials = json_material_settings.at("materials");
   material_data.material_num = GetUint32(json_materials.size());
   material_data.material_variation_hash = AllocateArrayScene<StrHash>(material_data.material_num);
@@ -365,56 +363,66 @@ auto ParseSamplerResources(const nlohmann::json& json_material_settings, D3d12De
   return sampler_descriptor_heap_set;
 }
 auto CreateMaterialInfoResources(const uint32_t material_num, const shader::AlbedoInfo* const albedo_infos, const shader::MaterialMiscInfo* const material_misc_infos, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
-  auto [albedo_allocation, albedo_resource] = ReserveResourceTransfer(GetUint32(sizeof(shader::AlbedoInfo)) * material_num, albedo_infos, "albedo", frame_index, buffer_allocator, resource_transfer);
-  auto [material_misc_allocation, material_misc_resource] = ReserveResourceTransfer(GetUint32(sizeof(shader::MaterialMiscInfo)) * material_num, material_misc_infos, "material_misc", frame_index, buffer_allocator, resource_transfer);
+  auto [albedo_allocation, albedo_resource] = ReserveBufferTransfer(GetUint32(sizeof(shader::AlbedoInfo)) * material_num, albedo_infos, "albedo", frame_index, buffer_allocator, resource_transfer);
+  auto [material_misc_allocation, material_misc_resource] = ReserveBufferTransfer(GetUint32(sizeof(shader::MaterialMiscInfo)) * material_num, material_misc_infos, "material_misc", frame_index, buffer_allocator, resource_transfer);
   return std::make_tuple(albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource);
 }
 } // namespace
 ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   loginfo("loading {}", filename);
   auto json = LoadJson(filename);
-  auto model_resources = ParseModelResources(json, filename, frame_index, buffer_allocator, resource_transfer);
+  auto [mesh_views, mesh_allocations, mesh_resources] = ParseMeshViews(json, filename, frame_index, buffer_allocator, resource_transfer);
   auto model_data = ParseModelData(json);
   const auto& json_material_settings = json.at("material_settings");
   const auto [material_data, material_albedo_infos, material_misc_infos] = ParseMaterials(json_material_settings);
   const auto [texture_num, texture_allocations, texture_resources, texture_descriptor_heap_set] = ParseTextureResources(json_material_settings, filename, frame_index, device, buffer_allocator, resource_transfer);
   const auto sampler_descriptor_heap_set = ParseSamplerResources(json_material_settings, device);
   auto [albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource] = CreateMaterialInfoResources(material_data.material_num, material_albedo_infos, material_misc_infos, frame_index, buffer_allocator, resource_transfer);
-  return {model_data,
-    model_resources,
-    material_data,
-    {
-      .albedo_allocation = albedo_allocation,
-      .albedo_resource = albedo_resource,
-      .material_misc_allocation = material_misc_allocation,
-      .material_misc_resource = material_misc_resource,
-      .texture_num = texture_num,
-      .texture_allocations = texture_allocations,
-      .texture_resources = texture_resources,
+  // TODO create albedo_infos, material_misc_infos views
+  const uint32_t resource_num = model_data.mesh_num * kMeshResourceTypeNum + texture_num + 2/*material_albedo_infos+material_misc_infos*/;
+  auto allocations = AllocateArrayScene<D3D12MA::Allocation*>(resource_num);
+  auto resources = AllocateArrayScene<ID3D12Resource*>(resource_num);
+  {
+    uint32_t resource_index = 0;
+    for (; resource_index < kMeshResourceTypeNum; resource_index++) {
+      allocations[resource_index] = mesh_allocations[resource_index];
+      resources[resource_index] = mesh_resources[resource_index];
+    }
+    allocations[resource_index] = albedo_allocation;
+    resources[resource_index] = albedo_resource;
+    resource_index++;
+    allocations[resource_index] = material_misc_allocation;
+    resources[resource_index] = material_misc_resource;
+    resource_index++;
+    for (uint32_t i = 0; i < texture_num; i++) {
+      allocations[resource_index + i] = texture_allocations[i];
+      resources[resource_index + i] = texture_resources[i];
+    }
+  }
+  return {
+    .model_data = model_data,
+    .mesh_views = mesh_views,
+    .material_data = material_data,
+    .material_views = {
       .texture_descriptor_heap_set = std::move(texture_descriptor_heap_set),
       .sampler_descriptor_heap_set = std::move(sampler_descriptor_heap_set),
-    }
+    },
+    .resource_set = {
+      .resource_num = resource_num,
+      .allocations = allocations,
+      .resources = resources,
+    },
   };
 }
-void ReleaseModelResources(ModelDataSet* model_data_set) {
-  for (uint32_t i = 0; i < kMeshResourceTypeNum; i++) {
-    model_data_set->model_resources.mesh_allocations[i]->Release();
-    model_data_set->model_resources.mesh_resources[i]->Release();
-  }
-  model_data_set->material_resources.albedo_allocation->Release();
-  model_data_set->material_resources.albedo_resource->Release();
-  model_data_set->material_resources.material_misc_allocation->Release();
-  model_data_set->material_resources.material_misc_resource->Release();
-  for (uint32_t i = 0; i < model_data_set->material_resources.texture_num; i++) {
-    if (model_data_set->material_resources.texture_allocations[i]) {
-      model_data_set->material_resources.texture_allocations[i]->Release();
+void ReleaseModelResources(ResourceSet* resource_set) {
+  for (uint32_t i = 0; i < resource_set->resource_num; i++) {
+    if (resource_set->allocations[i]) {
+      resource_set->allocations[i]->Release();
     }
-    if (model_data_set->material_resources.texture_resources[i]) {
-      model_data_set->material_resources.texture_resources[i]->Release();
+    if (resource_set->resources[i]) {
+      resource_set->resources[i]->Release();
     }
   }
-  model_data_set->material_resources.texture_descriptor_heap_set.heap->Release();
-  model_data_set->material_resources.sampler_descriptor_heap_set.heap->Release();
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -432,7 +440,9 @@ TEST_CASE("scene loader") { // NOLINT
   auto resource_transfer = PrepareResourceTransferer(frame_num, 1024, 12);
   auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", frame_index, device.Get(), buffer_allocator, &resource_transfer);
   ClearResourceTransfer(frame_num, &resource_transfer);
-  ReleaseModelResources(&model_data_set);
+  ReleaseModelResources(&model_data_set.resource_set);
+  model_data_set.material_views.texture_descriptor_heap_set.heap->Release();
+  model_data_set.material_views.sampler_descriptor_heap_set.heap->Release();
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
