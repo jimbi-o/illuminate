@@ -8,7 +8,7 @@
 #include "d3d12_texture_util.h"
 #include "shader/include/shader_defines.h"
 namespace illuminate {
-enum MeshResourceType {
+enum MeshResourceType : uint32_t {
   kMeshResourceTypeTransform,
   kMeshResourceTypeIndex,
   kMeshResourceTypePosition,
@@ -51,10 +51,17 @@ struct ModelDataSet {
   MaterialViews material_views{};
   ResourceSet resource_set{};
 };
-static const uint32_t kDefaultTextureIndexBlack = 0;
-static const uint32_t kDefaultTextureIndexWhite = 1;
-static const uint32_t kDefaultTextureIndexYellow = 2;
-static const uint32_t kDefaultTextureIndexNormal = 3;
+enum DefaultTextureIndex : uint32_t {
+  kDefaultTextureIndexBlack = 0,
+  kDefaultTextureIndexWhite,
+  kDefaultTextureIndexYellow,
+  kDefaultTextureIndexNormal,
+  kDefaultTextureIndexNum,
+};
+struct DefaultTextureSet {
+  DescriptorHeapSet descriptor_heap_set{};
+  ResourceSet resource_set{};
+};
 namespace {
 nlohmann::json LoadJson(const char* const filename) {
   std::ifstream file(filename);
@@ -261,6 +268,36 @@ D3D12_SHADER_RESOURCE_VIEW_DESC GetSrvDescTexture2D(const D3D12_RESOURCE_DESC1& 
     },
   };
 }
+auto ReserveTextureTransfer(const wchar_t* const texture_filepath, const char* const texture_name, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+  ID3D12Resource* resource_default{nullptr};
+  D3D12MA::Allocation* allocation_default{nullptr};
+  const auto texture_creation_info = GatherTextureCreationInfo(device, texture_filepath);
+  if (texture_creation_info.resource_desc.Width == 0) {
+    return std::make_tuple(allocation_default, resource_default, texture_creation_info.resource_desc);
+  }
+  if (texture_creation_info.resource_desc.Flags) {
+    logwarn("texture flag({}):{}", texture_name, texture_creation_info.resource_desc.Flags);
+  }
+  ID3D12Resource* resource_upload{nullptr};
+  D3D12MA::Allocation* allocation_upload{nullptr};
+  CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ,
+               GetBufferDesc(texture_creation_info.total_size_in_bytes),
+               nullptr, buffer_allocator,
+               &allocation_upload, &resource_upload);
+  CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON,
+               texture_creation_info.resource_desc,
+               nullptr, buffer_allocator,
+               &allocation_default, &resource_default);
+  SetD3d12Name(resource_upload, texture_name);
+  SetD3d12Name(resource_default, texture_name);
+  FillUploadResource(texture_creation_info, resource_upload);
+  if (!ReserveResourceTransfer(frame_index, texture_creation_info.subresource_num, texture_creation_info.layout,
+                               resource_upload, allocation_upload,
+                               resource_default, resource_transfer)) {
+    logwarn("texture ReserveResourceTransfer failed. {}", texture_name);
+  }
+  return std::make_tuple(allocation_default, resource_default, texture_creation_info.resource_desc);
+}
 auto ParseTextureResources(const nlohmann::json& json_material_settings, const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   const auto& json_textures = json_material_settings.at("textures");
   const auto texture_num = GetUint32(json_textures.size());
@@ -277,35 +314,16 @@ auto ParseTextureResources(const nlohmann::json& json_material_settings, const c
       continue;
     }
     const auto texture_path = GetTexturePath(filename, texture_name);
-    const auto texture_creation_info = GatherTextureCreationInfo(device, texture_path);
-    if (texture_creation_info.resource_desc.Width == 0) {
-      logwarn("invalid texture {}", texture_name);
-      continue;
-    }
-    if (texture_creation_info.resource_desc.Flags) {
-      logwarn("texture flag:{}", texture_creation_info.resource_desc.Flags);
-    }
-    ID3D12Resource* resource_upload{nullptr};
-    D3D12MA::Allocation* allocation_upload{nullptr};
-    CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ,
-                 GetBufferDesc(texture_creation_info.total_size_in_bytes),
-                 nullptr, buffer_allocator,
-                 &allocation_upload, &resource_upload);
-    CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON,
-                 texture_creation_info.resource_desc,
-                 nullptr, buffer_allocator,
-                 &texture_allocations[i], &texture_resources[i]);
-    SetD3d12Name(resource_upload, texture_name);
-    SetD3d12Name(texture_resources[i], texture_name);
-    FillUploadResource(texture_creation_info, resource_upload);
-    if (!ReserveResourceTransfer(frame_index, texture_creation_info.subresource_num, texture_creation_info.layout,
-                                 resource_upload, allocation_upload,
-                                 texture_resources[i], resource_transfer)) {
-      logwarn("texture ReserveResourceTransfer failed. {} {}", texture_name, i);
+    auto [allocation_default, resource_default, resource_desc] = ReserveTextureTransfer(texture_path, texture_name, frame_index, device, buffer_allocator, resource_transfer);
+    if (resource_desc.Width == 0) {
+          logwarn("invalid texture {}", texture_name);
+          continue;
     }
     const auto handle = GetDescriptorHandle(texture_descriptor_heap_set.heap_head_addr, texture_descriptor_heap_set.handle_increment_size, i);
-    const auto view_desc = GetSrvDescTexture2D(texture_creation_info.resource_desc);
-    device->CreateShaderResourceView(texture_resources[i], &view_desc, handle);
+    const auto view_desc = GetSrvDescTexture2D(resource_desc);
+    device->CreateShaderResourceView(resource_default, &view_desc, handle);
+    texture_allocations[i] = allocation_default;
+    texture_resources[i] = resource_default;
   }
   return std::make_tuple(texture_num, texture_allocations, texture_resources, texture_descriptor_heap_set);
 }
@@ -435,7 +453,7 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
     },
   };
 }
-void ReleaseModelResources(ResourceSet* resource_set) {
+void ReleaseResourceSet(ResourceSet* resource_set) {
   for (uint32_t i = 0; i < resource_set->resource_num; i++) {
     if (resource_set->allocations[i]) {
       resource_set->allocations[i]->Release();
@@ -450,6 +468,9 @@ void ReleaseMaterialViewDescriptorHeaps(MaterialViews* material_views) {
   material_views->texture_descriptor_heap_set.heap->Release();
   material_views->sampler_descriptor_heap_set.heap->Release();
 }
+auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+  return DefaultTextureSet{};
+}
 } // namespace illuminate
 #include "doctest/doctest.h"
 #include "d3d12_dxgi_core.h"
@@ -463,17 +484,18 @@ TEST_CASE("scene loader") { // NOLINT
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   const uint32_t frame_num = 2;
   uint32_t frame_index = 0;
-  auto resource_transfer = PrepareResourceTransferer(frame_num, 1024, 12);
+  const uint32_t max_mip_num = 12;
+  auto resource_transfer = PrepareResourceTransferer(frame_num, 1024, max_mip_num);
   auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", frame_index, device.Get(), buffer_allocator, &resource_transfer);
   ClearResourceTransfer(frame_num, &resource_transfer);
-  ReleaseModelResources(&model_data_set.resource_set);
+  ReleaseResourceSet(&model_data_set.resource_set);
   ReleaseMaterialViewDescriptorHeaps(&model_data_set.material_views);
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
   ClearAllAllocations();
 }
-TEST_CASE("create default textures") { // NOLINT
+TEST_CASE("load default textures") { // NOLINT
   using namespace illuminate; // NOLINT
   DxgiCore dxgi_core;
   dxgi_core.Init(); // NOLINT
@@ -482,10 +504,12 @@ TEST_CASE("create default textures") { // NOLINT
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   const uint32_t frame_num = 2;
   uint32_t frame_index = 0;
-  auto resource_transfer = PrepareResourceTransferer(frame_num, 1024, 12);
-  // auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", frame_index, device.Get(), buffer_allocator, &resource_transfer);
+  const uint32_t max_mip_num = 2;
+  auto resource_transfer = PrepareResourceTransferer(frame_num, 1024, max_mip_num);
+  auto default_textures = LoadDefaultTextures(frame_index, device.Get(), buffer_allocator, &resource_transfer);
   ClearResourceTransfer(frame_num, &resource_transfer);
-  // ReleaseModelResources(&model_data_set);
+  ReleaseResourceSet(&default_textures.resource_set);
+  default_textures.descriptor_heap_set.heap->Release();
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
