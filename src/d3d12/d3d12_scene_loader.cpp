@@ -59,9 +59,10 @@ enum DefaultTextureIndex : uint32_t {
   kDefaultTextureIndexNum,
 };
 struct DefaultTextureSet {
-  DescriptorHeapSet descriptor_heap_set{};
   ResourceSet resource_set{};
+  DescriptorHeapSet descriptor_heap_set{};
 };
+const char kDefaultTexturePath[] = "textures/";
 namespace {
 nlohmann::json LoadJson(const char* const filename) {
   std::ifstream file(filename);
@@ -135,15 +136,16 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
   auto mesh_binary_buffer = ReadAllBytesFromFileToTemporaryBuffer(binary_path);
   // TODO check transform matrix column/row-major
   const auto& json_binary_info = json.at("binary_info");
+  const char* mesh_type_name[] = {
+    "transform",
+    "index",
+    "position",
+    "normal",
+    "tangent",
+    "texcoord",
+  };
+  static_assert(countof(mesh_type_name) == kMeshResourceTypeNum);
   for (uint32_t mesh_resource_type = 0; mesh_resource_type < kMeshResourceTypeNum; mesh_resource_type++) {
-    const char* mesh_type_name[] = {
-      "transform",
-      "index",
-      "position",
-      "normal",
-      "tangent",
-      "texcoord",
-    };
     const auto& mesh_binary_info = json_binary_info.at(mesh_type_name[mesh_resource_type]);
     const auto buffer_size = mesh_binary_info.at("size_in_bytes").get<uint32_t>();
     const uint32_t buffer_name_len = 128;
@@ -301,8 +303,8 @@ auto ReserveTextureTransfer(const wchar_t* const texture_filepath, const char* c
 auto ParseTextureResources(const nlohmann::json& json_material_settings, const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   const auto& json_textures = json_material_settings.at("textures");
   const auto texture_num = GetUint32(json_textures.size());
-  auto texture_allocations = AllocateArrayScene<D3D12MA::Allocation*>(texture_num);
-  auto texture_resources = AllocateArrayScene<ID3D12Resource*>(texture_num);
+  auto texture_allocations = AllocateArrayFrame<D3D12MA::Allocation*>(texture_num);
+  auto texture_resources = AllocateArrayFrame<ID3D12Resource*>(texture_num);
   auto texture_descriptor_heap_set = CreateDescriptorHeapSet(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, texture_num);
   for (uint32_t i = 0; i < texture_num; i++) {
     const auto& texture_name_str = json_textures[i].at("path").get<std::string>();
@@ -405,6 +407,15 @@ auto CreateMaterialInfoResources(const uint32_t material_num, const shader::Albe
   auto [material_misc_allocation, material_misc_resource] = CreateConstantBufer<shader::MaterialMiscInfo, 1>(material_num, material_misc_infos, "material_misc", frame_index, device, buffer_allocator, resource_transfer, descriptor_heap_set);
   return std::make_tuple(albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource, descriptor_heap_set);
 }
+auto ReserveDefaultTextureTransfer(const uint32_t texture_index, const char* const texture_name, const DescriptorHeapSet& descriptor_heap_set, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+  auto texture_path = GetTexturePath(kDefaultTexturePath, texture_name);
+  auto [allocation_default, resource_default, resource_desc] = ReserveTextureTransfer(texture_path, texture_name, frame_index, device, buffer_allocator, resource_transfer);
+  assert(resource_desc.Width > 0);
+  const auto handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, texture_index);
+  const auto view_desc = GetSrvDescTexture2D(resource_desc);
+  device->CreateShaderResourceView(resource_default, &view_desc, handle);
+  return std::make_pair(allocation_default, resource_default);
+}
 } // namespace
 ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   loginfo("loading {}", filename);
@@ -416,7 +427,6 @@ ModelDataSet LoadModelData(const char* const filename, const uint32_t frame_inde
   const auto [texture_num, texture_allocations, texture_resources, texture_descriptor_heap_set] = ParseTextureResources(json_material_settings, filename, frame_index, device, buffer_allocator, resource_transfer);
   const auto sampler_descriptor_heap_set = ParseSamplerResources(json_material_settings, device);
   auto [albedo_allocation, albedo_resource, material_misc_allocation, material_misc_resource, material_descriptor_heap_set] = CreateMaterialInfoResources(material_data.material_num, material_albedo_infos, material_misc_infos, frame_index, device, buffer_allocator, resource_transfer);
-  // TODO create albedo_infos, material_misc_infos views
   const uint32_t resource_num = model_data.mesh_num * kMeshResourceTypeNum + texture_num + 2/*material_albedo_infos+material_misc_infos*/;
   auto allocations = AllocateArrayScene<D3D12MA::Allocation*>(resource_num);
   auto resources = AllocateArrayScene<ID3D12Resource*>(resource_num);
@@ -469,7 +479,27 @@ void ReleaseMaterialViewDescriptorHeaps(MaterialViews* material_views) {
   material_views->sampler_descriptor_heap_set.heap->Release();
 }
 auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
-  return DefaultTextureSet{};
+  auto allocations = AllocateArrayScene<D3D12MA::Allocation*>(kDefaultTextureIndexNum);
+  auto resources = AllocateArrayScene<ID3D12Resource*>(kDefaultTextureIndexNum);
+  auto descriptor_heap_set = CreateDescriptorHeapSet(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kDefaultTextureIndexNum);
+  const char* const texture_name[] = {
+    "black.dds",
+    "white.dds",
+    "yellow.dds",
+    "normal.dds",
+  };
+  static_assert(countof(texture_name) == kDefaultTextureIndexNum);
+  for (uint32_t i = 0; i < kDefaultTextureIndexNum; i++) {
+    std::tie(allocations[i], resources[i]) = ReserveDefaultTextureTransfer(i, texture_name[i], descriptor_heap_set, frame_index, device, buffer_allocator, resource_transfer);
+  }
+  return DefaultTextureSet{
+    .resource_set = {
+      .resource_num = kDefaultTextureIndexNum,
+      .allocations = allocations,
+      .resources = resources,
+    },
+    .descriptor_heap_set = std::move(descriptor_heap_set),
+  };
 }
 } // namespace illuminate
 #include "doctest/doctest.h"
@@ -504,7 +534,7 @@ TEST_CASE("load default textures") { // NOLINT
   auto buffer_allocator = GetBufferAllocator(dxgi_core.GetAdapter(), device.Get());
   const uint32_t frame_num = 2;
   uint32_t frame_index = 0;
-  const uint32_t max_mip_num = 2;
+  const uint32_t max_mip_num = 3;
   auto resource_transfer = PrepareResourceTransferer(frame_num, 1024, max_mip_num);
   auto default_textures = LoadDefaultTextures(frame_index, device.Get(), buffer_allocator, &resource_transfer);
   ClearResourceTransfer(frame_num, &resource_transfer);
