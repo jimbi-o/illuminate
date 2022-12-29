@@ -518,9 +518,49 @@ auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12M
   };
 }
 } // namespace illuminate
-#include "doctest/doctest.h"
+#include <memory>
 #include "d3d12_dxgi_core.h"
 #include "d3d12_device.h"
+namespace illuminate {
+class GraphicDevice {
+ public:
+  static const uint32_t kFrameNum = 2;
+  static const uint32_t kMaxMipMapNum = 12;
+  static std::unique_ptr<GraphicDevice> CreateGraphicDevice();
+  virtual ~GraphicDevice();
+  auto DxgiAdapter() { return dxgi_core_.GetAdapter(); }
+  auto D3d12Device() { return device_.Get(); }
+  auto GpuBufferAllocator() { return buffer_allocator_; }
+  auto ResourceTransferManager() { return &resource_transfer_; }
+ private:
+  GraphicDevice();
+  GraphicDevice(const GraphicDevice&) = delete;
+  GraphicDevice(GraphicDevice&&) = delete;
+  void operator= (const GraphicDevice&) = delete;
+  DxgiCore dxgi_core_;
+  Device device_;
+  D3D12MA::Allocator* buffer_allocator_;
+  ResourceTransfer resource_transfer_;
+};
+} // namespace illuminate
+namespace illuminate {
+std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice() {
+  return std::unique_ptr<GraphicDevice>(new GraphicDevice());
+}
+GraphicDevice::GraphicDevice() {
+  dxgi_core_.Init();
+  device_.Init(DxgiAdapter());
+  buffer_allocator_ = GetBufferAllocator(DxgiAdapter(), D3d12Device());
+  resource_transfer_ = PrepareResourceTransferer(kFrameNum, 1024, kMaxMipMapNum);
+}
+GraphicDevice::~GraphicDevice() {
+  ClearResourceTransfer(kFrameNum, ResourceTransferManager());
+  buffer_allocator_->Release();
+  device_.Term();
+  dxgi_core_.Term();
+}
+}
+#include "doctest/doctest.h"
 TEST_CASE("scene loader") { // NOLINT
   using namespace illuminate; // NOLINT
   DxgiCore dxgi_core;
@@ -542,5 +582,18 @@ TEST_CASE("scene loader") { // NOLINT
   buffer_allocator->Release();
   device.Term();
   dxgi_core.Term();
+  ClearAllAllocations();
+}
+TEST_CASE("scene viewer") { // NOLINT
+  using namespace illuminate; // NOLINT
+  auto graphic_device = GraphicDevice::CreateGraphicDevice();
+  uint32_t frame_index = 0;
+  auto default_textures = LoadDefaultTextures(frame_index, graphic_device->D3d12Device(), graphic_device->GpuBufferAllocator(), graphic_device->ResourceTransferManager());
+  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, frame_index, graphic_device->D3d12Device(), graphic_device->GpuBufferAllocator(), graphic_device->ResourceTransferManager());
+  ReleaseResourceSet(&model_data_set.resource_set);
+  ReleaseMaterialViewDescriptorHeaps(&model_data_set.material_views);
+  ReleaseResourceSet(&default_textures.resource_set);
+  default_textures.descriptor_heap_set.heap->Release();
+  graphic_device.reset();
   ClearAllAllocations();
 }
