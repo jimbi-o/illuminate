@@ -540,6 +540,8 @@ class GraphicDevice {
   GraphicDevice(GraphicDevice&&) = delete;
   void operator= (const GraphicDevice&) = delete;
   uint32_t frame_buffer_num_;
+  uint32_t width_;
+  uint32_t height_;
   DxgiCore dxgi_core_;
   Device device_;
   D3D12MA::Allocator* buffer_allocator_;
@@ -550,7 +552,18 @@ class GraphicDevice {
 };
 } // namespace illuminate
 #include "d3d12_json_parser.h"
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
+LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+  // if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) { return true; } // TODO comment-in
+  switch (msg) {
+    case WM_DESTROY: {
+      ::PostQuitMessage(0);
+      return 0;
+    }
+  }
+  return ::DefWindowProc(hWnd, msg, wParam, lParam);
+}
 std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice(const nlohmann::json& config) {
   return std::unique_ptr<GraphicDevice>(new GraphicDevice(config));
 }
@@ -592,11 +605,17 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
       SetD3d12Name(command_list_set_.GetCommandQueue(i), GetStringView(command_queues[i], "name"));
     }
   }
-  // window_.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height, WndProc);
-  // swapchain_.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, render_graph.frame_buffer_num + 1, render_graph.frame_buffer_num, render_graph.swapchain_usage);
+  {
+    const auto& window = config.at("window");
+    width_ = window.at("width");
+    height_ = window.at("height");
+    window_.Init(GetStringView(window.at("title")).data(), width_, height_, WndProc);
+  }
+  // swapchain_.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(swapchain_command_queue_index), device.Get(), window.GetHwnd(), swapchain_format, frame_buffer_num + 1, frame_buffer_num, swapchain_usage);
 }
 GraphicDevice::~GraphicDevice() {
   ClearResourceTransfer(frame_buffer_num_, ResourceTransferManager());
+  window_.Term();
   command_list_set_.Term();
   buffer_allocator_->Release();
   device_.Term();
