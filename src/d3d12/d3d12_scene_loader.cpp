@@ -521,6 +521,9 @@ auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12M
 #include <memory>
 #include "d3d12_dxgi_core.h"
 #include "d3d12_device.h"
+#include "d3d12_command_list.h"
+#include "d3d12_swapchain.h"
+#include "d3d12_win32_window.h"
 namespace illuminate {
 class GraphicDevice {
  public:
@@ -541,8 +544,12 @@ class GraphicDevice {
   Device device_;
   D3D12MA::Allocator* buffer_allocator_;
   ResourceTransfer resource_transfer_;
+  CommandListSet command_list_set_;
+  Window window_;
+  Swapchain swapchain_;
 };
 } // namespace illuminate
+#include "d3d12_json_parser.h"
 namespace illuminate {
 std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice(const nlohmann::json& config) {
   return std::unique_ptr<GraphicDevice>(new GraphicDevice(config));
@@ -556,9 +563,41 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
     const auto& resource_transfer_config = config.at("resource_transfer_config");
     resource_transfer_ = PrepareResourceTransferer(frame_buffer_num_, resource_transfer_config.at("max_buffer_transfer_num_per_frame"), resource_transfer_config.at("max_mip_map_num"));
   }
+  {
+    const auto& command_queues = config.at("command_queue");
+    const auto command_queue_num = GetUint32(command_queues.size());
+    auto command_queue_type = AllocateArrayFrame<D3D12_COMMAND_LIST_TYPE>(command_queue_num);
+    auto command_queue_priority = AllocateArrayFrame<D3D12_COMMAND_QUEUE_PRIORITY>(command_queue_num);
+    auto command_list_num_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num);
+    uint32_t command_allocator_num_per_queue_type[kCommandQueueTypeNum]{};
+    for (uint32_t i = 0; i < command_queue_num; i++) {
+      auto command_queue_type_str = GetStringView(command_queues[i], "type");
+      command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_DIRECT;
+      if (command_queue_type_str.compare("compute") == 0) {
+        command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+      } else if (command_queue_type_str.compare("copy") == 0) {
+        command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_COPY;
+      }
+      auto command_queue_priority_str = GetStringView(command_queues[i], "priority");
+      command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+      if (command_queue_priority_str.compare("high") == 0) {
+        command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_HIGH;
+      } else if (command_queue_priority_str.compare("global realtime") == 0) {
+        command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME;
+      }
+      command_list_num_per_queue[i] = command_queues[i].at("command_list_num");
+    }
+    command_list_set_.Init(D3d12Device(), command_queue_num, command_queue_type, command_queue_priority, command_list_num_per_queue, frame_buffer_num_, command_allocator_num_per_queue_type);
+    for (uint32_t i = 0; i < command_queue_num; i++) {
+      SetD3d12Name(command_list_set_.GetCommandQueue(i), GetStringView(command_queues[i], "name"));
+    }
+  }
+  // window_.Init(render_graph.window_title, render_graph.window_width, render_graph.window_height, WndProc);
+  // swapchain_.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(render_graph.swapchain_command_queue_index), device.Get(), window.GetHwnd(), render_graph.swapchain_format, render_graph.frame_buffer_num + 1, render_graph.frame_buffer_num, render_graph.swapchain_usage);
 }
 GraphicDevice::~GraphicDevice() {
   ClearResourceTransfer(frame_buffer_num_, ResourceTransferManager());
+  command_list_set_.Term();
   buffer_allocator_->Release();
   device_.Term();
   dxgi_core_.Term();
