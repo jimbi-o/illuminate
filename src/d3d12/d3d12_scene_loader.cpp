@@ -524,19 +524,19 @@ auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12M
 namespace illuminate {
 class GraphicDevice {
  public:
-  static const uint32_t kFrameNum = 2;
-  static const uint32_t kMaxMipMapNum = 12;
-  static std::unique_ptr<GraphicDevice> CreateGraphicDevice();
+  static std::unique_ptr<GraphicDevice> CreateGraphicDevice(const nlohmann::json&);
   virtual ~GraphicDevice();
   auto DxgiAdapter() { return dxgi_core_.GetAdapter(); }
   auto D3d12Device() { return device_.Get(); }
   auto GpuBufferAllocator() { return buffer_allocator_; }
   auto ResourceTransferManager() { return &resource_transfer_; }
  private:
-  GraphicDevice();
+  GraphicDevice(const nlohmann::json& config);
+  GraphicDevice() = delete;
   GraphicDevice(const GraphicDevice&) = delete;
   GraphicDevice(GraphicDevice&&) = delete;
   void operator= (const GraphicDevice&) = delete;
+  uint32_t frame_buffer_num_;
   DxgiCore dxgi_core_;
   Device device_;
   D3D12MA::Allocator* buffer_allocator_;
@@ -544,17 +544,21 @@ class GraphicDevice {
 };
 } // namespace illuminate
 namespace illuminate {
-std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice() {
-  return std::unique_ptr<GraphicDevice>(new GraphicDevice());
+std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice(const nlohmann::json& config) {
+  return std::unique_ptr<GraphicDevice>(new GraphicDevice(config));
 }
-GraphicDevice::GraphicDevice() {
+GraphicDevice::GraphicDevice(const nlohmann::json& config) {
+  frame_buffer_num_ = config.at("frame_buffer_num");
   dxgi_core_.Init();
   device_.Init(DxgiAdapter());
   buffer_allocator_ = GetBufferAllocator(DxgiAdapter(), D3d12Device());
-  resource_transfer_ = PrepareResourceTransferer(kFrameNum, 1024, kMaxMipMapNum);
+  {
+    const auto& resource_transfer_config = config.at("resource_transfer_config");
+    resource_transfer_ = PrepareResourceTransferer(frame_buffer_num_, resource_transfer_config.at("max_buffer_transfer_num_per_frame"), resource_transfer_config.at("max_mip_map_num"));
+  }
 }
 GraphicDevice::~GraphicDevice() {
-  ClearResourceTransfer(kFrameNum, ResourceTransferManager());
+  ClearResourceTransfer(frame_buffer_num_, ResourceTransferManager());
   buffer_allocator_->Release();
   device_.Term();
   dxgi_core_.Term();
@@ -586,7 +590,7 @@ TEST_CASE("scene loader") { // NOLINT
 }
 TEST_CASE("scene viewer") { // NOLINT
   using namespace illuminate; // NOLINT
-  auto graphic_device = GraphicDevice::CreateGraphicDevice();
+  auto graphic_device = GraphicDevice::CreateGraphicDevice(LoadJson("configs/config_default.json"));
   uint32_t frame_index = 0;
   auto default_textures = LoadDefaultTextures(frame_index, graphic_device->D3d12Device(), graphic_device->GpuBufferAllocator(), graphic_device->ResourceTransferManager());
   auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, frame_index, graphic_device->D3d12Device(), graphic_device->GpuBufferAllocator(), graphic_device->ResourceTransferManager());
