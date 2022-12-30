@@ -611,10 +611,24 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
     height_ = window.at("height");
     window_.Init(GetStringView(window.at("title")).data(), width_, height_, WndProc);
   }
-  // swapchain_.Init(dxgi_core.GetFactory(), command_list_set.GetCommandQueue(swapchain_command_queue_index), device.Get(), window.GetHwnd(), swapchain_format, frame_buffer_num + 1, frame_buffer_num, swapchain_usage);
+  {
+    const auto& swapchain = config.at("swapchain");
+    uint32_t command_queue_index = 0;
+    const auto& command_queues = config.at("command_queue");
+    const auto& name = GetStringView(swapchain.at("command_queue"));
+    for (uint32_t i = 0; i < command_queues.size(); i++) {
+      if (GetStringView(command_queues[i].at("name")) == name) {
+        command_queue_index = i;
+        break;
+      }
+    }
+    const auto swapchain_format = GetDxgiFormat(swapchain.at("format"));
+    swapchain_.Init(dxgi_core_.GetFactory(), command_list_set_.GetCommandQueue(command_queue_index), D3d12Device(), window_.GetHwnd(), swapchain_format, frame_buffer_num_ + 1, frame_buffer_num_, DXGI_USAGE_RENDER_TARGET_OUTPUT);
+  }
 }
 GraphicDevice::~GraphicDevice() {
   ClearResourceTransfer(frame_buffer_num_, ResourceTransferManager());
+  swapchain_.Term();
   window_.Term();
   command_list_set_.Term();
   buffer_allocator_->Release();
