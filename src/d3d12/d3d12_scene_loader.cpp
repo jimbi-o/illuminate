@@ -561,6 +561,7 @@ class GraphicDevice {
   uint64_t** frame_signals_;
   Window window_;
   Swapchain swapchain_;
+  DescriptorGpu descriptor_gpu_;
 };
 } // namespace illuminate
 #include "d3d12_json_parser.h"
@@ -644,10 +645,15 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
     frame_signals_[i] = AllocateArraySystem<uint64_t>(command_queue_num_);
     std::fill(frame_signals_[i], frame_signals_[i] + command_queue_num_, 0);
   }
+  {
+    const auto& descriptor_gpu = config.at("descriptor_gpu");
+    descriptor_gpu_.Init(GetDevice(), descriptor_gpu.at("gpu_handle_num_view"), descriptor_gpu.at("gpu_handle_num_sampler"));
+  }
 }
 GraphicDevice::~GraphicDevice() {
   command_queue_signals_.WaitAll(GetDevice());
   command_queue_signals_.Term();
+  descriptor_gpu_.Term();
   ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
   swapchain_.Term();
   window_.Term();
