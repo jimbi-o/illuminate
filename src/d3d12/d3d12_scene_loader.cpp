@@ -533,7 +533,6 @@ class GraphicDevice {
   auto GetDevice() { return device_.Get(); }
   auto GetGpuBufferAllocator() { return buffer_allocator_; }
   auto GetResourceTransferManager() { return &resource_transfer_; }
-  constexpr auto GetCommandQueueNum() const { return command_queue_num_; }
   auto GetCommandQueueList() { return command_list_set_.GetCommandQueueList(); }
   auto GetCommandQueue(const uint32_t index) { return command_list_set_.GetCommandQueue(index); }
   constexpr auto GetFrameBufferNum() const { return frame_buffer_num_; }
