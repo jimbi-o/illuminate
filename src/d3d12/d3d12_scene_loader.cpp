@@ -529,13 +529,15 @@ class GraphicDevice {
  public:
   static std::unique_ptr<GraphicDevice> CreateGraphicDevice(const nlohmann::json&);
   virtual ~GraphicDevice();
-  auto DxgiAdapter() { return dxgi_core_.GetAdapter(); }
-  auto D3d12Device() { return device_.Get(); }
-  auto GpuBufferAllocator() { return buffer_allocator_; }
-  auto ResourceTransferManager() { return &resource_transfer_; }
+  auto GetDxgiAdapter() { return dxgi_core_.GetAdapter(); }
+  auto GetDevice() { return device_.Get(); }
+  auto GetGpuBufferAllocator() { return buffer_allocator_; }
+  auto GetResourceTransferManager() { return &resource_transfer_; }
   constexpr auto GetCommandQueueNum() const { return command_queue_num_; }
   auto GetCommandQueueList() { return command_list_set_.GetCommandQueueList(); }
   auto GetCommandQueue(const uint32_t index) { return command_list_set_.GetCommandQueue(index); }
+  constexpr auto GetFrameBufferNum() const { return frame_buffer_num_; }
+  constexpr auto GetFrameBufferIndex() const { return frame_buffer_index_; }
   bool PreRender();
   void PostRender() {}
   void Present();
@@ -581,8 +583,8 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   frame_buffer_num_ = config.at("frame_buffer_num");
   frame_buffer_index_ = 0;
   dxgi_core_.Init();
-  device_.Init(DxgiAdapter());
-  buffer_allocator_ = GetBufferAllocator(DxgiAdapter(), D3d12Device());
+  device_.Init(GetDxgiAdapter());
+  buffer_allocator_ = GetBufferAllocator(GetDxgiAdapter(), GetDevice());
   {
     const auto& resource_transfer_config = config.at("resource_transfer_config");
     resource_transfer_ = PrepareResourceTransferer(frame_buffer_num_, resource_transfer_config.at("max_buffer_transfer_num_per_frame"), resource_transfer_config.at("max_mip_map_num"));
@@ -611,7 +613,7 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
       }
       command_list_num_per_queue[i] = command_queues[i].at("command_list_num");
     }
-    command_list_set_.Init(D3d12Device(), command_queue_num_, command_queue_type, command_queue_priority, command_list_num_per_queue, frame_buffer_num_, command_allocator_num_per_queue_type);
+    command_list_set_.Init(GetDevice(), command_queue_num_, command_queue_type, command_queue_priority, command_list_num_per_queue, frame_buffer_num_, command_allocator_num_per_queue_type);
     for (uint32_t i = 0; i < command_queue_num_; i++) {
       SetD3d12Name(command_list_set_.GetCommandQueue(i), GetStringView(command_queues[i], "name"));
     }
@@ -634,9 +636,9 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
       }
     }
     const auto swapchain_format = GetDxgiFormat(swapchain.at("format"));
-    swapchain_.Init(dxgi_core_.GetFactory(), GetCommandQueue(command_queue_index), D3d12Device(), window_.GetHwnd(), swapchain_format, frame_buffer_num_ + 1, frame_buffer_num_, DXGI_USAGE_RENDER_TARGET_OUTPUT);
+    swapchain_.Init(dxgi_core_.GetFactory(), GetCommandQueue(command_queue_index), GetDevice(), window_.GetHwnd(), swapchain_format, frame_buffer_num_ + 1, frame_buffer_num_, DXGI_USAGE_RENDER_TARGET_OUTPUT);
   }
-  command_queue_signals_.Init(D3d12Device(), command_queue_num_, GetCommandQueueList());
+  command_queue_signals_.Init(GetDevice(), command_queue_num_, GetCommandQueueList());
   frame_signals_ = AllocateArraySystem<uint64_t*>(frame_buffer_num_);
   for (uint32_t i = 0; i < frame_buffer_num_; i++) {
     frame_signals_[i] = AllocateArraySystem<uint64_t>(command_queue_num_);
@@ -644,9 +646,9 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   }
 }
 GraphicDevice::~GraphicDevice() {
-  command_queue_signals_.WaitAll(D3d12Device());
+  command_queue_signals_.WaitAll(GetDevice());
   command_queue_signals_.Term();
-  ClearResourceTransfer(frame_buffer_num_, ResourceTransferManager());
+  ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
   swapchain_.Term();
   window_.Term();
   command_list_set_.Term();
@@ -657,7 +659,7 @@ GraphicDevice::~GraphicDevice() {
 bool GraphicDevice::PreRender() {
   if (!window_.ProcessMessage()) { return false; }
   frame_buffer_index_ = (frame_buffer_index_ + 1) % frame_buffer_num_;
-  command_queue_signals_.WaitOnCpu(D3d12Device(), frame_signals_[frame_buffer_index_]);
+  command_queue_signals_.WaitOnCpu(GetDevice(), frame_signals_[frame_buffer_index_]);
   command_list_set_.SucceedFrame();
   swapchain_.UpdateBackBufferIndex();
   return true;
@@ -694,8 +696,8 @@ TEST_CASE("scene viewer") { // NOLINT
   using namespace illuminate; // NOLINT
   auto graphic_device = GraphicDevice::CreateGraphicDevice(LoadJson("configs/config_default.json"));
   uint32_t frame_index = 0;
-  auto default_textures = LoadDefaultTextures(frame_index, graphic_device->D3d12Device(), graphic_device->GpuBufferAllocator(), graphic_device->ResourceTransferManager());
-  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, frame_index, graphic_device->D3d12Device(), graphic_device->GpuBufferAllocator(), graphic_device->ResourceTransferManager());
+  auto default_textures = LoadDefaultTextures(frame_index, graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
+  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, frame_index, graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
   for (uint32_t i = 0; i < 10; i++) {
     if (!graphic_device->PreRender()) { break; }
     graphic_device->Present();
