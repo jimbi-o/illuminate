@@ -1,0 +1,8 @@
+node imgui(rtv dst : SV_Target0, RpsViewport dst_viewport : SV_Viewport);
+
+export void rps_main([readonly(present)] texture backbuffer)
+{
+  ResourceDesc backbuffer_desc = backbuffer.desc();
+  RpsViewport dst_viewport = viewport(backbuffer_desc.Width, backbuffer_desc.Height);
+  imgui(backbuffer, dst_viewport);
+}

@@ -84,6 +84,13 @@ CPMAddPackage(
   GITHUB_REPOSITORY "jimbi-o/gfxminimath"
   GIT_TAG "e5b289ae4f4ac97755b053c5b2a97da6e4538c56"
 )
+CPMAddPackage(
+  NAME RenderPipelineShaders
+  GITHUB_REPOSITORY "GPUOpen-LibrariesAndSDKs/RenderPipelineShaders"
+  GIT_TAG "3a693036b72fc657b9542b631e34dfaf03033741"
+  OPTIONS
+  "RpsBuildTests OFF" "RpsEnableVulkan OFF" "RpsEnableImGui OFF"
+)
 
 if(BUILD_WITH_TEST AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata/${TEST_MODEL_NAME}")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resource/scenedata")
@@ -116,6 +123,13 @@ endif()
 
 target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM INTERFACE spdlog)
 set_target_properties(spdlog PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
+
+add_library(rendergraph)
+target_sources(rendergraph
+  PRIVATE
+  resource/configs/default_rendergraph.rpsl.g.c
+)
+
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   spdlog
   D3D12MemoryAllocator
@@ -123,6 +137,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   DirectXTK12
   $<$<CONFIG:Debug>:dxguid.lib>
   gfxminimath
+  rps_core
+  rps_runtime
+  rps_runtime_d3d12
+  rendergraph
 )
 
 target_compile_features(${CMAKE_PROJECT_NAME} PUBLIC cxx_std_20)
@@ -153,6 +171,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${DirectXTK12_SOURCE_DIR}/Inc"
   "${DirectX-Headers_SOURCE_DIR}/include/directx"
   "${gfxminimath_SOURCE_DIR}/include"
+  "${RenderPipelineShaders_SOURCE_DIR}/include"
   "resource"
 )
 target_precompile_headers(${CMAKE_PROJECT_NAME}
@@ -177,7 +196,9 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${DirectX-Headers_SOURCE_DIR}/include/directx/d3d12.h"
   "${DirectX-Headers_SOURCE_DIR}/include/directx/d3dx12.h"
   "${gfxminimath_SOURCE_DIR}/include/gfxminimath/gfxminimath.h"
+  "${RenderPipelineShaders_SOURCE_DIR}/include/rps/rps.h"
 )
+
 if(USE_D3D12_AGILITY_SDK)
   target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_D3D12_AGILITY_SDK)
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "${d3d12_SOURCE_DIR}/build/native/include")

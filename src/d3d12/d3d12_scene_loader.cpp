@@ -519,6 +519,7 @@ auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12M
 }
 } // namespace illuminate
 #include <memory>
+#include "rps/rps.h"
 #include "d3d12_dxgi_core.h"
 #include "d3d12_device.h"
 #include "d3d12_command_list.h"
@@ -537,16 +538,20 @@ class GraphicDevice {
   auto GetCommandQueue(const uint32_t index) { return command_list_set_.GetCommandQueue(index); }
   constexpr auto GetFrameBufferNum() const { return frame_buffer_num_; }
   constexpr auto GetFrameBufferIndex() const { return frame_buffer_index_; }
-  bool PreRender();
-  void PostRender() {}
+  bool PreUpdate();
+  void Render();
   void Present();
  private:
+  void UpdateRenderGraph();
+  void RenderRenderGraph();
   GraphicDevice(const nlohmann::json& config);
   GraphicDevice() = delete;
   GraphicDevice(const GraphicDevice&) = delete;
   GraphicDevice(GraphicDevice&&) = delete;
   void operator= (const GraphicDevice&) = delete;
+  void operator= (GraphicDevice&&) = delete;
   uint32_t frame_buffer_num_;
+  uint32_t frame_buffer_count_;
   uint32_t frame_buffer_index_;
   uint32_t width_;
   uint32_t height_;
@@ -557,17 +562,24 @@ class GraphicDevice {
   uint32_t command_queue_num_;
   CommandListSet command_list_set_;
   CommandQueueSignals command_queue_signals_;
-  uint64_t** frame_signals_;
   Window window_;
   Swapchain swapchain_;
   DescriptorGpu descriptor_gpu_;
+  RpsDevice rps_device_;
+  RpsRenderGraph rps_render_graph_;
+  uint64_t** frame_signals_;
 };
 } // namespace illuminate
+#include "imgui.h"
+#include "backends/imgui_impl_win32.h"
+#include "backends/imgui_impl_dx12.h"
+#include "rps/runtime/d3d12/rps_d3d12_runtime.h"
 #include "d3d12_json_parser.h"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
+namespace {
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-  // if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) { return true; } // TODO comment-in
+  if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) { return true; }
   switch (msg) {
     case WM_DESTROY: {
       ::PostQuitMessage(0);
@@ -576,11 +588,61 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   }
   return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
+auto InitImgui(HWND hwnd, D3d12Device* device, const uint32_t frame_buffer_num, const DXGI_FORMAT format, const D3D12_CPU_DESCRIPTOR_HANDLE& imgui_font_cpu_handle, const D3D12_GPU_DESCRIPTOR_HANDLE& imgui_font_gpu_handle) {
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImPlot::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+  ImGui_ImplWin32_Init(hwnd);
+  ImGui_ImplDX12_Init(device, frame_buffer_num, format, nullptr/*descriptor heap not used in single viewport mode*/, imgui_font_cpu_handle, imgui_font_gpu_handle);
+  if (!ImGui_ImplDX12_CreateDeviceObjects()) {
+    logerror("ImGui_ImplDX12_CreateDeviceObjects failed.");
+    assert(false);
+  }
+}
+auto TermImgui() {
+  ImPlot::DestroyContext();
+  ImGui_ImplDX12_Shutdown();
+  ImGui_ImplWin32_Shutdown();
+  ImGui::DestroyContext();
+}
+auto UpdateImgui() {
+  ImGui_ImplDX12_NewFrame();
+  ImGui_ImplWin32_NewFrame();
+  ImGui::NewFrame();
+}
+auto RenderImgui(const RpsCmdCallbackContext* context) {
+  ImGui::Render();
+  auto command_list = rpsD3D12CommandListFromHandle(context->hCommandBuffer);
+  ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), command_list);
+}
+void RecordDebugMarker([[maybe_unused]] void* context, const RpsRuntimeOpRecordDebugMarkerArgs* args) {
+  auto* command_list = rpsD3D12CommandListFromHandle(args->hCommandBuffer);
+  switch (args->mode)
+  {
+    case RPS_RUNTIME_DEBUG_MARKER_BEGIN:
+      PIXBeginEvent(command_list, 0, args->text);
+      break;
+    case RPS_RUNTIME_DEBUG_MARKER_END:
+      PIXEndEvent(command_list);
+      break;
+    case RPS_RUNTIME_DEBUG_MARKER_LABEL:
+      PIXSetMarker(command_list, 0, args->text);
+      break;
+  }
+}
+void RpsLogger([[maybe_unused]]void* context, [[maybe_unused]]const char* format, ...) {
+}
+RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)
+} // namespace
 std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice(const nlohmann::json& config) {
   return std::unique_ptr<GraphicDevice>(new GraphicDevice(config));
 }
 GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   frame_buffer_num_ = config.at("frame_buffer_num");
+  frame_buffer_count_ = 0;
   frame_buffer_index_ = 0;
   dxgi_core_.Init();
   device_.Init(GetDxgiAdapter());
@@ -612,6 +674,7 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
         command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME;
       }
       command_list_num_per_queue[i] = command_queues[i].at("command_list_num");
+      command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(command_queue_type[i])] += command_list_num_per_queue[i];
     }
     command_list_set_.Init(GetDevice(), command_queue_num_, command_queue_type, command_queue_priority, command_list_num_per_queue, frame_buffer_num_, command_allocator_num_per_queue_type);
     for (uint32_t i = 0; i < command_queue_num_; i++) {
@@ -647,11 +710,76 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   {
     const auto& descriptor_gpu = config.at("descriptor_gpu");
     descriptor_gpu_.Init(GetDevice(), descriptor_gpu.at("gpu_handle_num_view"), descriptor_gpu.at("gpu_handle_num_sampler"));
+    descriptor_gpu_.SetPersistentViewHandleNum(descriptor_gpu.at("persistent_view_num"));
+    descriptor_gpu_.SetPersistentSamplerHandleNum(descriptor_gpu.at("persistent_sampler_num"));
   }
+  {
+    RpsDeviceCreateInfo create_info = {
+      .allocator = {
+        .pfnAlloc = AllocateRenderGraph,
+        .pfnFree  = FreeRenderGraph,
+      },
+      .printer = {
+        .pfnPrintf  = RpsLogger,
+      },
+    };
+    RpsRuntimeDeviceCreateInfo runtime_create_info = {
+      .pUserContext = this,
+      .callbacks = {
+        .pfnRecordDebugMarker = &RecordDebugMarker,
+      },
+    };
+    RpsD3D12RuntimeDeviceCreateInfo runtime_device_create_info = {
+      .pDeviceCreateInfo  = &create_info,
+      .pRuntimeCreateInfo = &runtime_create_info,
+      .pD3D12Device       = GetDevice(),
+      // .flags = RPS_D3D12_RUNTIME_FLAG_PREFER_ENHANCED_BARRIERS;
+    };
+    const auto result = rpsD3D12RuntimeDeviceCreate(&runtime_device_create_info, &rps_device_);
+    assert(result == RPS_OK);
+  }
+  {
+    auto queue_flags = AllocateArrayFrame<RpsQueueFlags>(command_queue_num_);
+    for (uint32_t i = 0; i < command_queue_num_; i++) {
+      auto flag = RPS_QUEUE_FLAG_GRAPHICS;
+      const auto type = command_list_set_.GetCommandQueueType(i);
+      if (type == D3D12_COMMAND_LIST_TYPE_COMPUTE) {
+        flag = RPS_QUEUE_FLAG_COMPUTE;
+      } else if (type == D3D12_COMMAND_LIST_TYPE_COPY) {
+        flag = RPS_QUEUE_FLAG_COPY;
+      }
+      queue_flags[i] = flag;
+    }
+    RpsRenderGraphCreateInfo render_graph_create_info = {
+      .scheduleInfo = {
+        .numQueues = command_queue_num_,
+        .pQueueInfos = queue_flags,
+      },
+      .mainEntryCreateInfo = {
+        .hRpslEntryPoint = RPS_ENTRY_REF(default_rendergraph, rps_main),
+      },
+    };
+    const auto result = rpsRenderGraphCreate(rps_device_, &render_graph_create_info, &rps_render_graph_);
+    assert(result == RPS_OK);
+  }
+  {
+    auto rpsl_entry = rpsRenderGraphGetMainEntry(rps_render_graph_);
+    auto result = rpsProgramBindNode(rpsl_entry, "imgui", &RenderImgui, this);
+    assert(result == RPS_OK);
+  }
+  auto descriptor_heap_set = CreateDescriptorHeapSet(GetDevice(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 32);
+  const uint32_t imgui_descriptor_index = 0;
+  const auto imgui_cpu_handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, imgui_descriptor_index);
+  InitImgui(window_.GetHwnd(), GetDevice(), frame_buffer_num_, swapchain_.GetDxgiFormat(), imgui_cpu_handle, descriptor_gpu_.GetViewGpuHandle(imgui_descriptor_index));
+  descriptor_gpu_.WriteToPersistentViewHandleRange(imgui_descriptor_index, 1, imgui_cpu_handle, GetDevice());
+  descriptor_heap_set.heap->Release();
 }
 GraphicDevice::~GraphicDevice() {
   command_queue_signals_.WaitAll(GetDevice());
+  rpsRenderGraphDestroy(rps_render_graph_);
+  rpsDeviceDestroy(rps_device_);
   command_queue_signals_.Term();
+  TermImgui();
   descriptor_gpu_.Term();
   ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
   swapchain_.Term();
@@ -661,16 +789,111 @@ GraphicDevice::~GraphicDevice() {
   device_.Term();
   dxgi_core_.Term();
 }
-bool GraphicDevice::PreRender() {
+bool GraphicDevice::PreUpdate() {
   if (!window_.ProcessMessage()) { return false; }
-  frame_buffer_index_ = (frame_buffer_index_ + 1) % frame_buffer_num_;
   command_queue_signals_.WaitOnCpu(GetDevice(), frame_signals_[frame_buffer_index_]);
+  UpdateRenderGraph();
   command_list_set_.SucceedFrame();
-  swapchain_.UpdateBackBufferIndex();
+  UpdateImgui();
   return true;
+}
+void GraphicDevice::Render() {
+  RenderRenderGraph();
 }
 void GraphicDevice::Present() {
   swapchain_.Present();
+  swapchain_.UpdateBackBufferIndex();
+  frame_buffer_count_++;
+  frame_buffer_index_ = (frame_buffer_count_) % frame_buffer_num_;
+}
+void GraphicDevice::UpdateRenderGraph() {
+  const auto swapchain_buffer_num = swapchain_.GetSwapchainBufferNum();
+  auto back_buffers = AllocateArrayFrame<RpsRuntimeResource>(swapchain_buffer_num);
+  for (uint32_t i = 0; i < swapchain_buffer_num; i++) {
+    back_buffers[i] = rpsD3D12ResourceToHandle(swapchain_.GetResource(i));
+  }
+  RpsResourceDesc back_buffer_desc = {
+    .type              = RPS_RESOURCE_TYPE_IMAGE_2D,
+    .temporalLayers    = swapchain_buffer_num,
+    .flags             = 0,
+    .image = {
+      .width       = swapchain_.GetWidth(),
+      .height      = swapchain_.GetHeight(),
+      .arrayLayers = 1,
+      .mipLevels   = 1,
+      .format      = rpsFormatFromDXGI(swapchain_.GetDxgiFormat()),
+      .sampleCount = 1,
+    },
+  };
+  RpsConstant args[] = {&back_buffer_desc};
+  const RpsRuntimeResource* arg_resources[] = {back_buffers};
+  const auto gpu_completed_frame_index = (frame_buffer_count_ > frame_buffer_num_) ? static_cast<uint64_t>(frame_buffer_count_ - frame_buffer_num_) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
+  RpsRenderGraphUpdateInfo update_info = {
+    .frameIndex               = frame_buffer_count_,
+    .gpuCompletedFrameIndex   = gpu_completed_frame_index,
+    .diagnosticFlags          = RpsDiagnosticFlags(RPS_DIAGNOSTIC_ENABLE_RUNTIME_DEBUG_NAMES | ((gpu_completed_frame_index == RPS_GPU_COMPLETED_FRAME_INDEX_NONE) ? RPS_DIAGNOSTIC_ENABLE_ALL: RPS_DIAGNOSTIC_NONE)),
+    .numArgs                  = countof(args),
+    .ppArgs                   = args,
+    .ppArgResources           = arg_resources,
+  };
+  rpsRenderGraphUpdate(rps_render_graph_, &update_info);
+}
+void GraphicDevice::RenderRenderGraph() {
+  RpsRenderGraphBatchLayout batch_layout = {};
+  auto result = rpsRenderGraphGetBatchLayout(rps_render_graph_, &batch_layout);
+  if (result != RPS_OK) {
+    logerror("rpsRenderGraphGetBatchLayout failed. {}", result);
+    return;
+  }
+  auto last_batch_index_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
+  std::fill(last_batch_index_per_queue, last_batch_index_per_queue + command_queue_num_, ~0U);
+  for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
+    last_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] = batch_index;
+  }
+  for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
+    const auto& batch = batch_layout.pCmdBatches[batch_index];
+    const auto command_queue_index = batch.queueIndex;
+    auto command_list = command_list_set_.GetCommandList(GetDevice(), command_queue_index);
+    RpsRenderGraphRecordCommandInfo record_info = {
+      .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
+      .pUserContext  = this,
+      .cmdBeginIndex = batch.cmdBegin,
+      .numCmds       = batch.numCmds,
+      // .flags         = RPS_RECORD_COMMAND_FLAG_ENABLE_COMMAND_DEBUG_MARKERS,
+    };
+    auto signal_queue_index = AllocateArrayFrame<uint32_t>(batch_layout.numFenceSignals);
+    auto fence_val = AllocateArrayFrame<uint64_t>(batch_layout.numFenceSignals);
+    std::fill(signal_queue_index, signal_queue_index + batch_layout.numFenceSignals, 0);
+    std::fill(fence_val, fence_val + batch_layout.numFenceSignals, 0);
+    for (uint32_t wait_fence_index = batch.waitFencesBegin; wait_fence_index < (batch.waitFencesBegin + batch.numWaitFences); wait_fence_index++) {
+      const auto fence_index = batch_layout.pWaitFenceIndices[wait_fence_index];
+      if (!command_queue_signals_.RegisterWaitOnCommandQueue(signal_queue_index[fence_index], command_queue_index, fence_val[fence_index])) {
+        logerror("RegisterWaitOnCommandQueue failed. {} {} {} {}", command_queue_index, batch_index, wait_fence_index, fence_val[batch_layout.pWaitFenceIndices[wait_fence_index]]);
+        return;
+      }
+    }
+    result = rpsRenderGraphRecordCommands(rps_render_graph_, &record_info);
+    if (RPS_FAILED(result)) {
+      logerror("rpsRenderGraphRecordCommands failed. {} {}", result, batch_index);
+      assert(false);
+      return;
+    }
+    command_list_set_.ExecuteCommandList(command_queue_index);
+    if (batch.signalFenceIndex != RPS_INDEX_NONE_U32 || batch_index == last_batch_index_per_queue[command_queue_index]) {
+      const auto next_signal_val = command_queue_signals_.SucceedSignal(command_queue_index);
+      if (next_signal_val == CommandQueueSignals::kInvalidSignalVal) {
+        logerror("command_queue_signals_.SucceedSignal failed. {} {}", command_queue_index, batch_index);
+        assert(false);
+        return;
+      }
+      frame_signals_[frame_buffer_index_][command_queue_index] = next_signal_val;
+      if (batch.signalFenceIndex != RPS_INDEX_NONE_U32) {
+        const auto fence_index = batch.signalFenceIndex;
+        signal_queue_index[fence_index] = command_queue_index;
+        fence_val[fence_index] = next_signal_val;
+      }
+    }
+  }
 }
 }
 #include "doctest/doctest.h"
@@ -704,7 +927,8 @@ TEST_CASE("scene viewer") { // NOLINT
   auto default_textures = LoadDefaultTextures(frame_index, graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
   auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, frame_index, graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
   for (uint32_t i = 0; i < 10; i++) {
-    if (!graphic_device->PreRender()) { break; }
+    if (!graphic_device->PreUpdate()) { break; }
+    graphic_device->Render();
     graphic_device->Present();
   }
   ReleaseResourceSet(&model_data_set.resource_set);

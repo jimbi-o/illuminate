@@ -7,6 +7,9 @@ static const uint32_t scene_frame_buffer_size_in_bytes = 32 * 1024 * 1024;
 static std::byte scene_frame_memory_buffer[scene_frame_buffer_size_in_bytes];
 static LinearAllocator system_memory_allocator(system_memory_buffer, system_memory_buffer_size_in_bytes);
 static DoubleEndedLinearAllocator scene_frame_memory_allocator(scene_frame_memory_buffer, scene_frame_buffer_size_in_bytes);
+static const uint32_t render_graph_buffer_size_in_bytes = 32 * 1024 * 1024;
+static std::byte render_graph_buffer[render_graph_buffer_size_in_bytes];
+static LinearAllocator render_graph_allocator(render_graph_buffer, render_graph_buffer_size_in_bytes);
 }
 void ResetAllocation(const MemoryType type) {
   switch (type) {
@@ -43,6 +46,13 @@ void* AllocateFrame(const size_t bytes, const size_t alignment_in_bytes) {
   auto addr = scene_frame_memory_allocator.AllocateHigher(bytes, alignment_in_bytes);
   assert(addr != nullptr);
   return addr;
+}
+void* AllocateRenderGraph([[maybe_unused]] void* context, const size_t bytes, const size_t alignment_in_bytes) {
+  auto addr = system_memory_allocator.Allocate(bytes, alignment_in_bytes);
+  assert(addr != nullptr);
+  return addr;
+}
+void FreeRenderGraph([[maybe_unused]] void* context, [[maybe_unused]] void* ptr) {
 }
 } // namespace illuminate
 #include "doctest/doctest.h"

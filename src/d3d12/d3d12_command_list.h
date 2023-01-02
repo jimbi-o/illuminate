@@ -52,6 +52,7 @@ class CommandListSet {
   void Term();
   constexpr auto GetCommandQueueList() { return command_queue_list_.GetList(); }
   constexpr auto GetCommandQueue(const uint32_t command_queue_index) { return command_queue_list_.Get(command_queue_index); }
+  constexpr auto GetCommandQueueType(const uint32_t i) const { return command_queue_type_[i]; }
   D3d12CommandList* GetCommandList(D3d12Device* device, const uint32_t command_queue_index);
   void ExecuteCommandList(const uint32_t command_queue_index);
   void SucceedFrame() { command_list_pool_.SucceedFrame(); }

@@ -7,6 +7,8 @@ enum class MemoryType : uint8_t { kSystem, kScene, kFrame, };
 void* AllocateSystem(const size_t bytes, const size_t alignment_in_bytes = kDefaultAlignmentSize);
 void* AllocateScene(const size_t bytes, const size_t alignment_in_bytes = kDefaultAlignmentSize);
 void* AllocateFrame(const size_t bytes, const size_t alignment_in_bytes = kDefaultAlignmentSize);
+void* AllocateRenderGraph(void* context, const size_t bytes, const size_t alignment_in_bytes = kDefaultAlignmentSize);
+void FreeRenderGraph(void* context, void* ptr);
 inline auto Allocate(const MemoryType type, const size_t bytes, const size_t alignment_in_bytes = kDefaultAlignmentSize) {
   switch (type) {
     case MemoryType::kSystem: return AllocateSystem(bytes, alignment_in_bytes);
