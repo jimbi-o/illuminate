@@ -854,6 +854,7 @@ void GraphicDevice::RenderRenderGraph() {
     const auto& batch = batch_layout.pCmdBatches[batch_index];
     const auto command_queue_index = batch.queueIndex;
     auto command_list = command_list_set_.GetCommandList(GetDevice(), command_queue_index);
+    descriptor_gpu_.SetDescriptorHeapsToCommandList(1, &command_list);
     RpsRenderGraphRecordCommandInfo record_info = {
       .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
       .pUserContext  = this,
