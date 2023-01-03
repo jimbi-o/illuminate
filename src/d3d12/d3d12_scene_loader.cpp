@@ -553,8 +553,6 @@ class GraphicDevice {
   uint32_t frame_buffer_num_;
   uint32_t frame_buffer_count_;
   uint32_t frame_buffer_index_;
-  uint32_t width_;
-  uint32_t height_;
   DxgiCore dxgi_core_;
   Device device_;
   D3D12MA::Allocator* buffer_allocator_;
@@ -683,9 +681,9 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   }
   {
     const auto& window = config.at("window");
-    width_ = window.at("width");
-    height_ = window.at("height");
-    window_.Init(GetStringView(window.at("title")).data(), width_, height_, WndProc);
+    const auto width = window.at("width").get<uint32_t>();
+    const auto height = window.at("height").get<uint32_t>();
+    window_.Init(GetStringView(window.at("title")).data(), width, height, WndProc);
   }
   {
     const auto& swapchain = config.at("swapchain");
