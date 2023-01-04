@@ -9,6 +9,8 @@
 #include "shader/include/shader_defines.h"
 namespace illuminate {
 enum MeshResourceType : uint32_t {
+  kMeshResourceTypeTransformOffset,
+  kMeshResourceTypeTransformIndex,
   kMeshResourceTypeTransform,
   kMeshResourceTypeIndex,
   kMeshResourceTypePosition,
@@ -20,21 +22,24 @@ enum MeshResourceType : uint32_t {
 struct ModelData {
   uint32_t  mesh_num{0};
   uint32_t* instance_num{nullptr};
-  uint32_t** transform_index{nullptr};
   uint32_t* index_buffer_len{nullptr};
   uint32_t* index_buffer_offset{nullptr};
   uint32_t* vertex_buffer_offset{nullptr};
   uint32_t* material_setting_index{nullptr};
 };
 struct MeshViews {
+  D3D12_CPU_DESCRIPTOR_HANDLE transform_offset_handle{};
+  D3D12_CPU_DESCRIPTOR_HANDLE transform_index_handle{};
+  D3D12_CPU_DESCRIPTOR_HANDLE transform_handle{};
   D3D12_INDEX_BUFFER_VIEW index_buffer_view{};
-  D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[kMeshResourceTypeNum]{};
+  D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view[kVertexBufferTypeNum]{};
 };
 struct MaterialData {
   uint32_t material_num{};
   StrHash* material_variation_hash{};
 };
-struct MaterialViews {
+struct DescriptorHeaps {
+  DescriptorHeapSet mesh_descriptor_heap_set{};
   DescriptorHeapSet material_descriptor_heap_set{};
   DescriptorHeapSet texture_descriptor_heap_set{};
   DescriptorHeapSet sampler_descriptor_heap_set{};
@@ -48,7 +53,7 @@ struct ModelDataSet {
   ModelData model_data{};
   MeshViews mesh_views{};
   MaterialData material_data{};
-  MaterialViews material_views{};
+  DescriptorHeaps descriptor_heaps{};
   ResourceSet resource_set{};
 };
 enum DefaultTextureIndex : uint32_t {
@@ -91,13 +96,12 @@ char* ReadAllBytesFromFileToTemporaryBuffer(const char* const filepath) {
 }
 constexpr auto ConvertToVertexBufferType(const MeshResourceType type) {
   switch (type) {
-    case kMeshResourceTypeTransform: return kVertexBufferTypeNum;
-    case kMeshResourceTypeIndex    : return kVertexBufferTypeNum;
     case kMeshResourceTypePosition : return kVertexBufferTypePosition;
     case kMeshResourceTypeNormal   : return kVertexBufferTypeNormal;
     case kMeshResourceTypeTangent  : return kVertexBufferTypeTangent;
     case kMeshResourceTypeTexcoord : return kVertexBufferTypeTexCoord0;
   }
+  assert(false);
   return kVertexBufferTypeNum;
 }
 auto ReserveBufferTransfer(const uint32_t buffer_size, const void* buffer_data, const char* const buffer_name, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
@@ -126,7 +130,7 @@ auto ReserveBufferTransfer(const uint32_t buffer_size, const void* buffer_data, 
   ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, resource_default, resource_transfer);
   return std::make_pair(allocation_default, resource_default);
 }
-auto ParseMeshViews(const nlohmann::json& json, const char* const filename, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+auto ParseMeshViews(const nlohmann::json& json, const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   MeshViews mesh_views{};
   auto mesh_allocations = AllocateArrayFrame<D3D12MA::Allocation*>(kMeshResourceTypeNum);
   auto mesh_resources = AllocateArrayFrame<ID3D12Resource*>(kMeshResourceTypeNum);
@@ -137,6 +141,8 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
   // TODO check transform matrix column/row-major
   const auto& json_binary_info = json.at("binary_info");
   const char* mesh_type_name[] = {
+    "transform_offset",
+    "transform_index",
     "transform",
     "index",
     "position",
@@ -145,6 +151,7 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
     "texcoord",
   };
   static_assert(countof(mesh_type_name) == kMeshResourceTypeNum);
+  auto mesh_descriptor_heap_set = CreateDescriptorHeapSet(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kMeshResourceTypeNum - static_cast<uint32_t>(kVertexBufferTypeNum) - 1/*index buffer*/);
   for (uint32_t mesh_resource_type = 0; mesh_resource_type < kMeshResourceTypeNum; mesh_resource_type++) {
     const auto& mesh_binary_info = json_binary_info.at(mesh_type_name[mesh_resource_type]);
     const auto buffer_size = mesh_binary_info.at("size_in_bytes").get<uint32_t>();
@@ -156,7 +163,10 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
     const auto addr = resource_default->GetGPUVirtualAddress();
     const uint32_t stride_in_bytes = mesh_binary_info.at("stride_in_bytes");
     switch (mesh_resource_type) {
+      case kMeshResourceTypeTransformOffset:
+      case kMeshResourceTypeTransformIndex:
       case kMeshResourceTypeTransform:
+        // TODO
         break;
       case kMeshResourceTypeIndex:
         mesh_views.index_buffer_view = {
@@ -175,28 +185,20 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
     mesh_allocations[mesh_resource_type] = allocation_default;
     mesh_resources[mesh_resource_type] = resource_default;
   }
-  return std::make_tuple(mesh_views, mesh_allocations, mesh_resources);
+  return std::make_tuple(mesh_views, mesh_allocations, mesh_resources, mesh_descriptor_heap_set);
 }
 auto ParseModelData(const nlohmann::json& json) {
   ModelData model_data{};
   const auto& json_meshes = json.at("meshes");
   model_data.mesh_num = GetUint32(json_meshes.size());
   model_data.instance_num = AllocateArrayScene<uint32_t>(model_data.mesh_num);
-  model_data.transform_index = AllocateArrayScene<uint32_t*>(model_data.mesh_num);
   model_data.index_buffer_len = AllocateArrayScene<uint32_t>(model_data.mesh_num);
   model_data.index_buffer_offset = AllocateArrayScene<uint32_t>(model_data.mesh_num);
   model_data.vertex_buffer_offset = AllocateArrayScene<uint32_t>(model_data.mesh_num);
   model_data.material_setting_index = AllocateArrayScene<uint32_t>(model_data.mesh_num);
   for (uint32_t i = 0; i < model_data.mesh_num; i++) {
     const auto& json_mesh = json_meshes[i];
-    {
-      const auto& transform_json = json_mesh.at("transform");
-      model_data.instance_num[i] = GetUint32(transform_json.size());
-      model_data.transform_index[i] = AllocateArrayScene<uint32_t>(model_data.instance_num[i]);
-      for (uint32_t j = 0; j < model_data.instance_num[i]; j++) {
-        model_data.transform_index[i][j] = transform_json[j];
-      }
-    }
+    model_data.instance_num[i] = json_mesh.at("instance_num");
     model_data.index_buffer_len[i] = json_mesh.at("index_buffer_len");
     model_data.index_buffer_offset[i] = json_mesh.at("index_buffer_offset");
     model_data.vertex_buffer_offset[i] = json_mesh.at("vertex_buffer_index_offset");
@@ -436,7 +438,7 @@ auto ReserveDefaultTextureTransfer(const uint32_t texture_index, const char* con
 ModelDataSet LoadModelData(const char* const filename, const DescriptorHeapSet& default_texture_descriptor_heap_set, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   loginfo("loading {}", filename);
   auto json = LoadJson(filename);
-  auto [mesh_views, mesh_allocations, mesh_resources] = ParseMeshViews(json, filename, frame_index, buffer_allocator, resource_transfer);
+  auto [mesh_views, mesh_allocations, mesh_resources, mesh_descriptor_heap_set] = ParseMeshViews(json, filename, frame_index, device, buffer_allocator, resource_transfer);
   auto model_data = ParseModelData(json);
   const auto& json_material_settings = json.at("material_settings");
   const auto [material_data, material_albedo_infos, material_misc_infos] = ParseMaterials(json_material_settings);
@@ -467,7 +469,8 @@ ModelDataSet LoadModelData(const char* const filename, const DescriptorHeapSet& 
     .model_data = model_data,
     .mesh_views = mesh_views,
     .material_data = material_data,
-    .material_views = {
+    .descriptor_heaps = {
+      .mesh_descriptor_heap_set = std::move(mesh_descriptor_heap_set),
       .material_descriptor_heap_set = std::move(material_descriptor_heap_set),
       .texture_descriptor_heap_set = std::move(texture_descriptor_heap_set),
       .sampler_descriptor_heap_set = std::move(sampler_descriptor_heap_set),
@@ -489,10 +492,11 @@ void ReleaseResourceSet(ResourceSet* resource_set) {
     }
   }
 }
-void ReleaseMaterialViewDescriptorHeaps(MaterialViews* material_views) {
-  material_views->material_descriptor_heap_set.heap->Release();
-  material_views->texture_descriptor_heap_set.heap->Release();
-  material_views->sampler_descriptor_heap_set.heap->Release();
+void ReleaseMaterialViewDescriptorHeaps(DescriptorHeaps* descriptor_heaps) {
+  descriptor_heaps->mesh_descriptor_heap_set.heap->Release();
+  descriptor_heaps->material_descriptor_heap_set.heap->Release();
+  descriptor_heaps->texture_descriptor_heap_set.heap->Release();
+  descriptor_heaps->sampler_descriptor_heap_set.heap->Release();
 }
 auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   auto allocations = AllocateArrayScene<D3D12MA::Allocation*>(kDefaultTextureIndexNum);
@@ -911,7 +915,7 @@ TEST_CASE("scene loader") { // NOLINT
   auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, frame_index, device.Get(), buffer_allocator, &resource_transfer);
   ClearResourceTransfer(frame_num, &resource_transfer);
   ReleaseResourceSet(&model_data_set.resource_set);
-  ReleaseMaterialViewDescriptorHeaps(&model_data_set.material_views);
+  ReleaseMaterialViewDescriptorHeaps(&model_data_set.descriptor_heaps);
   ReleaseResourceSet(&default_textures.resource_set);
   default_textures.descriptor_heap_set.heap->Release();
   buffer_allocator->Release();
@@ -931,7 +935,7 @@ TEST_CASE("scene viewer") { // NOLINT
     graphic_device->Present();
   }
   ReleaseResourceSet(&model_data_set.resource_set);
-  ReleaseMaterialViewDescriptorHeaps(&model_data_set.material_views);
+  ReleaseMaterialViewDescriptorHeaps(&model_data_set.descriptor_heaps);
   ReleaseResourceSet(&default_textures.resource_set);
   default_textures.descriptor_heap_set.heap->Release();
   graphic_device.reset();
