@@ -104,12 +104,12 @@ constexpr auto ConvertToVertexBufferType(const MeshResourceType type) {
   assert(false);
   return kVertexBufferTypeNum;
 }
-auto ReserveBufferTransfer(const uint32_t buffer_size, const void* buffer_data, const char* const buffer_name, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
+auto ReserveBufferTransfer(const uint32_t buffer_size, const void* buffer_data, const uint32_t resource_size, const char* const buffer_name, const uint32_t frame_index, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   D3D12MA::Allocation *allocation_default{nullptr}, *allocation_upload{nullptr}; 
   ID3D12Resource *resource_default{nullptr}, *resource_upload{nullptr};
   {
     // create resources
-    const auto desc = GetBufferDesc(buffer_size);
+    const auto desc = GetBufferDesc(resource_size);
     CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, desc, nullptr, buffer_allocator, &allocation_default, &resource_default);
     CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, desc, nullptr, buffer_allocator, &allocation_upload, &resource_upload);
   }
@@ -129,6 +129,27 @@ auto ReserveBufferTransfer(const uint32_t buffer_size, const void* buffer_data, 
   }
   ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, resource_default, resource_transfer);
   return std::make_pair(allocation_default, resource_default);
+}
+auto GetConstantBufferDesc(const D3D12_GPU_VIRTUAL_ADDRESS& addr, const uint32_t size) {
+  return D3D12_CONSTANT_BUFFER_VIEW_DESC{
+    .BufferLocation = addr,
+    .SizeInBytes = size,
+  };
+}
+auto CreateCbv(const D3D12_GPU_VIRTUAL_ADDRESS& addr, const uint32_t buffer_size, const DescriptorHeapSet& descriptor_heap_set, const uint32_t index, D3d12Device* device) {
+  const auto resource_desc = GetConstantBufferDesc(addr, buffer_size);
+  const auto handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, index);
+  device->CreateConstantBufferView(&resource_desc, handle);
+  return handle;
+}
+auto AlignIfCbv(const uint32_t size_in_bytes, const uint32_t mesh_resource_type) {
+  switch (mesh_resource_type) {
+    case kMeshResourceTypeTransformOffset:
+    case kMeshResourceTypeTransformIndex:
+    case kMeshResourceTypeTransform:
+      return AlignAddress(size_in_bytes, 256); // cbv size must be multiple of 256
+  }
+  return size_in_bytes;
 }
 auto ParseMeshViews(const nlohmann::json& json, const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   MeshViews mesh_views{};
@@ -155,18 +176,23 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
   for (uint32_t mesh_resource_type = 0; mesh_resource_type < kMeshResourceTypeNum; mesh_resource_type++) {
     const auto& mesh_binary_info = json_binary_info.at(mesh_type_name[mesh_resource_type]);
     const auto buffer_size = mesh_binary_info.at("size_in_bytes").get<uint32_t>();
+    const auto aligned_buffer_size = AlignIfCbv(buffer_size, mesh_resource_type);
     const uint32_t buffer_name_len = 128;
     char buffer_name[buffer_name_len];
     snprintf(buffer_name, buffer_name_len, "%s_%s", filename, mesh_type_name[mesh_resource_type]);
     const uint32_t offset_in_bytes = mesh_binary_info.at("offset_in_bytes");
-    auto [allocation_default, resource_default] = ReserveBufferTransfer(buffer_size, &mesh_binary_buffer[offset_in_bytes], buffer_name, frame_index, buffer_allocator, resource_transfer);
+    auto [allocation_default, resource_default] = ReserveBufferTransfer(buffer_size, &mesh_binary_buffer[offset_in_bytes], aligned_buffer_size, buffer_name, frame_index, buffer_allocator, resource_transfer);
     const auto addr = resource_default->GetGPUVirtualAddress();
     const uint32_t stride_in_bytes = mesh_binary_info.at("stride_in_bytes");
     switch (mesh_resource_type) {
       case kMeshResourceTypeTransformOffset:
+        mesh_views.transform_offset_handle = CreateCbv(addr, aligned_buffer_size, mesh_descriptor_heap_set, 0, device);
+        break;
       case kMeshResourceTypeTransformIndex:
+        mesh_views.transform_index_handle = CreateCbv(addr, aligned_buffer_size, mesh_descriptor_heap_set, 1, device);
+        break;
       case kMeshResourceTypeTransform:
-        // TODO
+        mesh_views.transform_handle = CreateCbv(addr, aligned_buffer_size, mesh_descriptor_heap_set, 2, device);
         break;
       case kMeshResourceTypeIndex:
         mesh_views.index_buffer_view = {
@@ -401,22 +427,12 @@ auto ParseSamplerResources(const nlohmann::json& json_material_settings, D3d12De
   }
   return sampler_descriptor_heap_set;
 }
-auto GetConstantBufferDesc(const D3D12_GPU_VIRTUAL_ADDRESS&  addr, const uint32_t size) {
-  return D3D12_CONSTANT_BUFFER_VIEW_DESC{
-    .BufferLocation = addr,
-    .SizeInBytes = size,
-  };
-}
-auto CreateCbv(ID3D12Resource* resource, const uint32_t buffer_size, const DescriptorHeapSet& descriptor_heap_set, const uint32_t index, D3d12Device* device) {
-  const auto resource_desc = GetConstantBufferDesc(resource->GetGPUVirtualAddress(), buffer_size);
-  const auto handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, index);
-  device->CreateConstantBufferView(&resource_desc, handle);
-}
 template <typename T, uint32_t index>
 auto CreateConstantBufer(const uint32_t num, const void* buffer, const char* const name, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer,  const DescriptorHeapSet& descriptor_heap_set) {
-  const auto size = AlignAddress(GetUint32(sizeof(T)) * num, 256); // cbv size must be multiple of 256
-  auto [allocation, resource] = ReserveBufferTransfer(size, buffer, name, frame_index, buffer_allocator, resource_transfer);
-  CreateCbv(resource, size, descriptor_heap_set, index, device);
+  const auto size = GetUint32(sizeof(T)) * num;
+  const auto aligned_buffer_size = AlignAddress(size, 256);
+  auto [allocation, resource] = ReserveBufferTransfer(size, buffer, aligned_buffer_size, name, frame_index, buffer_allocator, resource_transfer); // cbv size must be multiple of 256
+  CreateCbv(resource->GetGPUVirtualAddress(), aligned_buffer_size, descriptor_heap_set, index, device);
   return std::make_pair(allocation, resource);
 }
 auto CreateMaterialInfoResources(const uint32_t material_num, const shader::AlbedoInfo* const albedo_infos, const shader::MaterialMiscInfo* const material_misc_infos, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
