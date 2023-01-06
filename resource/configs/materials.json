@@ -1,0 +1,77 @@
+{
+  "common_settings": {
+    "ps": "ps_6_5",
+    "vs": "vs_6_5",
+    "gs": "gs_6_5",
+    "hs": "hs_6_5",
+    "ds": "ds_6_5",
+    "cs": "cs_6_5",
+    "lib": "lib_6_5",
+    "ms": "ms_6_5",
+    "as": "as_6_5",
+    "entry": "main",
+    "args": ["-Zi", "-Zpr", "-Qstrip_debug", "-Qstrip_reflect", "-Qstrip_rootsignature"],
+    "input_elements": [
+      {
+        "name": "POSITION",
+        "format": "R32G32B32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      },
+      {
+        "name": "NORMAL",
+        "format": "R32G32B32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      },
+      {
+        "name": "TANGENT",
+        "format": "R32G32B32A32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      },
+      {
+        "name": "TEXCOORD_0",
+        "plain_name": "TEXCOORD",
+        "format": "R32G32_FLOAT",
+        "aligned_byte_offset": "APPEND_ALIGNED_ELEMENT",
+        "slot_class": "PER_VERTEX_DATA",
+        "instance_data_step_rate": 0
+      }
+    ]
+  },
+  "materials": [
+    {
+      "name": "prez",
+      "rootsig": "prez",
+      "depth_stencil": {
+        "format": "D24_UNORM_S8_UINT"
+      },
+      "args": ["-DPREZ"],
+      "variations": [
+        {
+          "input_element": ["POSITION"],
+          "params": [
+            {
+              "name": "MESH_DEFORM_TYPE",
+              "val":  ["MESH_DEFORM_TYPE_STATIC"]
+            },
+            {
+              "name": "OPACITY_TYPE",
+              "val":  ["OPACITY_TYPE_OPAQUE"]
+            }
+          ],
+          "shaders": [
+            {
+              "file": "shader/geom/geom.vs.hlsl",
+              "target": "vs"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

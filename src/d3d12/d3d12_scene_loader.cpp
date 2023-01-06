@@ -1,5 +1,6 @@
 #include "d3d12_scene_loader.h"
 #include <fstream>
+#include "gfxminimath/gfxminimath.h"
 #include "d3d12_descriptors.h"
 #include "d3d12_gpu_buffer_allocator.h"
 #include "d3d12_memory_allocators.h"
@@ -130,26 +131,25 @@ auto ReserveBufferTransfer(const uint32_t buffer_size, const void* buffer_data, 
   ReserveResourceTransfer(frame_index, resource_upload, allocation_upload, resource_default, resource_transfer);
   return std::make_pair(allocation_default, resource_default);
 }
-auto GetConstantBufferDesc(const D3D12_GPU_VIRTUAL_ADDRESS& addr, const uint32_t size) {
-  return D3D12_CONSTANT_BUFFER_VIEW_DESC{
-    .BufferLocation = addr,
-    .SizeInBytes = size,
+constexpr auto GetByteAddressBufferSrvDesc(const uint32_t buffer_size) {
+  auto desc = D3D12_SHADER_RESOURCE_VIEW_DESC {
+    .Format = DXGI_FORMAT_R32_TYPELESS,
+    .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+    .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+    .Buffer = {
+      .FirstElement = 0,
+      .NumElements = buffer_size / 4, // 4 for sizeof(R32_TYPELESS)
+      .StructureByteStride = 0,
+      .Flags = D3D12_BUFFER_SRV_FLAG_RAW,
+    },
   };
+  return desc;
 }
-auto CreateCbv(const D3D12_GPU_VIRTUAL_ADDRESS& addr, const uint32_t buffer_size, const DescriptorHeapSet& descriptor_heap_set, const uint32_t index, D3d12Device* device) {
-  const auto resource_desc = GetConstantBufferDesc(addr, buffer_size);
+auto CreateByteAddressBufferSrv(const uint32_t buffer_size, const DescriptorHeapSet& descriptor_heap_set, const uint32_t index, ID3D12Resource* resource, D3d12Device* device) {
+  auto desc = GetByteAddressBufferSrvDesc(buffer_size);
   const auto handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, index);
-  device->CreateConstantBufferView(&resource_desc, handle);
+  device->CreateShaderResourceView(resource, &desc, handle);
   return handle;
-}
-auto AlignIfCbv(const uint32_t size_in_bytes, const uint32_t mesh_resource_type) {
-  switch (mesh_resource_type) {
-    case kMeshResourceTypeTransformOffset:
-    case kMeshResourceTypeTransformIndex:
-    case kMeshResourceTypeTransform:
-      return AlignAddress(size_in_bytes, 256); // cbv size must be multiple of 256
-  }
-  return size_in_bytes;
 }
 auto ParseMeshViews(const nlohmann::json& json, const char* const filename, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer) {
   MeshViews mesh_views{};
@@ -176,23 +176,22 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
   for (uint32_t mesh_resource_type = 0; mesh_resource_type < kMeshResourceTypeNum; mesh_resource_type++) {
     const auto& mesh_binary_info = json_binary_info.at(mesh_type_name[mesh_resource_type]);
     const auto buffer_size = mesh_binary_info.at("size_in_bytes").get<uint32_t>();
-    const auto aligned_buffer_size = AlignIfCbv(buffer_size, mesh_resource_type);
     const uint32_t buffer_name_len = 128;
     char buffer_name[buffer_name_len];
     snprintf(buffer_name, buffer_name_len, "%s_%s", filename, mesh_type_name[mesh_resource_type]);
     const uint32_t offset_in_bytes = mesh_binary_info.at("offset_in_bytes");
-    auto [allocation_default, resource_default] = ReserveBufferTransfer(buffer_size, &mesh_binary_buffer[offset_in_bytes], aligned_buffer_size, buffer_name, frame_index, buffer_allocator, resource_transfer);
+    auto [allocation_default, resource_default] = ReserveBufferTransfer(buffer_size, &mesh_binary_buffer[offset_in_bytes], buffer_size, buffer_name, frame_index, buffer_allocator, resource_transfer);
     const auto addr = resource_default->GetGPUVirtualAddress();
     const uint32_t stride_in_bytes = mesh_binary_info.at("stride_in_bytes");
     switch (mesh_resource_type) {
       case kMeshResourceTypeTransformOffset:
-        mesh_views.transform_offset_handle = CreateCbv(addr, aligned_buffer_size, mesh_descriptor_heap_set, 0, device);
+        mesh_views.transform_offset_handle = CreateByteAddressBufferSrv(buffer_size, mesh_descriptor_heap_set, 0, resource_default, device);
         break;
       case kMeshResourceTypeTransformIndex:
-        mesh_views.transform_index_handle = CreateCbv(addr, aligned_buffer_size, mesh_descriptor_heap_set, 1, device);
+        mesh_views.transform_index_handle = CreateByteAddressBufferSrv(buffer_size, mesh_descriptor_heap_set, 1, resource_default, device);
         break;
       case kMeshResourceTypeTransform:
-        mesh_views.transform_handle = CreateCbv(addr, aligned_buffer_size, mesh_descriptor_heap_set, 2, device);
+        mesh_views.transform_handle = CreateByteAddressBufferSrv(buffer_size, mesh_descriptor_heap_set, 2, resource_default, device);
         break;
       case kMeshResourceTypeIndex:
         mesh_views.index_buffer_view = {
@@ -427,6 +426,18 @@ auto ParseSamplerResources(const nlohmann::json& json_material_settings, D3d12De
   }
   return sampler_descriptor_heap_set;
 }
+auto GetConstantBufferDesc(const D3D12_GPU_VIRTUAL_ADDRESS& addr, const uint32_t size) {
+  return D3D12_CONSTANT_BUFFER_VIEW_DESC{
+    .BufferLocation = addr,
+    .SizeInBytes = size,
+  };
+}
+auto CreateCbv(const D3D12_GPU_VIRTUAL_ADDRESS& addr, const uint32_t buffer_size, const DescriptorHeapSet& descriptor_heap_set, const uint32_t index, D3d12Device* device) {
+  const auto resource_desc = GetConstantBufferDesc(addr, buffer_size);
+  const auto handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, index);
+  device->CreateConstantBufferView(&resource_desc, handle);
+  return handle;
+}
 template <typename T, uint32_t index>
 auto CreateConstantBufer(const uint32_t num, const void* buffer, const char* const name, const uint32_t frame_index, D3d12Device* device, D3D12MA::Allocator* buffer_allocator, ResourceTransfer* resource_transfer,  const DescriptorHeapSet& descriptor_heap_set) {
   const auto size = GetUint32(sizeof(T)) * num;
@@ -546,6 +557,9 @@ auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12M
 #include "d3d12_swapchain.h"
 #include "d3d12_win32_window.h"
 namespace illuminate {
+struct SwapchainData;
+struct RenderGraphRecordConfig;
+struct UtilFuncs;
 class GraphicDevice {
  public:
   static std::unique_ptr<GraphicDevice> CreateGraphicDevice(const nlohmann::json&);
@@ -554,16 +568,17 @@ class GraphicDevice {
   auto GetDevice() { return device_.Get(); }
   auto GetGpuBufferAllocator() { return buffer_allocator_; }
   auto GetResourceTransferManager() { return &resource_transfer_; }
+  constexpr auto GetCommandQueueNum() const { return command_queue_num_; }
   auto GetCommandQueueList() { return command_list_set_.GetCommandQueueList(); }
+  auto GetCommandQueueType() { return command_list_set_.GetCommandQueueTypeList(); }
   auto GetCommandQueue(const uint32_t index) { return command_list_set_.GetCommandQueue(index); }
   constexpr auto GetFrameBufferNum() const { return frame_buffer_num_; }
-  constexpr auto GetFrameBufferIndex() const { return frame_buffer_index_; }
+  void GetSwapchainData(SwapchainData* swapchain_data);
+  void GetRenderGraphRecordConfig(RenderGraphRecordConfig* record_config);
+  void GetUtilFuncs(UtilFuncs* util_funcs);
   bool PreUpdate();
-  void Render();
   void Present();
  private:
-  void UpdateRenderGraph();
-  void RenderRenderGraph();
   GraphicDevice(const nlohmann::json& config);
   GraphicDevice() = delete;
   GraphicDevice(const GraphicDevice&) = delete;
@@ -571,21 +586,67 @@ class GraphicDevice {
   void operator= (const GraphicDevice&) = delete;
   void operator= (GraphicDevice&&) = delete;
   uint32_t frame_buffer_num_;
-  uint32_t frame_buffer_count_;
-  uint32_t frame_buffer_index_;
   DxgiCore dxgi_core_;
   Device device_;
   D3D12MA::Allocator* buffer_allocator_;
   ResourceTransfer resource_transfer_;
   uint32_t command_queue_num_;
   CommandListSet command_list_set_;
-  CommandQueueSignals command_queue_signals_;
   Window window_;
   Swapchain swapchain_;
   DescriptorGpu descriptor_gpu_;
+};
+struct RenderPassCommonData;
+class RenderGraph {
+ public:
+  struct Config {
+    D3d12Device* device{};
+    const uint32_t command_queue_num{};
+    const D3D12_COMMAND_LIST_TYPE* const command_queue_type{};
+    D3d12CommandQueue** command_queue_list{};
+    uint32_t frame_buffer_num{};
+    uint32_t material_hash_list_len{};
+    StrHash* material_hash_list{};
+  };
+  struct GeomPassParams {
+    StrHash material_index{};
+  };
+  static std::unique_ptr<RenderGraph> CreateRenderGraph(const Config& config);
+  ~RenderGraph();
+  constexpr auto GetFrameIndex() const { return frame_buffer_index_; }
+  void Update(const SwapchainData& config);
+  void RecordCommands(const RenderGraphRecordConfig& config, const RenderPassCommonData& render_pass_common_data);
+  void PostPresent();
+  void WaitAll() { command_queue_signals_.WaitAll(device_); }
+ private:
+  RenderGraph(const Config& config);
+  D3d12Device* device_;
   RpsDevice rps_device_;
   RpsRenderGraph rps_render_graph_;
+  GeomPassParams prez_pass_params_;
+  CommandQueueSignals command_queue_signals_;
+  uint32_t command_queue_num_;
+  uint32_t frame_buffer_num_;
   uint64_t** frame_signals_;
+  uint32_t frame_count_;
+  uint32_t frame_buffer_index_;
+  RenderGraph(const RenderGraph&) = delete;
+  RenderGraph(RenderGraph&&) = delete;
+  void operator=(const RenderGraph&) = delete;
+  void operator=(RenderGraph&&) = delete;
+};
+struct SwapchainData {
+  uint32_t swapchain_buffer_num;
+  ID3D12Resource** swapchain_resources;
+  uint32_t swapchain_width;
+  uint32_t swapchain_height;
+  DXGI_FORMAT swapchain_format;
+};
+struct RenderGraphRecordConfig {
+  using GetCmdList  = std::function<D3d12CommandList*(const uint32_t)>;
+  using ExecCmdList = std::function<void(const uint32_t)>;
+  GetCmdList get_cmd_list;
+  ExecCmdList execute_command_list;
 };
 } // namespace illuminate
 #include "imgui.h"
@@ -593,8 +654,34 @@ class GraphicDevice {
 #include "backends/imgui_impl_dx12.h"
 #include "rps/runtime/d3d12/rps_d3d12_runtime.h"
 #include "d3d12_json_parser.h"
+#include "d3d12_shader_compiler.h"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
+struct SceneParams;
+struct GpuHandles;
+struct RenderPassCommonData {
+  ModelDataSet* model_data_set{nullptr};
+  MaterialList* material_list{nullptr};
+  SceneParams*  scene_params{nullptr};
+  UtilFuncs*    util_funcs{nullptr};
+  GpuHandles*   gpu_handles{nullptr};
+};
+struct SceneParams {
+  float camera_pos[3]{};
+  float fov_vertical{40.0f};
+  float camera_focus[3]{};
+  float near_z{0.001f};
+  Size2d primarybuffer_size;
+  float far_z{1000.0f};
+  float light_direction[3]{};
+};
+struct GpuHandles {
+  D3D12_GPU_DESCRIPTOR_HANDLE geom_pass_gpu_handle{};
+};
+struct UtilFuncs {
+  using WriteToGpuHandle = std::function<D3D12_GPU_DESCRIPTOR_HANDLE(const D3D12_CPU_DESCRIPTOR_HANDLE* const, const uint32_t)>;
+  WriteToGpuHandle write_to_gpu_handle;
+};
 namespace {
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) { return true; }
@@ -631,6 +718,117 @@ auto UpdateImgui() {
   ImGui_ImplWin32_NewFrame();
   ImGui::NewFrame();
 }
+auto MakeVec3(const float array[3]) {
+  return gfxminimath::vec3(array[0], array[1], array[2]);
+}
+auto MakeVec4(const float array[4]) {
+  return gfxminimath::vec4(array[0], array[1], array[2], array[3]);
+}
+auto MakeVec4(const float array[3], const float w) {
+  return gfxminimath::vec4(array[0], array[1], array[2], w);
+}
+auto CalcLightVectorVs(const float light_direction[3], const gfxminimath::matrix& view_matrix) {
+  auto light_direction_vs = gfxminimath::vec3(mul(view_matrix, MakeVec4(light_direction, 0.0f)));
+  return normalize_vector(light_direction_vs);
+}
+void GetLightOriginLocationInScreenSpace(const gfxminimath::vec3& light_direction_vs, const gfxminimath::matrix& projection_matrix, const uint32_t primarybuffer_width, const uint32_t primarybuffer_height, int32_t light_origin_location_in_screen_space[2]) {
+  using namespace gfxminimath;
+  auto light_origin = mul(projection_matrix, append_w(light_direction_vs * 100000.0f, 1.0f));
+  light_origin = (light_origin + 1.0f) * 0.5f;
+  light_origin *= vec4(static_cast<float>(primarybuffer_width), static_cast<float>(primarybuffer_height), 0.0f, 0.0f);
+  light_origin = round(light_origin);
+  float tmp[4];
+  light_origin.store(tmp);
+  light_origin_location_in_screen_space[0] = static_cast<int32_t>(tmp[0]);
+  light_origin_location_in_screen_space[1] = static_cast<int32_t>(tmp[1]);
+}
+auto GetAspectRatio(const Size2d& buffer_size) {
+  return static_cast<float>(buffer_size.width) / buffer_size.height;
+}
+void GetCompactProjectionParam(const float fov_vertical_radian, const float aspect_ratio, const float z_near, const float z_far, float compact_projection_param[4]) {
+  // https://shikihuiku.github.io/post/projection_matrix/
+  // https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
+  /*m11*/ compact_projection_param[0] = 1.0f / std::tan(fov_vertical_radian * 0.5f);
+  /*m00*/ compact_projection_param[1] = compact_projection_param[0] / aspect_ratio;
+  /*m22*/ compact_projection_param[2] = z_far / (z_far - z_near);
+  /*m23*/ compact_projection_param[3] = -z_near * compact_projection_param[2];
+}
+auto GetProjectionMatrix(const float compact_projection_param[4]) {
+  return gfxminimath::matrix(compact_projection_param[1], 0.0f,  0.0f,  0.0f,
+                             0.0f, compact_projection_param[0],  0.0f,  0.0f,
+                             0.0f, 0.0f, compact_projection_param[2], compact_projection_param[3],
+                             0.0f,  0.0f,  1.0f, 0.0f);
+}
+auto CalcViewMatrix(float camera_pos[3], float camera_focus[3]) {
+  return gfxminimath::lookat_lh(MakeVec3(camera_pos), MakeVec3(camera_focus));
+}
+auto UpdateSceneData(const RpsCmdCallbackContext* context, ID3D12Resource* camera_data_resource, D3D12_CPU_DESCRIPTOR_HANDLE camera_data_handle) {
+  using namespace gfxminimath;
+  const auto render_pass_common_data = static_cast<RenderPassCommonData*>(context->pUserRecordContext);
+  const auto scene_params = render_pass_common_data->scene_params;
+  const auto view_matrix = CalcViewMatrix(scene_params->camera_pos, scene_params->camera_focus);
+  float compact_projection_param[4];
+  GetCompactProjectionParam(scene_params->fov_vertical * gfxminimath::kDegreeToRadian, GetAspectRatio(scene_params->primarybuffer_size), scene_params->near_z, scene_params->far_z, compact_projection_param);
+  const auto projection_matrix = GetProjectionMatrix(compact_projection_param);
+  const auto light_direction_vs = CalcLightVectorVs(scene_params->light_direction, view_matrix);
+  int32_t light_origin_location_in_screen_space[2];
+  GetLightOriginLocationInScreenSpace(light_direction_vs, projection_matrix, scene_params->primarybuffer_size.width, scene_params->primarybuffer_size.height, light_origin_location_in_screen_space);
+  float light_direction_vs_array[3];
+  to_array(light_direction_vs, light_direction_vs_array);
+  float view_matrix_array[16];
+  to_array_column_major(view_matrix, view_matrix_array);
+  float projection_matrix_array[16];
+  to_array_column_major(projection_matrix, projection_matrix_array);
+  // const auto light_slope_zx = light_direction_vs[2] / light_direction_vs[0];
+  // const auto far_div_near = scene_params->far_z / scene_params->near_z;
+  {
+    shader::SceneCameraData camera_data{};
+    memcpy(&camera_data.view_matrix, view_matrix_array, sizeof(camera_data.view_matrix));
+    memcpy(&camera_data.projection_matrix, projection_matrix_array, sizeof(camera_data.projection_matrix));
+    auto camera_data_ptr = MapResource(camera_data_resource, sizeof(camera_data));
+    memcpy(camera_data_ptr, &camera_data, sizeof(camera_data));
+    UnmapResource(camera_data_resource);
+  }
+  {
+    D3D12_CPU_DESCRIPTOR_HANDLE handles[] = {
+      camera_data_handle,
+      render_pass_common_data->model_data_set->mesh_views.transform_offset_handle,
+      render_pass_common_data->model_data_set->mesh_views.transform_index_handle,
+      render_pass_common_data->model_data_set->mesh_views.transform_handle,
+    };
+    render_pass_common_data->gpu_handles->geom_pass_gpu_handle = render_pass_common_data->util_funcs->write_to_gpu_handle(handles, countof(handles));
+  }
+}
+auto GeomPass(const RpsCmdCallbackContext* context) {
+  auto command_list = rpsD3D12CommandListFromHandle(context->hCommandBuffer);
+  const auto& pass_params = static_cast<RenderGraph::GeomPassParams*>(context->pCmdCallbackContext);
+  const auto render_pass_common_data = static_cast<RenderPassCommonData*>(context->pUserRecordContext);
+  command_list->SetGraphicsRootSignature(GetMaterialRootsig(*render_pass_common_data->material_list, pass_params->material_index));
+  command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  command_list->SetGraphicsRootDescriptorTable(1, render_pass_common_data->gpu_handles->geom_pass_gpu_handle);
+  const auto& model_data = render_pass_common_data->model_data_set->model_data;
+  command_list->IASetIndexBuffer(&render_pass_common_data->model_data_set->mesh_views.index_buffer_view);
+  command_list->IASetVertexBuffers(0, kVertexBufferTypeNum, render_pass_common_data->model_data_set->mesh_views.vertex_buffer_view);
+  uint32_t prev_variation_hash = 0;
+  for (uint32_t i = 0; i < model_data.mesh_num; i++) {
+    command_list->SetGraphicsRoot32BitConstant(0, i, 0);
+    const auto& material_variation_hash = render_pass_common_data->model_data_set->material_data.material_variation_hash[model_data.material_setting_index[i]];
+    if (prev_variation_hash != material_variation_hash) {
+      auto variation_index = FindMaterialVariationIndex(*render_pass_common_data->material_list, pass_params->material_index, material_variation_hash);
+      if (variation_index == MaterialList::kInvalidIndex) {
+        logwarn("material variation not found. {} {}", i, material_variation_hash);
+        variation_index = 0;
+      }
+      const auto pso_index = GetMaterialPsoIndex(*render_pass_common_data->material_list, pass_params->material_index, variation_index);
+      command_list->SetPipelineState(render_pass_common_data->material_list->pso_list[pso_index]);
+    }
+    command_list->DrawIndexedInstanced(model_data.index_buffer_len[i],
+                                       model_data.instance_num[i],
+                                       model_data.index_buffer_offset[i],
+                                       model_data.vertex_buffer_offset[i],
+                                       0);
+  }
+}
 auto RenderImgui(const RpsCmdCallbackContext* context) {
   ImGui::Render();
   auto command_list = rpsD3D12CommandListFromHandle(context->hCommandBuffer);
@@ -653,15 +851,12 @@ void RecordDebugMarker([[maybe_unused]] void* context, const RpsRuntimeOpRecordD
 }
 void RpsLogger([[maybe_unused]]void* context, [[maybe_unused]]const char* format, ...) {
 }
-RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)
 } // namespace
 std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice(const nlohmann::json& config) {
   return std::unique_ptr<GraphicDevice>(new GraphicDevice(config));
 }
 GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   frame_buffer_num_ = config.at("frame_buffer_num");
-  frame_buffer_count_ = 0;
-  frame_buffer_index_ = 0;
   dxgi_core_.Init();
   device_.Init(GetDxgiAdapter());
   buffer_allocator_ = GetBufferAllocator(GetDxgiAdapter(), GetDevice());
@@ -719,17 +914,77 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
     const auto swapchain_format = GetDxgiFormat(swapchain.at("format"));
     swapchain_.Init(dxgi_core_.GetFactory(), GetCommandQueue(command_queue_index), GetDevice(), window_.GetHwnd(), swapchain_format, frame_buffer_num_ + 1, frame_buffer_num_, DXGI_USAGE_RENDER_TARGET_OUTPUT);
   }
-  command_queue_signals_.Init(GetDevice(), command_queue_num_, GetCommandQueueList());
-  frame_signals_ = AllocateArraySystem<uint64_t*>(frame_buffer_num_);
-  for (uint32_t i = 0; i < frame_buffer_num_; i++) {
-    frame_signals_[i] = AllocateArraySystem<uint64_t>(command_queue_num_);
-    std::fill(frame_signals_[i], frame_signals_[i] + command_queue_num_, 0);
-  }
   {
     const auto& descriptor_gpu = config.at("descriptor_gpu");
     descriptor_gpu_.Init(GetDevice(), descriptor_gpu.at("gpu_handle_num_view"), descriptor_gpu.at("gpu_handle_num_sampler"));
     descriptor_gpu_.SetPersistentViewHandleNum(descriptor_gpu.at("persistent_view_num"));
     descriptor_gpu_.SetPersistentSamplerHandleNum(descriptor_gpu.at("persistent_sampler_num"));
+  }
+  auto descriptor_heap_set = CreateDescriptorHeapSet(GetDevice(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 32);
+  const uint32_t imgui_descriptor_index = 0;
+  const auto imgui_cpu_handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, imgui_descriptor_index);
+  InitImgui(window_.GetHwnd(), GetDevice(), frame_buffer_num_, swapchain_.GetDxgiFormat(), imgui_cpu_handle, descriptor_gpu_.GetViewGpuHandle(imgui_descriptor_index));
+  descriptor_gpu_.WriteToPersistentViewHandleRange(imgui_descriptor_index, 1, imgui_cpu_handle, GetDevice());
+  descriptor_heap_set.heap->Release();
+}
+GraphicDevice::~GraphicDevice() {
+  TermImgui();
+  descriptor_gpu_.Term();
+  ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
+  swapchain_.Term();
+  window_.Term();
+  command_list_set_.Term();
+  buffer_allocator_->Release();
+  device_.Term();
+  dxgi_core_.Term();
+}
+void GraphicDevice::GetSwapchainData(SwapchainData* swapchain_data) {
+  swapchain_data->swapchain_buffer_num = swapchain_.GetSwapchainBufferNum();
+  swapchain_data->swapchain_resources  = swapchain_.GetResourceList();
+  swapchain_data->swapchain_width      = swapchain_.GetWidth();
+  swapchain_data->swapchain_height     = swapchain_.GetHeight();
+  swapchain_data->swapchain_format     = swapchain_.GetDxgiFormat();
+}
+void GraphicDevice::GetRenderGraphRecordConfig(RenderGraphRecordConfig* record_config) {
+  record_config->get_cmd_list = [command_list_set = &command_list_set_, descriptor_gpu = &descriptor_gpu_, device = GetDevice()](const uint32_t command_queue_index) {
+    auto command_list = command_list_set->GetCommandList(device, command_queue_index);
+    descriptor_gpu->SetDescriptorHeapsToCommandList(1, &command_list);
+    return command_list;
+  };
+  record_config->execute_command_list = [command_list_set = &command_list_set_](const uint32_t command_queue_index) {
+    command_list_set->ExecuteCommandList(command_queue_index);
+  };
+}
+void GraphicDevice::GetUtilFuncs(UtilFuncs* util_funcs) {
+  util_funcs->write_to_gpu_handle = [descriptor_gpu = &descriptor_gpu_, device = GetDevice()](const D3D12_CPU_DESCRIPTOR_HANDLE* const cpu_handles, const uint32_t cpu_handle_num) {
+    return descriptor_gpu->WriteToTransientViewHandleRange(cpu_handle_num, cpu_handles, device);
+  };
+}
+bool GraphicDevice::PreUpdate() {
+  if (!window_.ProcessMessage()) { return false; }
+  command_list_set_.SucceedFrame();
+  UpdateImgui();
+  return true;
+}
+void GraphicDevice::Present() {
+  swapchain_.Present();
+  swapchain_.UpdateBackBufferIndex();
+}
+RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)
+std::unique_ptr<RenderGraph> RenderGraph::CreateRenderGraph(const Config& config) {
+  return std::unique_ptr<RenderGraph>(new RenderGraph(config));
+}
+RenderGraph::RenderGraph(const Config& config) {
+  command_queue_num_ = config.command_queue_num;
+  frame_buffer_num_ = config.frame_buffer_num;
+  device_ = config.device;
+  frame_buffer_index_ = 0;
+  frame_count_ = 0;
+  command_queue_signals_.Init(config.device, config.command_queue_num, config.command_queue_list);
+  frame_signals_ = AllocateArrayScene<uint64_t*>(frame_buffer_num_);
+  for (uint32_t i = 0; i < frame_buffer_num_; i++) {
+    frame_signals_[i] = AllocateArrayScene<uint64_t>(command_queue_num_);
+    std::fill(frame_signals_[i], frame_signals_[i] + command_queue_num_, 0);
   }
   {
     RpsDeviceCreateInfo create_info = {
@@ -750,17 +1005,17 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
     RpsD3D12RuntimeDeviceCreateInfo runtime_device_create_info = {
       .pDeviceCreateInfo  = &create_info,
       .pRuntimeCreateInfo = &runtime_create_info,
-      .pD3D12Device       = GetDevice(),
+      .pD3D12Device       = config.device,
       // .flags = RPS_D3D12_RUNTIME_FLAG_PREFER_ENHANCED_BARRIERS;
     };
     const auto result = rpsD3D12RuntimeDeviceCreate(&runtime_device_create_info, &rps_device_);
     assert(result == RPS_OK);
   }
   {
-    auto queue_flags = AllocateArrayFrame<RpsQueueFlags>(command_queue_num_);
-    for (uint32_t i = 0; i < command_queue_num_; i++) {
+    auto queue_flags = AllocateArrayFrame<RpsQueueFlags>(config.command_queue_num);
+    for (uint32_t i = 0; i < config.command_queue_num; i++) {
       auto flag = RPS_QUEUE_FLAG_GRAPHICS;
-      const auto type = command_list_set_.GetCommandQueueType(i);
+      const auto type = config.command_queue_type[i];
       if (type == D3D12_COMMAND_LIST_TYPE_COMPUTE) {
         flag = RPS_QUEUE_FLAG_COMPUTE;
       } else if (type == D3D12_COMMAND_LIST_TYPE_COPY) {
@@ -770,7 +1025,7 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
     }
     RpsRenderGraphCreateInfo render_graph_create_info = {
       .scheduleInfo = {
-        .numQueues = command_queue_num_,
+        .numQueues = config.command_queue_num,
         .pQueueInfos = queue_flags,
       },
       .mainEntryCreateInfo = {
@@ -782,72 +1037,51 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   }
   {
     auto rpsl_entry = rpsRenderGraphGetMainEntry(rps_render_graph_);
-    auto result = rpsProgramBindNode(rpsl_entry, "imgui", &RenderImgui, this);
-    assert(result == RPS_OK);
+    {
+      const auto result = rpsProgramBindNode(rpsl_entry, "update_scene_data", &UpdateSceneData);
+      assert(result == RPS_OK);
+    }
+    {
+      prez_pass_params_.material_index = FindHashIndex(config.material_hash_list_len, config.material_hash_list, CalcStrHash("prez"));
+      const auto result = rpsProgramBindNode(rpsl_entry, "prez_pass", &GeomPass, &prez_pass_params_, RPS_CMD_CALLBACK_FLAG_NONE);
+      assert(result == RPS_OK);
+    }
+    {
+      const auto result = rpsProgramBindNode(rpsl_entry, "imgui", &RenderImgui);
+      assert(result == RPS_OK);
+    }
   }
-  auto descriptor_heap_set = CreateDescriptorHeapSet(GetDevice(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 32);
-  const uint32_t imgui_descriptor_index = 0;
-  const auto imgui_cpu_handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, imgui_descriptor_index);
-  InitImgui(window_.GetHwnd(), GetDevice(), frame_buffer_num_, swapchain_.GetDxgiFormat(), imgui_cpu_handle, descriptor_gpu_.GetViewGpuHandle(imgui_descriptor_index));
-  descriptor_gpu_.WriteToPersistentViewHandleRange(imgui_descriptor_index, 1, imgui_cpu_handle, GetDevice());
-  descriptor_heap_set.heap->Release();
 }
-GraphicDevice::~GraphicDevice() {
-  command_queue_signals_.WaitAll(GetDevice());
+RenderGraph::~RenderGraph() {
+  WaitAll();
+  command_queue_signals_.Term();
   rpsRenderGraphDestroy(rps_render_graph_);
   rpsDeviceDestroy(rps_device_);
-  command_queue_signals_.Term();
-  TermImgui();
-  descriptor_gpu_.Term();
-  ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
-  swapchain_.Term();
-  window_.Term();
-  command_list_set_.Term();
-  buffer_allocator_->Release();
-  device_.Term();
-  dxgi_core_.Term();
 }
-bool GraphicDevice::PreUpdate() {
-  if (!window_.ProcessMessage()) { return false; }
-  command_queue_signals_.WaitOnCpu(GetDevice(), frame_signals_[frame_buffer_index_]);
-  UpdateRenderGraph();
-  command_list_set_.SucceedFrame();
-  UpdateImgui();
-  return true;
-}
-void GraphicDevice::Render() {
-  RenderRenderGraph();
-}
-void GraphicDevice::Present() {
-  swapchain_.Present();
-  swapchain_.UpdateBackBufferIndex();
-  frame_buffer_count_++;
-  frame_buffer_index_ = (frame_buffer_count_) % frame_buffer_num_;
-}
-void GraphicDevice::UpdateRenderGraph() {
-  const auto swapchain_buffer_num = swapchain_.GetSwapchainBufferNum();
-  auto back_buffers = AllocateArrayFrame<RpsRuntimeResource>(swapchain_buffer_num);
-  for (uint32_t i = 0; i < swapchain_buffer_num; i++) {
-    back_buffers[i] = rpsD3D12ResourceToHandle(swapchain_.GetResource(i));
+void RenderGraph::Update(const SwapchainData& swapchain_data) {
+  auto back_buffers = AllocateArrayFrame<RpsRuntimeResource>(swapchain_data.swapchain_buffer_num);
+  for (uint32_t i = 0; i < swapchain_data.swapchain_buffer_num; i++) {
+    back_buffers[i] = rpsD3D12ResourceToHandle(swapchain_data.swapchain_resources[i]);
   }
   RpsResourceDesc back_buffer_desc = {
     .type              = RPS_RESOURCE_TYPE_IMAGE_2D,
-    .temporalLayers    = swapchain_buffer_num,
+    .temporalLayers    = swapchain_data.swapchain_buffer_num,
     .flags             = 0,
     .image = {
-      .width       = swapchain_.GetWidth(),
-      .height      = swapchain_.GetHeight(),
+      .width       = swapchain_data.swapchain_width,
+      .height      = swapchain_data.swapchain_height,
       .arrayLayers = 1,
       .mipLevels   = 1,
-      .format      = rpsFormatFromDXGI(swapchain_.GetDxgiFormat()),
+      .format      = rpsFormatFromDXGI(swapchain_data.swapchain_format),
       .sampleCount = 1,
     },
   };
-  RpsConstant args[] = {&back_buffer_desc};
+  const auto camera_buffer_size = GetUint32(sizeof(shader::SceneCameraData));
+  RpsConstant args[] = {&back_buffer_desc, &frame_buffer_num_, &camera_buffer_size};
   const RpsRuntimeResource* arg_resources[] = {back_buffers};
-  const auto gpu_completed_frame_index = (frame_buffer_count_ > frame_buffer_num_) ? static_cast<uint64_t>(frame_buffer_count_ - frame_buffer_num_) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
+  const auto gpu_completed_frame_index = (frame_count_ > frame_buffer_num_) ? static_cast<uint64_t>(frame_count_ - frame_buffer_num_) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
   RpsRenderGraphUpdateInfo update_info = {
-    .frameIndex               = frame_buffer_count_,
+    .frameIndex               = frame_count_,
     .gpuCompletedFrameIndex   = gpu_completed_frame_index,
     .diagnosticFlags          = RpsDiagnosticFlags(RPS_DIAGNOSTIC_ENABLE_RUNTIME_DEBUG_NAMES | ((gpu_completed_frame_index == RPS_GPU_COMPLETED_FRAME_INDEX_NONE) ? RPS_DIAGNOSTIC_ENABLE_ALL: RPS_DIAGNOSTIC_NONE)),
     .numArgs                  = countof(args),
@@ -856,7 +1090,7 @@ void GraphicDevice::UpdateRenderGraph() {
   };
   rpsRenderGraphUpdate(rps_render_graph_, &update_info);
 }
-void GraphicDevice::RenderRenderGraph() {
+void RenderGraph::RecordCommands(const RenderGraphRecordConfig& config, const RenderPassCommonData& render_pass_common_data) {
   RpsRenderGraphBatchLayout batch_layout = {};
   auto result = rpsRenderGraphGetBatchLayout(rps_render_graph_, &batch_layout);
   if (result != RPS_OK) {
@@ -871,11 +1105,10 @@ void GraphicDevice::RenderRenderGraph() {
   for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
     const auto& batch = batch_layout.pCmdBatches[batch_index];
     const auto command_queue_index = batch.queueIndex;
-    auto command_list = command_list_set_.GetCommandList(GetDevice(), command_queue_index);
-    descriptor_gpu_.SetDescriptorHeapsToCommandList(1, &command_list);
+    auto command_list = config.get_cmd_list(command_queue_index);
     RpsRenderGraphRecordCommandInfo record_info = {
       .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
-      .pUserContext  = this,
+      .pUserContext  = &const_cast<RenderPassCommonData&>(render_pass_common_data),
       .cmdBeginIndex = batch.cmdBegin,
       .numCmds       = batch.numCmds,
       // .flags         = RPS_RECORD_COMMAND_FLAG_ENABLE_COMMAND_DEBUG_MARKERS,
@@ -897,11 +1130,11 @@ void GraphicDevice::RenderRenderGraph() {
       assert(false);
       return;
     }
-    command_list_set_.ExecuteCommandList(command_queue_index);
+    config.execute_command_list(command_queue_index);
     if (batch.signalFenceIndex != RPS_INDEX_NONE_U32 || batch_index == last_batch_index_per_queue[command_queue_index]) {
       const auto next_signal_val = command_queue_signals_.SucceedSignal(command_queue_index);
       if (next_signal_val == CommandQueueSignals::kInvalidSignalVal) {
-        logerror("command_queue_signals_.SucceedSignal failed. {} {}", command_queue_index, batch_index);
+        logerror("command_queue_signals.SucceedSignal failed. {} {}", command_queue_index, batch_index);
         assert(false);
         return;
       }
@@ -913,6 +1146,11 @@ void GraphicDevice::RenderRenderGraph() {
       }
     }
   }
+}
+void RenderGraph::PostPresent() {
+  frame_count_++;
+  frame_buffer_index_ = (frame_count_) % frame_buffer_num_;
+  command_queue_signals_.WaitOnCpu(device_, frame_signals_[frame_buffer_index_]);
 }
 }
 #include "doctest/doctest.h"
@@ -942,18 +1180,47 @@ TEST_CASE("scene loader") { // NOLINT
 TEST_CASE("scene viewer") { // NOLINT
   using namespace illuminate; // NOLINT
   auto graphic_device = GraphicDevice::CreateGraphicDevice(LoadJson("configs/config_default.json"));
-  uint32_t frame_index = 0;
-  auto default_textures = LoadDefaultTextures(frame_index, graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
-  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, frame_index, graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
+  auto material_pack = BuildMaterialList(graphic_device->GetDevice(), LoadJson("configs/materials.json"));
+  auto render_graph = RenderGraph::CreateRenderGraph({
+      .device             = graphic_device->GetDevice(),
+      .command_queue_num  = graphic_device->GetCommandQueueNum(),
+      .command_queue_type = graphic_device->GetCommandQueueType(),
+      .command_queue_list = graphic_device->GetCommandQueueList(),
+      .frame_buffer_num   = graphic_device->GetFrameBufferNum(),
+      .material_hash_list_len = material_pack.material_list.material_num,
+      .material_hash_list     = material_pack.config.material_hash_list,
+    });
+  auto default_textures = LoadDefaultTextures(render_graph->GetFrameIndex(), graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
+  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, render_graph->GetFrameIndex(), graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
+  SwapchainData swapchain_data;
+  graphic_device->GetSwapchainData(&swapchain_data);
+  RenderGraphRecordConfig record_config;
+  graphic_device->GetRenderGraphRecordConfig(&record_config);
+  SceneParams scene_params;
+  UtilFuncs   util_funcs;
+  GpuHandles  gpu_handles;
+  graphic_device->GetUtilFuncs(&util_funcs);;
+  RenderPassCommonData render_pass_common_data{
+    .model_data_set = &model_data_set,
+    .material_list  = &material_pack.material_list,
+    .scene_params   = &scene_params,
+    .util_funcs     = &util_funcs,
+    .gpu_handles    = &gpu_handles,
+  };
   for (uint32_t i = 0; i < 10; i++) {
     if (!graphic_device->PreUpdate()) { break; }
-    graphic_device->Render();
+    render_graph->Update(swapchain_data);
+    render_graph->RecordCommands(record_config, render_pass_common_data);
     graphic_device->Present();
+    render_graph->PostPresent();
   }
+  render_graph->WaitAll();
   ReleaseResourceSet(&model_data_set.resource_set);
   ReleaseMaterialViewDescriptorHeaps(&model_data_set.descriptor_heaps);
   ReleaseResourceSet(&default_textures.resource_set);
   default_textures.descriptor_heap_set.heap->Release();
+  ReleasePsoAndRootsig(&material_pack.material_list);
+  render_graph.reset();
   graphic_device.reset();
   ClearAllAllocations();
 }
