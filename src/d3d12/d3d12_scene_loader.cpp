@@ -566,8 +566,6 @@ class GraphicDevice {
   virtual ~GraphicDevice();
   auto GetDxgiAdapter() { return dxgi_core_.GetAdapter(); }
   auto GetDevice() { return device_.Get(); }
-  auto GetGpuBufferAllocator() { return buffer_allocator_; }
-  auto GetResourceTransferManager() { return &resource_transfer_; }
   constexpr auto GetCommandQueueNum() const { return command_queue_num_; }
   auto GetCommandQueueList() { return command_list_set_.GetCommandQueueList(); }
   auto GetCommandQueueType() { return command_list_set_.GetCommandQueueTypeList(); }
@@ -588,8 +586,6 @@ class GraphicDevice {
   uint32_t frame_buffer_num_;
   DxgiCore dxgi_core_;
   Device device_;
-  D3D12MA::Allocator* buffer_allocator_;
-  ResourceTransfer resource_transfer_;
   uint32_t command_queue_num_;
   CommandListSet command_list_set_;
   Window window_;
@@ -600,6 +596,7 @@ struct RenderPassCommonData;
 class RenderGraph {
  public:
   struct Config {
+    DxgiAdapter* dxgi_adapter{};
     D3d12Device* device{};
     const uint32_t command_queue_num{};
     const D3D12_COMMAND_LIST_TYPE* const command_queue_type{};
@@ -607,6 +604,8 @@ class RenderGraph {
     uint32_t frame_buffer_num{};
     uint32_t material_hash_list_len{};
     StrHash* material_hash_list{};
+    uint32_t max_buffer_transfer_num_per_frame{1024};
+    uint32_t max_mip_map_num{12};
   };
   struct GeomPassParams {
     StrHash material_index{};
@@ -614,6 +613,8 @@ class RenderGraph {
   static std::unique_ptr<RenderGraph> CreateRenderGraph(const Config& config);
   ~RenderGraph();
   constexpr auto GetFrameIndex() const { return frame_buffer_index_; }
+  auto GetGpuBufferAllocator() { return buffer_allocator_; }
+  auto GetResourceTransferManager() { return &resource_transfer_; }
   void Update(const SwapchainData& config);
   void RecordCommands(const RenderGraphRecordConfig& config, const RenderPassCommonData& render_pass_common_data);
   void PostPresent();
@@ -621,6 +622,8 @@ class RenderGraph {
  private:
   RenderGraph(const Config& config);
   D3d12Device* device_;
+  D3D12MA::Allocator* buffer_allocator_;
+  ResourceTransfer resource_transfer_;
   RpsDevice rps_device_;
   RpsRenderGraph rps_render_graph_;
   GeomPassParams prez_pass_params_;
@@ -630,6 +633,7 @@ class RenderGraph {
   uint64_t** frame_signals_;
   uint32_t frame_count_;
   uint32_t frame_buffer_index_;
+  uint32_t copy_queue_index_;
   RenderGraph(const RenderGraph&) = delete;
   RenderGraph(RenderGraph&&) = delete;
   void operator=(const RenderGraph&) = delete;
@@ -646,6 +650,7 @@ struct RenderGraphRecordConfig {
   using GetCmdList  = std::function<D3d12CommandList*(const uint32_t)>;
   using ExecCmdList = std::function<void(const uint32_t)>;
   GetCmdList get_cmd_list;
+  GetCmdList get_cmd_list_wo_set_descriptor_heap;
   ExecCmdList execute_command_list;
 };
 } // namespace illuminate
@@ -851,6 +856,37 @@ void RecordDebugMarker([[maybe_unused]] void* context, const RpsRuntimeOpRecordD
 }
 void RpsLogger([[maybe_unused]]void* context, [[maybe_unused]]const char* format, ...) {
 }
+auto RecordTransferResourceCommand(D3d12CommandList* command_list, ResourceTransfer* resource_transfer, const uint32_t frame_index) {
+  if (resource_transfer->transfer_reserved_buffer_num[frame_index] == 0
+      && resource_transfer->transfer_reserved_texture_num[frame_index]) {
+    NotifyTransferReservedResourcesProcessed(frame_index, resource_transfer);
+    return false;
+  }
+  for (uint32_t i = 0; i < resource_transfer->transfer_reserved_buffer_num[frame_index]; i++) {
+    command_list->CopyResource(resource_transfer->transfer_reserved_buffer_dst[frame_index][i],
+                               resource_transfer->transfer_reserved_buffer_src[frame_index][i]);
+  }
+  for (uint32_t i = 0; i < resource_transfer->transfer_reserved_texture_num[frame_index]; i++) {
+    for (uint32_t j = 0; j < resource_transfer->texture_subresource_num[frame_index][i]; j++) {
+      CD3DX12_TEXTURE_COPY_LOCATION src(resource_transfer->transfer_reserved_texture_src[frame_index][i],
+                                        resource_transfer->texture_layout[frame_index][i][j]);
+      CD3DX12_TEXTURE_COPY_LOCATION dst(resource_transfer->transfer_reserved_texture_dst[frame_index][i], j);
+      command_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    }
+  }
+  NotifyTransferReservedResourcesProcessed(frame_index, resource_transfer);
+  return true;
+}
+auto GetCopyQueueIndex(const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* const command_queue_type) {
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    if (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) { return i; }
+  }
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    if (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_DIRECT) { return i; }
+  }
+  assert(false);
+  return 0U;
+}
 } // namespace
 std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice(const nlohmann::json& config) {
   return std::unique_ptr<GraphicDevice>(new GraphicDevice(config));
@@ -859,11 +895,6 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
   frame_buffer_num_ = config.at("frame_buffer_num");
   dxgi_core_.Init();
   device_.Init(GetDxgiAdapter());
-  buffer_allocator_ = GetBufferAllocator(GetDxgiAdapter(), GetDevice());
-  {
-    const auto& resource_transfer_config = config.at("resource_transfer_config");
-    resource_transfer_ = PrepareResourceTransferer(frame_buffer_num_, resource_transfer_config.at("max_buffer_transfer_num_per_frame"), resource_transfer_config.at("max_mip_map_num"));
-  }
   {
     const auto& command_queues = config.at("command_queue");
     command_queue_num_ = GetUint32(command_queues.size());
@@ -930,11 +961,9 @@ GraphicDevice::GraphicDevice(const nlohmann::json& config) {
 GraphicDevice::~GraphicDevice() {
   TermImgui();
   descriptor_gpu_.Term();
-  ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
   swapchain_.Term();
   window_.Term();
   command_list_set_.Term();
-  buffer_allocator_->Release();
   device_.Term();
   dxgi_core_.Term();
 }
@@ -950,6 +979,9 @@ void GraphicDevice::GetRenderGraphRecordConfig(RenderGraphRecordConfig* record_c
     auto command_list = command_list_set->GetCommandList(device, command_queue_index);
     descriptor_gpu->SetDescriptorHeapsToCommandList(1, &command_list);
     return command_list;
+  };
+  record_config->get_cmd_list_wo_set_descriptor_heap = [command_list_set = &command_list_set_, descriptor_gpu = &descriptor_gpu_, device = GetDevice()](const uint32_t command_queue_index) {
+    return command_list_set->GetCommandList(device, command_queue_index);
   };
   record_config->execute_command_list = [command_list_set = &command_list_set_](const uint32_t command_queue_index) {
     command_list_set->ExecuteCommandList(command_queue_index);
@@ -980,8 +1012,11 @@ RenderGraph::RenderGraph(const Config& config) {
   device_ = config.device;
   frame_buffer_index_ = 0;
   frame_count_ = 0;
+  buffer_allocator_ = GetBufferAllocator(config.dxgi_adapter, device_);
+  resource_transfer_ = PrepareResourceTransferer(frame_buffer_num_, config.max_buffer_transfer_num_per_frame, config.max_mip_map_num);
   command_queue_signals_.Init(config.device, config.command_queue_num, config.command_queue_list);
   frame_signals_ = AllocateArrayScene<uint64_t*>(frame_buffer_num_);
+  copy_queue_index_ = GetCopyQueueIndex(config.command_queue_num, config.command_queue_type);
   for (uint32_t i = 0; i < frame_buffer_num_; i++) {
     frame_signals_[i] = AllocateArrayScene<uint64_t>(command_queue_num_);
     std::fill(frame_signals_[i], frame_signals_[i] + command_queue_num_, 0);
@@ -1054,6 +1089,8 @@ RenderGraph::RenderGraph(const Config& config) {
 }
 RenderGraph::~RenderGraph() {
   WaitAll();
+  ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
+  buffer_allocator_->Release();
   command_queue_signals_.Term();
   rpsRenderGraphDestroy(rps_render_graph_);
   rpsDeviceDestroy(rps_device_);
@@ -1091,21 +1128,38 @@ void RenderGraph::Update(const SwapchainData& swapchain_data) {
   rpsRenderGraphUpdate(rps_render_graph_, &update_info);
 }
 void RenderGraph::RecordCommands(const RenderGraphRecordConfig& config, const RenderPassCommonData& render_pass_common_data) {
+  uint64_t copy_queue_signal = 0;
+  if (RecordTransferResourceCommand(config.get_cmd_list_wo_set_descriptor_heap(copy_queue_index_), &resource_transfer_, frame_buffer_index_)) {
+    copy_queue_signal = command_queue_signals_.SucceedSignal(copy_queue_index_);
+    assert(copy_queue_signal != CommandQueueSignals::kInvalidSignalVal);
+    config.execute_command_list(copy_queue_index_);
+  }
   RpsRenderGraphBatchLayout batch_layout = {};
   auto result = rpsRenderGraphGetBatchLayout(rps_render_graph_, &batch_layout);
   if (result != RPS_OK) {
     logerror("rpsRenderGraphGetBatchLayout failed. {}", result);
     return;
   }
+  auto first_batch_index_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
+  std::fill(first_batch_index_per_queue, first_batch_index_per_queue + command_queue_num_, ~0U);
   auto last_batch_index_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
   std::fill(last_batch_index_per_queue, last_batch_index_per_queue + command_queue_num_, ~0U);
   for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
+    if (first_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] == ~0U) {
+      first_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] = batch_index;
+    }
     last_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] = batch_index;
   }
   for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
     const auto& batch = batch_layout.pCmdBatches[batch_index];
     const auto command_queue_index = batch.queueIndex;
-    auto command_list = config.get_cmd_list(command_queue_index);
+    if (batch_index == first_batch_index_per_queue[command_queue_index] && copy_queue_signal != 0) {
+      if (!command_queue_signals_.RegisterWaitOnCommandQueue(copy_queue_index_, command_queue_index, copy_queue_signal)) {
+        logerror("failed RegisterWaitOnCommandQueue for copy_queue_signal. {} {} {} {}", batch_index, copy_queue_index_, command_queue_index, copy_queue_signal);
+        assert(false);
+      }
+    }
+    auto command_list = (command_queue_index != copy_queue_index_) ? config.get_cmd_list(command_queue_index) : config.get_cmd_list_wo_set_descriptor_heap(command_queue_index);
     RpsRenderGraphRecordCommandInfo record_info = {
       .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
       .pUserContext  = &const_cast<RenderPassCommonData&>(render_pass_common_data),
@@ -1182,6 +1236,7 @@ TEST_CASE("scene viewer") { // NOLINT
   auto graphic_device = GraphicDevice::CreateGraphicDevice(LoadJson("configs/config_default.json"));
   auto material_pack = BuildMaterialList(graphic_device->GetDevice(), LoadJson("configs/materials.json"));
   auto render_graph = RenderGraph::CreateRenderGraph({
+      .dxgi_adapter       = graphic_device->GetDxgiAdapter(),
       .device             = graphic_device->GetDevice(),
       .command_queue_num  = graphic_device->GetCommandQueueNum(),
       .command_queue_type = graphic_device->GetCommandQueueType(),
@@ -1190,8 +1245,8 @@ TEST_CASE("scene viewer") { // NOLINT
       .material_hash_list_len = material_pack.material_list.material_num,
       .material_hash_list     = material_pack.config.material_hash_list,
     });
-  auto default_textures = LoadDefaultTextures(render_graph->GetFrameIndex(), graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
-  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, render_graph->GetFrameIndex(), graphic_device->GetDevice(), graphic_device->GetGpuBufferAllocator(), graphic_device->GetResourceTransferManager());
+  auto default_textures = LoadDefaultTextures(render_graph->GetFrameIndex(), graphic_device->GetDevice(), render_graph->GetGpuBufferAllocator(), render_graph->GetResourceTransferManager());
+  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, render_graph->GetFrameIndex(), graphic_device->GetDevice(), render_graph->GetGpuBufferAllocator(), render_graph->GetResourceTransferManager());
   SwapchainData swapchain_data;
   graphic_device->GetSwapchainData(&swapchain_data);
   RenderGraphRecordConfig record_config;
@@ -1207,7 +1262,7 @@ TEST_CASE("scene viewer") { // NOLINT
     .util_funcs     = &util_funcs,
     .gpu_handles    = &gpu_handles,
   };
-  for (uint32_t i = 0; i < 10; i++) {
+  for (uint32_t i = 0; i < 100; i++) {
     if (!graphic_device->PreUpdate()) { break; }
     render_graph->Update(swapchain_data);
     render_graph->RecordCommands(record_config, render_pass_common_data);

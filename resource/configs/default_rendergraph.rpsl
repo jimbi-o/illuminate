@@ -1,5 +1,5 @@
 node update_scene_data([writeonly(cpu)] buffer camera_resource, [readonly(cb, vs)] buffer camera_handle);
-node prez_pass(rtv dst : SV_Target0, dsv ds : SV_DepthStencil, RpsViewport dst_viewport : SV_Viewport, [readonly(cb, vs)] buffer camera_handle);
+node prez_pass(rtv dst : SV_Target0, dsv ds : SV_DepthStencil, RpsViewport dst_viewport : SV_Viewport, [readonly(cb, vs)] buffer camera_handle/*needed to keep update_scene_data*/);
 node imgui(rtv dst : SV_Target0, RpsViewport dst_viewport : SV_Viewport);
 
 export void rps_main([readonly(present)] texture backbuffer, uint frame_buffer_num, uint camera_buffer_size)
