@@ -1159,7 +1159,11 @@ void RecordDebugMarker([[maybe_unused]] void* context, const RpsRuntimeOpRecordD
       break;
   }
 }
-void RpsLogger([[maybe_unused]]void* context, [[maybe_unused]]const char* format, ...) {
+void RpsLogger([[maybe_unused]]void* context, const char* format, va_list args) {
+  const auto len = GetUint32(strlen(format) * 2);
+  auto buffer = AllocateArrayFrame<char>(len);
+  snprintf(buffer, len, format, args);
+  loginfo(args);
 }
 void UpdateSceneParams(SceneParams* scene_params) {
 }
@@ -1176,7 +1180,7 @@ RenderGraph::RenderGraph(const Config& config) {
         .pfnFree  = FreeRenderGraph,
       },
       .printer = {
-        .pfnPrintf  = RpsLogger,
+        .pfnVPrintf = RpsLogger,
       },
     };
     RpsRuntimeDeviceCreateInfo runtime_create_info = {
