@@ -585,6 +585,7 @@ class CommandRecorder final {
   auto GetGpuBufferAllocator() { return buffer_allocator_; }
   auto GetResourceTransferManager() { return &resource_transfer_; }
   bool ProcessWindowMessage();
+  void PreUpdate();
   void RecordCommands(RenderGraph* render_graph, const SceneData& scene_data);
   void Present();
   void WaitAll() { command_queue_signals_.WaitAll(device_); }
@@ -905,11 +906,13 @@ bool CommandRecorder::ProcessWindowMessage() {
   if (!window_.ProcessMessage()) { return false; }
   return true;
 }
+void CommandRecorder::PreUpdate() {
+  UpdateImgui();
+}
 void CommandRecorder::RecordCommands(RenderGraph* render_graph, const SceneData& scene_data) {
   swapchain_.UpdateBackBufferIndex();
   command_queue_signals_.WaitOnCpu(device_, frame_signals_[frame_buffer_index_]);
   command_list_set_.SetCurrentFrameBufferIndex(frame_buffer_index_);
-  UpdateImgui();
   if (const auto result = UpdateRenderGraph(render_graph); result != RPS_OK) {
     logerror("rpsRenderGraphUpdate failed. {}", result);
     return;
@@ -1274,6 +1277,7 @@ TEST_CASE("scene viewer") { // NOLINT
   };
   for (uint32_t i = 0; i < 100; i++) {
     if (!command_recorder->ProcessWindowMessage()) { break; }
+    command_recorder->PreUpdate();
     ResetAllocation(MemoryType::kFrame);
     command_recorder->RecordCommands(render_graph.get(), scene_data);
     command_recorder->Present();
