@@ -47,9 +47,9 @@ void CommandAllocatorPool::Term() {
     used_allocator_num_per_frame_[i] = 0;
   }
 }
-void CommandAllocatorPool::SucceedFrame() {
-  frame_index_++;
-  if (frame_index_ >= frame_buffer_num_) { frame_index_ = 0; }
+void CommandAllocatorPool::SetCurrentFrameBufferIndex(const uint32_t frame_buffer_index) {
+  assert(frame_buffer_index < frame_buffer_num_);
+  frame_index_ = frame_buffer_index;
   for (uint32_t i = 0; i < used_allocator_num_per_frame_[frame_index_]; i++) {
     auto hr = allocator_in_use_[frame_index_][i]->Reset();
     if (FAILED(hr)) {

@@ -20,7 +20,7 @@ class CommandQueueList {
 };
 class CommandQueueSignals {
  public:
-  static const uint64_t kInvalidSignalVal = ~0UL;
+  static const uint64_t kInvalidSignalVal = ~0ULL;
   bool Init(D3d12Device* const device, const uint32_t command_queue_num, D3d12CommandQueue** command_queue_list);
   void Term();
   uint64_t SetSignalVal(const uint32_t producer_queue_index, const uint64_t signal_val); // returns kInvalidSignalVal on failure.
@@ -32,7 +32,7 @@ class CommandQueueSignals {
   uint32_t command_queue_num_{0};
   D3d12CommandQueue** command_queue_list_{nullptr};
   D3d12Fence** fence_{nullptr};
-  uint64_t* used_signal_val_list_{nullptr};
+  uint64_t signal_serial_val_{0};
   HANDLE handle_{};
 };
 }

@@ -7,7 +7,7 @@ class CommandAllocatorPool {
  public:
   void Init(const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type);
   void Term();
-  void SucceedFrame();
+  void SetCurrentFrameBufferIndex(const uint32_t frame_buffer_index);
   D3d12CommandAllocator* RetainCommandAllocator(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
  private:
   uint32_t allocator_pool_size_[kCommandQueueTypeNum]{};
@@ -23,7 +23,7 @@ class CommandListPool {
  public:
   void Init(const uint32_t* command_list_num_per_queue_type, const uint32_t frame_buffer_num, const uint32_t* command_allocator_num_per_queue_type);
   void Term();
-  void SucceedFrame() { command_allocator_pool_.SucceedFrame(); }
+  auto SetCurrentFrameBufferIndex(const uint32_t frame_buffer_index) { command_allocator_pool_.SetCurrentFrameBufferIndex(frame_buffer_index); }
   D3d12CommandList* RetainCommandList(D3d12Device* device, const D3D12_COMMAND_LIST_TYPE);
   void ReturnCommandList(const D3D12_COMMAND_LIST_TYPE, const uint32_t num, D3d12CommandList**);
  private:
@@ -56,7 +56,7 @@ class CommandListSet {
   constexpr auto GetCommandQueueType(const uint32_t i) const { return command_queue_type_[i]; }
   D3d12CommandList* GetCommandList(D3d12Device* device, const uint32_t command_queue_index);
   void ExecuteCommandList(const uint32_t command_queue_index);
-  void SucceedFrame() { command_list_pool_.SucceedFrame(); }
+  auto SetCurrentFrameBufferIndex(const uint32_t frame_buffer_index) { command_list_pool_.SetCurrentFrameBufferIndex(frame_buffer_index); }
  private:
   CommandQueueList command_queue_list_;
   CommandListPool command_list_pool_;

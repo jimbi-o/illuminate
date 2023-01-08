@@ -12,7 +12,6 @@ class Swapchain {
   void UpdateBackBufferIndex();
   bool Present();
   constexpr auto GetBufferIndex() const { return buffer_index_; }
-  constexpr auto GetResourceList() { return resources_; }
   auto GetResource() { return resources_[buffer_index_]; }
   auto GetResource(const uint32_t i) { return resources_[i]; }
   const auto& GetRtvHandle() const { return cpu_handles_rtv_[buffer_index_]; }

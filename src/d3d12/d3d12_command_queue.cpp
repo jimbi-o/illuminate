@@ -45,19 +45,17 @@ bool CommandQueueSignals::Init(D3d12Device* const device, const uint32_t command
   command_queue_num_ = command_queue_num;
   command_queue_list_ = command_queue_list;
   fence_ = AllocateArraySystem<D3d12Fence*>(command_queue_num);
-  used_signal_val_list_ = AllocateArraySystem<uint64_t>(command_queue_num);
   for (uint32_t i = 0; i < command_queue_num; i++) {
-    used_signal_val_list_[i] = 0UL;
     ID3D12Fence* fence = nullptr;
-    auto hr = device->CreateFence(used_signal_val_list_[i], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+    auto hr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
     if (FAILED(hr)) {
-      logerror("CreateFence failed. {} {}", i, used_signal_val_list_[i]);
+      logerror("CreateFence failed. {}", i);
       assert(false && "CreateFence failed.");
       return false;
     }
     hr = fence->QueryInterface(IID_PPV_ARGS(&fence_[i]));
     if (FAILED(hr)) {
-      logerror("fence->QueryInterface failed. {} {}", i, used_signal_val_list_[i]);
+      logerror("fence->QueryInterface failed. {}", i);
       assert(false && "fence->QueryInterface failed.");
       return false;
     }
@@ -73,7 +71,6 @@ void CommandQueueSignals::Term() {
   for (uint32_t i = 0; i < command_queue_num_; i++) {
     fence_[i]->Release();
   }
-  used_signal_val_list_ = nullptr;
   if (handle_) {
     CloseHandle(handle_);
     handle_ = nullptr;
@@ -86,11 +83,11 @@ uint64_t CommandQueueSignals::SetSignalVal(const uint32_t producer_queue_index, 
     assert(false && "CommandQueue signal failed");
     return kInvalidSignalVal;
   }
-  used_signal_val_list_[producer_queue_index] = signal_val;
+  signal_serial_val_ = signal_val;
   return signal_val;
 }
 uint64_t CommandQueueSignals::SucceedSignal(const uint32_t producer_queue_index) {
-  return SetSignalVal(producer_queue_index, used_signal_val_list_[producer_queue_index] + 1);
+  return SetSignalVal(producer_queue_index, signal_serial_val_ + 1);
 }
 bool CommandQueueSignals::RegisterWaitOnCommandQueue(const uint32_t producer_queue_index, const uint32_t consumer_queue_index, const uint64_t wait_signal_val) {
   if (producer_queue_index == consumer_queue_index) {

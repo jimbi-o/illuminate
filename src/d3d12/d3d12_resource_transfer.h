@@ -26,6 +26,7 @@ ResourceTransfer PrepareResourceTransferer(const uint32_t frame_buffer_num, cons
 void ClearResourceTransfer(const uint32_t frame_buffer_num, ResourceTransfer* resource_transfer);
 bool ReserveResourceTransfer(const uint32_t frame_index, ID3D12Resource* src, D3D12MA::Allocation* src_allocation, ID3D12Resource* dst, ResourceTransfer* resource_transfer);
 bool ReserveResourceTransfer(const uint32_t frame_index, const uint32_t subresource_num, const D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layout, ID3D12Resource* src, D3D12MA::Allocation* src_allocation, ID3D12Resource* dst, ResourceTransfer* resource_transfer);
+bool IsResourceTransferReserved(const uint32_t frame_index, ResourceTransfer* resource_transfer);
 void NotifyTransferReservedResourcesProcessed(const uint32_t frame_index, ResourceTransfer* resource_transfer);
 }
 #endif

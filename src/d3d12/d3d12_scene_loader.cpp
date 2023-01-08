@@ -557,101 +557,84 @@ auto LoadDefaultTextures(const uint32_t frame_index, D3d12Device* device, D3D12M
 #include "d3d12_swapchain.h"
 #include "d3d12_win32_window.h"
 namespace illuminate {
-struct SwapchainData;
-struct RenderGraphRecordConfig;
-struct UtilFuncs;
-class GraphicDevice {
+class GraphicDevice final {
  public:
-  static std::unique_ptr<GraphicDevice> CreateGraphicDevice(const nlohmann::json&);
-  virtual ~GraphicDevice();
+  static std::unique_ptr<GraphicDevice> CreateGraphicDevice();
+  ~GraphicDevice();
+  auto GetDxgiFactory() { return dxgi_core_.GetFactory(); }
   auto GetDxgiAdapter() { return dxgi_core_.GetAdapter(); }
   auto GetDevice() { return device_.Get(); }
-  constexpr auto GetCommandQueueNum() const { return command_queue_num_; }
-  auto GetCommandQueueList() { return command_list_set_.GetCommandQueueList(); }
-  auto GetCommandQueueType() { return command_list_set_.GetCommandQueueTypeList(); }
-  auto GetCommandQueue(const uint32_t index) { return command_list_set_.GetCommandQueue(index); }
-  constexpr auto GetFrameBufferNum() const { return frame_buffer_num_; }
-  void GetSwapchainData(SwapchainData* swapchain_data);
-  void GetRenderGraphRecordConfig(RenderGraphRecordConfig* record_config);
-  void GetUtilFuncs(UtilFuncs* util_funcs);
-  bool PreUpdate();
-  void Present();
  private:
-  GraphicDevice(const nlohmann::json& config);
-  GraphicDevice() = delete;
+  GraphicDevice();
+  DxgiCore dxgi_core_;
+  Device device_;
   GraphicDevice(const GraphicDevice&) = delete;
   GraphicDevice(GraphicDevice&&) = delete;
   void operator= (const GraphicDevice&) = delete;
   void operator= (GraphicDevice&&) = delete;
-  uint32_t frame_buffer_num_;
-  DxgiCore dxgi_core_;
-  Device device_;
-  uint32_t command_queue_num_;
-  CommandListSet command_list_set_;
+};
+class RenderGraph;
+struct SceneData;
+class CommandRecorder final {
+ public:
+  static std::unique_ptr<CommandRecorder> CreateCommandRecorder(const nlohmann::json& config, DxgiFactory* dxgi_factory, DxgiAdapter* dxgi_adapter, D3d12Device* device);
+  ~CommandRecorder();
+  constexpr auto GetCommandQueueNum() const { return command_queue_num_; }
+  constexpr auto GetCommandQueueType() const { return command_list_set_.GetCommandQueueTypeList(); }
+  constexpr auto GetFrameBufferIndex() const { return frame_buffer_index_; }
+  auto GetGpuBufferAllocator() { return buffer_allocator_; }
+  auto GetResourceTransferManager() { return &resource_transfer_; }
+  bool ProcessWindowMessage();
+  void RecordCommands(RenderGraph* render_graph, const SceneData& scene_data);
+  void Present();
+  void WaitAll() { command_queue_signals_.WaitAll(device_); }
+ private:
+  CommandRecorder(const nlohmann::json& config, DxgiFactory* dxgi_factory, DxgiAdapter* dxgi_adapter, D3d12Device* device);
+  auto GetCommandList(const uint32_t command_queue_index) { return command_list_set_.GetCommandList(device_, command_queue_index); }
+  D3d12Device* device_;
   Window window_;
   Swapchain swapchain_;
+  D3D12MA::Allocator* buffer_allocator_;
+  ResourceTransfer resource_transfer_;
   DescriptorGpu descriptor_gpu_;
+  uint32_t command_queue_num_;
+  CommandListSet command_list_set_;
+  CommandQueueSignals command_queue_signals_;
+  uint64_t** frame_signals_;
+  uint32_t frame_count_{0};
+  uint32_t frame_buffer_index_{0};
+  uint32_t frame_buffer_num_{0};
+  uint32_t copy_queue_index_{0};
+  CommandRecorder() = delete;
+  CommandRecorder(const CommandRecorder&) = delete;
+  CommandRecorder(CommandRecorder&&) = delete;
+  void operator=(const CommandRecorder&) = delete;
+  void operator=(CommandRecorder&&) = delete;
 };
-struct RenderPassCommonData;
-class RenderGraph {
+class RenderGraph final {
  public:
   struct Config {
-    DxgiAdapter* dxgi_adapter{};
     D3d12Device* device{};
-    const uint32_t command_queue_num{};
-    const D3D12_COMMAND_LIST_TYPE* const command_queue_type{};
-    D3d12CommandQueue** command_queue_list{};
-    uint32_t frame_buffer_num{};
+    uint32_t command_queue_num{};
+    const D3D12_COMMAND_LIST_TYPE* command_queue_type{};
     uint32_t material_hash_list_len{};
     StrHash* material_hash_list{};
-    uint32_t max_buffer_transfer_num_per_frame{1024};
-    uint32_t max_mip_map_num{12};
   };
   struct GeomPassParams {
     StrHash material_index{};
   };
   static std::unique_ptr<RenderGraph> CreateRenderGraph(const Config& config);
   ~RenderGraph();
-  constexpr auto GetFrameIndex() const { return frame_buffer_index_; }
-  auto GetGpuBufferAllocator() { return buffer_allocator_; }
-  auto GetResourceTransferManager() { return &resource_transfer_; }
-  void Update(const SwapchainData& config);
-  void RecordCommands(const RenderGraphRecordConfig& config, const RenderPassCommonData& render_pass_common_data);
-  void PostPresent();
-  void WaitAll() { command_queue_signals_.WaitAll(device_); }
+  constexpr auto GetRenderGraph() { return rps_render_graph_; }
  private:
   RenderGraph(const Config& config);
-  D3d12Device* device_;
-  D3D12MA::Allocator* buffer_allocator_;
-  ResourceTransfer resource_transfer_;
   RpsDevice rps_device_;
   RpsRenderGraph rps_render_graph_;
   GeomPassParams prez_pass_params_;
-  CommandQueueSignals command_queue_signals_;
-  uint32_t command_queue_num_;
-  uint32_t frame_buffer_num_;
-  uint64_t** frame_signals_;
-  uint32_t frame_count_;
-  uint32_t frame_buffer_index_;
-  uint32_t copy_queue_index_;
   RenderGraph(const RenderGraph&) = delete;
   RenderGraph(RenderGraph&&) = delete;
   void operator=(const RenderGraph&) = delete;
   void operator=(RenderGraph&&) = delete;
-};
-struct SwapchainData {
-  uint32_t swapchain_buffer_num;
-  ID3D12Resource** swapchain_resources;
-  uint32_t swapchain_width;
-  uint32_t swapchain_height;
-  DXGI_FORMAT swapchain_format;
-};
-struct RenderGraphRecordConfig {
-  using GetCmdList  = std::function<D3d12CommandList*(const uint32_t)>;
-  using ExecCmdList = std::function<void(const uint32_t)>;
-  GetCmdList get_cmd_list;
-  GetCmdList get_cmd_list_wo_set_descriptor_heap;
-  ExecCmdList execute_command_list;
 };
 } // namespace illuminate
 #include "imgui.h"
@@ -663,6 +646,7 @@ struct RenderGraphRecordConfig {
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 struct SceneParams;
+struct UtilFuncs;
 struct GpuHandles;
 struct RenderPassCommonData {
   ModelDataSet* model_data_set{nullptr};
@@ -670,6 +654,11 @@ struct RenderPassCommonData {
   SceneParams*  scene_params{nullptr};
   UtilFuncs*    util_funcs{nullptr};
   GpuHandles*   gpu_handles{nullptr};
+};
+struct SceneData {
+  ModelDataSet* model_data_set{nullptr};
+  MaterialList* material_list{nullptr};
+  SceneParams*  scene_params{nullptr};
 };
 struct SceneParams {
   float camera_pos[3]{};
@@ -680,12 +669,12 @@ struct SceneParams {
   float far_z{1000.0f};
   float light_direction[3]{};
 };
+struct UtilFuncs {
+  using WriteToGpuHandle = std::function<D3D12_GPU_DESCRIPTOR_HANDLE(const D3D12_CPU_DESCRIPTOR_HANDLE* const, const uint32_t)>;                                                                                
+  WriteToGpuHandle write_to_gpu_handle{};
+};
 struct GpuHandles {
   D3D12_GPU_DESCRIPTOR_HANDLE geom_pass_gpu_handle{};
-};
-struct UtilFuncs {
-  using WriteToGpuHandle = std::function<D3D12_GPU_DESCRIPTOR_HANDLE(const D3D12_CPU_DESCRIPTOR_HANDLE* const, const uint32_t)>;
-  WriteToGpuHandle write_to_gpu_handle;
 };
 namespace {
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -723,6 +712,290 @@ auto UpdateImgui() {
   ImGui_ImplWin32_NewFrame();
   ImGui::NewFrame();
 }
+auto SetupGraphicDevices(const nlohmann::json& json) {
+  auto graphic_device = GraphicDevice::CreateGraphicDevice();
+  auto command_recorder = CommandRecorder::CreateCommandRecorder(json, graphic_device->GetDxgiFactory(), graphic_device->GetDxgiAdapter(), graphic_device->GetDevice());
+  return std::make_pair(std::move(graphic_device), std::move(command_recorder));
+}
+auto SetupRenderGraph(GraphicDevice* graphic_device, CommandRecorder* command_recorder, const MaterialPack& material_pack) {
+  auto render_graph = RenderGraph::CreateRenderGraph({
+      .device             = graphic_device->GetDevice(),
+      .command_queue_num  = command_recorder->GetCommandQueueNum(),
+      .command_queue_type = command_recorder->GetCommandQueueType(),
+      .material_hash_list_len = material_pack.material_list.material_num,
+      .material_hash_list     = material_pack.config.material_hash_list,
+    });
+  return render_graph;
+}
+void RecordTransferResourceCommand(D3d12CommandList* command_list, const uint32_t frame_index, ResourceTransfer* resource_transfer) {
+  for (uint32_t i = 0; i < resource_transfer->transfer_reserved_buffer_num[frame_index]; i++) {
+    command_list->CopyResource(resource_transfer->transfer_reserved_buffer_dst[frame_index][i],
+                               resource_transfer->transfer_reserved_buffer_src[frame_index][i]);
+  }
+  for (uint32_t i = 0; i < resource_transfer->transfer_reserved_texture_num[frame_index]; i++) {
+    for (uint32_t j = 0; j < resource_transfer->texture_subresource_num[frame_index][i]; j++) {
+      CD3DX12_TEXTURE_COPY_LOCATION src(resource_transfer->transfer_reserved_texture_src[frame_index][i],
+                                        resource_transfer->texture_layout[frame_index][i][j]);
+      CD3DX12_TEXTURE_COPY_LOCATION dst(resource_transfer->transfer_reserved_texture_dst[frame_index][i], j);
+      command_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    }
+  }
+}
+auto GetCopyQueueIndex(const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* const command_queue_type) {
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    if (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) { return i; }
+  }
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    if (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_DIRECT) { return i; }
+  }
+  assert(false);
+  return 0U;
+}
+} // namespace
+std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice() {
+  return std::unique_ptr<GraphicDevice>(new GraphicDevice());
+}
+GraphicDevice::GraphicDevice() {
+  dxgi_core_.Init();
+  device_.Init(dxgi_core_.GetAdapter());
+}
+GraphicDevice::~GraphicDevice() {
+  device_.Term();
+  dxgi_core_.Term();
+}
+std::unique_ptr<CommandRecorder> CommandRecorder::CreateCommandRecorder(const nlohmann::json& config, DxgiFactory* dxgi_factory, DxgiAdapter* dxgi_adapter, D3d12Device* device) {
+  return std::unique_ptr<CommandRecorder>(new CommandRecorder(config, dxgi_factory, dxgi_adapter, device));
+}
+CommandRecorder::CommandRecorder(const nlohmann::json& config, DxgiFactory* dxgi_factory, DxgiAdapter* dxgi_adapter, D3d12Device* device) {
+  device_ = device;
+  frame_buffer_num_ = config.at("frame_buffer_num");
+  buffer_allocator_ = GetBufferAllocator(dxgi_adapter, device);
+  {
+    const auto& resource_transfer_config = config.at("resource_transfer_config");
+    resource_transfer_ = PrepareResourceTransferer(frame_buffer_num_, resource_transfer_config.at("max_buffer_transfer_num_per_frame"), resource_transfer_config.at("max_mip_map_num"));
+  }
+  {
+    const auto& command_queues = config.at("command_queue");
+    command_queue_num_ = GetUint32(command_queues.size());
+    auto command_queue_type = AllocateArrayFrame<D3D12_COMMAND_LIST_TYPE>(command_queue_num_);
+    auto command_queue_priority = AllocateArrayFrame<D3D12_COMMAND_QUEUE_PRIORITY>(command_queue_num_);
+    auto command_list_num_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
+    uint32_t command_allocator_num_per_queue_type[kCommandQueueTypeNum]{};
+    for (uint32_t i = 0; i < command_queue_num_; i++) {
+      auto command_queue_type_str = GetStringView(command_queues[i], "type");
+      command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_DIRECT;
+      if (command_queue_type_str.compare("compute") == 0) {
+        command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+      } else if (command_queue_type_str.compare("copy") == 0) {
+        command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_COPY;
+      }
+      auto command_queue_priority_str = GetStringView(command_queues[i], "priority");
+      command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+      if (command_queue_priority_str.compare("high") == 0) {
+        command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_HIGH;
+      } else if (command_queue_priority_str.compare("global realtime") == 0) {
+        command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME;
+      }
+      command_list_num_per_queue[i] = command_queues[i].at("command_list_num");
+      command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(command_queue_type[i])] += command_list_num_per_queue[i];
+    }
+    command_list_set_.Init(device, command_queue_num_, command_queue_type, command_queue_priority, command_list_num_per_queue, frame_buffer_num_, command_allocator_num_per_queue_type);
+    for (uint32_t i = 0; i < command_queue_num_; i++) {
+      SetD3d12Name(command_list_set_.GetCommandQueue(i), GetStringView(command_queues[i], "name"));
+    }
+    copy_queue_index_ = GetCopyQueueIndex(command_queue_num_, command_queue_type);
+  }
+  command_queue_signals_.Init(device, command_queue_num_, command_list_set_.GetCommandQueueList());
+  frame_signals_ = AllocateArraySystem<uint64_t*>(frame_buffer_num_);
+  for (uint32_t i = 0; i < frame_buffer_num_; i++) {
+    frame_signals_[i] = AllocateArraySystem<uint64_t>(command_queue_num_);
+    memset(frame_signals_[i], 0, command_queue_num_);
+  }
+  {
+    const auto& window = config.at("window");
+    const auto width = window.at("width").get<uint32_t>();
+    const auto height = window.at("height").get<uint32_t>();
+    window_.Init(GetStringView(window.at("title")).data(), width, height, WndProc);
+  }
+  {
+    const auto& swapchain = config.at("swapchain");
+    uint32_t command_queue_index = 0;
+    const auto& command_queues = config.at("command_queue");
+    const auto& name = GetStringView(swapchain.at("command_queue"));
+    const auto command_queue_num = GetUint32(command_queues.size());
+    for (uint32_t i = 0; i < command_queue_num; i++) {
+      if (GetStringView(command_queues[i].at("name")) == name) {
+        command_queue_index = i;
+        break;
+      }
+    }
+    const auto swapchain_format = GetDxgiFormat(swapchain.at("format"));
+    const auto frame_buffer_num = config.at("frame_buffer_num");
+    swapchain_.Init(dxgi_factory, command_list_set_.GetCommandQueue(command_queue_index), device, window_.GetHwnd(), swapchain_format, frame_buffer_num + 1, frame_buffer_num, DXGI_USAGE_RENDER_TARGET_OUTPUT);
+  }
+  {
+    const auto& descriptor_gpu = config.at("descriptor_gpu");
+    descriptor_gpu_.Init(device, descriptor_gpu.at("gpu_handle_num_view"), descriptor_gpu.at("gpu_handle_num_sampler"));
+    descriptor_gpu_.SetPersistentViewHandleNum(descriptor_gpu.at("persistent_view_num"));
+    descriptor_gpu_.SetPersistentSamplerHandleNum(descriptor_gpu.at("persistent_sampler_num"));
+  }
+  auto descriptor_heap_set = CreateDescriptorHeapSet(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 32);
+  const uint32_t imgui_descriptor_index = 0;
+  const auto imgui_cpu_handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, imgui_descriptor_index);
+  const auto swapchain_format = GetDxgiFormat(config.at("swapchain").at("format"));
+  InitImgui(window_.GetHwnd(), device, frame_buffer_num_, swapchain_format, imgui_cpu_handle, descriptor_gpu_.GetViewGpuHandle(imgui_descriptor_index));
+  descriptor_gpu_.WriteToPersistentViewHandleRange(imgui_descriptor_index, 1, imgui_cpu_handle, device);
+  descriptor_heap_set.heap->Release();
+}
+CommandRecorder::~CommandRecorder() {
+  WaitAll();
+  TermImgui();
+  descriptor_gpu_.Term();
+  ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
+  buffer_allocator_->Release();
+  command_queue_signals_.Term();
+  command_list_set_.Term();
+  swapchain_.Term();
+  window_.Term();
+}
+bool CommandRecorder::ProcessWindowMessage() {
+  if (!window_.ProcessMessage()) { return false; }
+  return true;
+}
+void CommandRecorder::RecordCommands(RenderGraph* render_graph, const SceneData& scene_data) {
+  swapchain_.UpdateBackBufferIndex();
+  command_queue_signals_.WaitOnCpu(device_, frame_signals_[frame_buffer_index_]);
+  command_list_set_.SetCurrentFrameBufferIndex(frame_buffer_index_);
+  UpdateImgui();
+  auto back_buffers = AllocateArrayFrame<RpsRuntimeResource>(swapchain_.GetSwapchainBufferNum());
+  for (uint32_t i = 0; i < swapchain_.GetSwapchainBufferNum(); i++) {
+    back_buffers[i] = rpsD3D12ResourceToHandle(swapchain_.GetResource(i));
+  }
+  RpsResourceDesc back_buffer_desc = {
+    .type              = RPS_RESOURCE_TYPE_IMAGE_2D,
+    .temporalLayers    = swapchain_.GetSwapchainBufferNum(),
+    .flags             = 0,
+    .image = {
+      .width       = swapchain_.GetWidth(),
+      .height      = swapchain_.GetHeight(),
+      .arrayLayers = 1,
+      .mipLevels   = 1,
+      .format      = rpsFormatFromDXGI(swapchain_.GetDxgiFormat()),
+      .sampleCount = 1,
+    },
+  };
+  const auto camera_buffer_size = GetUint32(sizeof(shader::SceneCameraData));
+  RpsConstant args[] = {&back_buffer_desc, &frame_buffer_num_, &camera_buffer_size};
+  const RpsRuntimeResource* arg_resources[] = {back_buffers};
+  const auto gpu_completed_frame_index = (frame_count_ > frame_buffer_num_) ? static_cast<uint64_t>(frame_count_ - frame_buffer_num_) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
+  RpsRenderGraphUpdateInfo update_info = {
+    .frameIndex               = frame_count_,
+    .gpuCompletedFrameIndex   = gpu_completed_frame_index,
+    .diagnosticFlags          = RpsDiagnosticFlags(RPS_DIAGNOSTIC_ENABLE_RUNTIME_DEBUG_NAMES | ((gpu_completed_frame_index == RPS_GPU_COMPLETED_FRAME_INDEX_NONE) ? RPS_DIAGNOSTIC_ENABLE_ALL: RPS_DIAGNOSTIC_NONE)),
+    .numArgs                  = countof(args),
+    .ppArgs                   = args,
+    .ppArgResources           = arg_resources,
+  };
+  auto result = rpsRenderGraphUpdate(render_graph->GetRenderGraph(), &update_info);
+  if (result != RPS_OK) {
+    logerror("rpsRenderGraphUpdate failed. {}", result);
+    return;
+  }
+  uint64_t copy_queue_signal = 0;
+  if (IsResourceTransferReserved(frame_buffer_index_, &resource_transfer_)) {
+    RecordTransferResourceCommand(GetCommandList(copy_queue_index_), frame_buffer_index_, &resource_transfer_);
+    command_list_set_.ExecuteCommandList(copy_queue_index_);
+    copy_queue_signal = command_queue_signals_.SucceedSignal(copy_queue_index_);
+    assert(copy_queue_signal != CommandQueueSignals::kInvalidSignalVal);
+  }
+  NotifyTransferReservedResourcesProcessed(frame_buffer_index_, &resource_transfer_);
+  RpsRenderGraphBatchLayout batch_layout = {};
+  result = rpsRenderGraphGetBatchLayout(render_graph->GetRenderGraph(), &batch_layout);
+  if (result != RPS_OK) {
+    logerror("rpsRenderGraphGetBatchLayout failed. {}", result);
+    return;
+  }
+  auto first_batch_index_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
+  std::fill(first_batch_index_per_queue, first_batch_index_per_queue + command_queue_num_, ~0U);
+  auto last_batch_index_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
+  std::fill(last_batch_index_per_queue, last_batch_index_per_queue + command_queue_num_, ~0U);
+  for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
+    if (first_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] == ~0U) {
+      first_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] = batch_index;
+    }
+    last_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] = batch_index;
+  }
+  for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
+    const auto& batch = batch_layout.pCmdBatches[batch_index];
+    const auto command_queue_index = batch.queueIndex;
+    if (copy_queue_signal != 0 && batch_index == first_batch_index_per_queue[command_queue_index] && command_queue_index != copy_queue_index_) {
+      if (!command_queue_signals_.RegisterWaitOnCommandQueue(copy_queue_index_, command_queue_index, copy_queue_signal)) {
+        logerror("failed RegisterWaitOnCommandQueue for copy_queue_signal. {} {} {} {}", batch_index, copy_queue_index_, command_queue_index, copy_queue_signal);
+        return;
+      }
+    }
+    auto command_list = GetCommandList(command_queue_index);
+    if (command_queue_index != copy_queue_index_) {
+      descriptor_gpu_.SetDescriptorHeapsToCommandList(1, &command_list);
+    }
+    UtilFuncs util_funcs {
+      .write_to_gpu_handle = [descriptor_gpu = &descriptor_gpu_, device = device_](const D3D12_CPU_DESCRIPTOR_HANDLE* const cpu_handles, const uint32_t cpu_handle_num) {
+        return descriptor_gpu->WriteToTransientViewHandleRange(cpu_handle_num, cpu_handles, device);
+      },
+    };
+    GpuHandles gpu_handles{};
+    RenderPassCommonData render_pass_common_data {
+      .model_data_set = scene_data.model_data_set,
+      .material_list  = scene_data.material_list,
+      .scene_params   = scene_data.scene_params,
+      .util_funcs     = &util_funcs,
+      .gpu_handles    = &gpu_handles,
+    };
+    RpsRenderGraphRecordCommandInfo record_info = {
+      .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
+      .pUserContext  = &render_pass_common_data,
+      .cmdBeginIndex = batch.cmdBegin,
+      .numCmds       = batch.numCmds,
+      // .flags         = RPS_RECORD_COMMAND_FLAG_ENABLE_COMMAND_DEBUG_MARKERS,
+    };
+    auto signal_queue_index = AllocateArrayFrame<uint32_t>(batch_layout.numFenceSignals);
+    auto fence_val = AllocateArrayFrame<uint64_t>(batch_layout.numFenceSignals);
+    std::fill(signal_queue_index, signal_queue_index + batch_layout.numFenceSignals, 0);
+    std::fill(fence_val, fence_val + batch_layout.numFenceSignals, 0);
+    for (uint32_t wait_fence_index = batch.waitFencesBegin; wait_fence_index < (batch.waitFencesBegin + batch.numWaitFences); wait_fence_index++) {
+      const auto fence_index = batch_layout.pWaitFenceIndices[wait_fence_index];
+      if (!command_queue_signals_.RegisterWaitOnCommandQueue(signal_queue_index[fence_index], command_queue_index, fence_val[fence_index])) {
+        logerror("RegisterWaitOnCommandQueue failed. {} {} {} {}", command_queue_index, batch_index, wait_fence_index, fence_val[batch_layout.pWaitFenceIndices[wait_fence_index]]);
+        return;
+      }
+    }
+    result = rpsRenderGraphRecordCommands(render_graph->GetRenderGraph(), &record_info);
+    if (RPS_FAILED(result)) {
+      logerror("rpsRenderGraphRecordCommands failed. {} {}", result, batch_index);
+      return;
+    }
+    command_list_set_.ExecuteCommandList(command_queue_index);
+    if (batch.signalFenceIndex != RPS_INDEX_NONE_U32 || batch_index == last_batch_index_per_queue[command_queue_index]) {
+      const auto next_signal_val = command_queue_signals_.SucceedSignal(command_queue_index);
+      if (next_signal_val == CommandQueueSignals::kInvalidSignalVal) {
+        logerror("command_queue_signals.SucceedSignal failed. {} {}", command_queue_index, batch_index);
+        return;
+      }
+      frame_signals_[frame_buffer_index_][command_queue_index] = next_signal_val;
+      if (batch.signalFenceIndex != RPS_INDEX_NONE_U32) {
+        const auto fence_index = batch.signalFenceIndex;
+        signal_queue_index[fence_index] = command_queue_index;
+        fence_val[fence_index] = next_signal_val;
+      }
+    }
+  }
+}
+void CommandRecorder::Present() {
+  swapchain_.Present();
+  frame_count_++;
+  frame_buffer_index_ = (frame_count_) % frame_buffer_num_;
+}
+namespace {
 auto MakeVec3(const float array[3]) {
   return gfxminimath::vec3(array[0], array[1], array[2]);
 }
@@ -856,171 +1129,12 @@ void RecordDebugMarker([[maybe_unused]] void* context, const RpsRuntimeOpRecordD
 }
 void RpsLogger([[maybe_unused]]void* context, [[maybe_unused]]const char* format, ...) {
 }
-auto RecordTransferResourceCommand(D3d12CommandList* command_list, ResourceTransfer* resource_transfer, const uint32_t frame_index) {
-  if (resource_transfer->transfer_reserved_buffer_num[frame_index] == 0
-      && resource_transfer->transfer_reserved_texture_num[frame_index]) {
-    NotifyTransferReservedResourcesProcessed(frame_index, resource_transfer);
-    return false;
-  }
-  for (uint32_t i = 0; i < resource_transfer->transfer_reserved_buffer_num[frame_index]; i++) {
-    command_list->CopyResource(resource_transfer->transfer_reserved_buffer_dst[frame_index][i],
-                               resource_transfer->transfer_reserved_buffer_src[frame_index][i]);
-  }
-  for (uint32_t i = 0; i < resource_transfer->transfer_reserved_texture_num[frame_index]; i++) {
-    for (uint32_t j = 0; j < resource_transfer->texture_subresource_num[frame_index][i]; j++) {
-      CD3DX12_TEXTURE_COPY_LOCATION src(resource_transfer->transfer_reserved_texture_src[frame_index][i],
-                                        resource_transfer->texture_layout[frame_index][i][j]);
-      CD3DX12_TEXTURE_COPY_LOCATION dst(resource_transfer->transfer_reserved_texture_dst[frame_index][i], j);
-      command_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-    }
-  }
-  NotifyTransferReservedResourcesProcessed(frame_index, resource_transfer);
-  return true;
-}
-auto GetCopyQueueIndex(const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* const command_queue_type) {
-  for (uint32_t i = 0; i < command_queue_num; i++) {
-    if (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) { return i; }
-  }
-  for (uint32_t i = 0; i < command_queue_num; i++) {
-    if (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_DIRECT) { return i; }
-  }
-  assert(false);
-  return 0U;
-}
 } // namespace
-std::unique_ptr<GraphicDevice> GraphicDevice::CreateGraphicDevice(const nlohmann::json& config) {
-  return std::unique_ptr<GraphicDevice>(new GraphicDevice(config));
-}
-GraphicDevice::GraphicDevice(const nlohmann::json& config) {
-  frame_buffer_num_ = config.at("frame_buffer_num");
-  dxgi_core_.Init();
-  device_.Init(GetDxgiAdapter());
-  {
-    const auto& command_queues = config.at("command_queue");
-    command_queue_num_ = GetUint32(command_queues.size());
-    auto command_queue_type = AllocateArrayFrame<D3D12_COMMAND_LIST_TYPE>(command_queue_num_);
-    auto command_queue_priority = AllocateArrayFrame<D3D12_COMMAND_QUEUE_PRIORITY>(command_queue_num_);
-    auto command_list_num_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
-    uint32_t command_allocator_num_per_queue_type[kCommandQueueTypeNum]{};
-    for (uint32_t i = 0; i < command_queue_num_; i++) {
-      auto command_queue_type_str = GetStringView(command_queues[i], "type");
-      command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_DIRECT;
-      if (command_queue_type_str.compare("compute") == 0) {
-        command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-      } else if (command_queue_type_str.compare("copy") == 0) {
-        command_queue_type[i] = D3D12_COMMAND_LIST_TYPE_COPY;
-      }
-      auto command_queue_priority_str = GetStringView(command_queues[i], "priority");
-      command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-      if (command_queue_priority_str.compare("high") == 0) {
-        command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_HIGH;
-      } else if (command_queue_priority_str.compare("global realtime") == 0) {
-        command_queue_priority[i] = D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME;
-      }
-      command_list_num_per_queue[i] = command_queues[i].at("command_list_num");
-      command_allocator_num_per_queue_type[GetCommandQueueTypeIndex(command_queue_type[i])] += command_list_num_per_queue[i];
-    }
-    command_list_set_.Init(GetDevice(), command_queue_num_, command_queue_type, command_queue_priority, command_list_num_per_queue, frame_buffer_num_, command_allocator_num_per_queue_type);
-    for (uint32_t i = 0; i < command_queue_num_; i++) {
-      SetD3d12Name(command_list_set_.GetCommandQueue(i), GetStringView(command_queues[i], "name"));
-    }
-  }
-  {
-    const auto& window = config.at("window");
-    const auto width = window.at("width").get<uint32_t>();
-    const auto height = window.at("height").get<uint32_t>();
-    window_.Init(GetStringView(window.at("title")).data(), width, height, WndProc);
-  }
-  {
-    const auto& swapchain = config.at("swapchain");
-    uint32_t command_queue_index = 0;
-    const auto& command_queues = config.at("command_queue");
-    const auto& name = GetStringView(swapchain.at("command_queue"));
-    for (uint32_t i = 0; i < command_queue_num_; i++) {
-      if (GetStringView(command_queues[i].at("name")) == name) {
-        command_queue_index = i;
-        break;
-      }
-    }
-    const auto swapchain_format = GetDxgiFormat(swapchain.at("format"));
-    swapchain_.Init(dxgi_core_.GetFactory(), GetCommandQueue(command_queue_index), GetDevice(), window_.GetHwnd(), swapchain_format, frame_buffer_num_ + 1, frame_buffer_num_, DXGI_USAGE_RENDER_TARGET_OUTPUT);
-  }
-  {
-    const auto& descriptor_gpu = config.at("descriptor_gpu");
-    descriptor_gpu_.Init(GetDevice(), descriptor_gpu.at("gpu_handle_num_view"), descriptor_gpu.at("gpu_handle_num_sampler"));
-    descriptor_gpu_.SetPersistentViewHandleNum(descriptor_gpu.at("persistent_view_num"));
-    descriptor_gpu_.SetPersistentSamplerHandleNum(descriptor_gpu.at("persistent_sampler_num"));
-  }
-  auto descriptor_heap_set = CreateDescriptorHeapSet(GetDevice(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 32);
-  const uint32_t imgui_descriptor_index = 0;
-  const auto imgui_cpu_handle = GetDescriptorHandle(descriptor_heap_set.heap_head_addr, descriptor_heap_set.handle_increment_size, imgui_descriptor_index);
-  InitImgui(window_.GetHwnd(), GetDevice(), frame_buffer_num_, swapchain_.GetDxgiFormat(), imgui_cpu_handle, descriptor_gpu_.GetViewGpuHandle(imgui_descriptor_index));
-  descriptor_gpu_.WriteToPersistentViewHandleRange(imgui_descriptor_index, 1, imgui_cpu_handle, GetDevice());
-  descriptor_heap_set.heap->Release();
-}
-GraphicDevice::~GraphicDevice() {
-  TermImgui();
-  descriptor_gpu_.Term();
-  swapchain_.Term();
-  window_.Term();
-  command_list_set_.Term();
-  device_.Term();
-  dxgi_core_.Term();
-}
-void GraphicDevice::GetSwapchainData(SwapchainData* swapchain_data) {
-  swapchain_data->swapchain_buffer_num = swapchain_.GetSwapchainBufferNum();
-  swapchain_data->swapchain_resources  = swapchain_.GetResourceList();
-  swapchain_data->swapchain_width      = swapchain_.GetWidth();
-  swapchain_data->swapchain_height     = swapchain_.GetHeight();
-  swapchain_data->swapchain_format     = swapchain_.GetDxgiFormat();
-}
-void GraphicDevice::GetRenderGraphRecordConfig(RenderGraphRecordConfig* record_config) {
-  record_config->get_cmd_list = [command_list_set = &command_list_set_, descriptor_gpu = &descriptor_gpu_, device = GetDevice()](const uint32_t command_queue_index) {
-    auto command_list = command_list_set->GetCommandList(device, command_queue_index);
-    descriptor_gpu->SetDescriptorHeapsToCommandList(1, &command_list);
-    return command_list;
-  };
-  record_config->get_cmd_list_wo_set_descriptor_heap = [command_list_set = &command_list_set_, descriptor_gpu = &descriptor_gpu_, device = GetDevice()](const uint32_t command_queue_index) {
-    return command_list_set->GetCommandList(device, command_queue_index);
-  };
-  record_config->execute_command_list = [command_list_set = &command_list_set_](const uint32_t command_queue_index) {
-    command_list_set->ExecuteCommandList(command_queue_index);
-  };
-}
-void GraphicDevice::GetUtilFuncs(UtilFuncs* util_funcs) {
-  util_funcs->write_to_gpu_handle = [descriptor_gpu = &descriptor_gpu_, device = GetDevice()](const D3D12_CPU_DESCRIPTOR_HANDLE* const cpu_handles, const uint32_t cpu_handle_num) {
-    return descriptor_gpu->WriteToTransientViewHandleRange(cpu_handle_num, cpu_handles, device);
-  };
-}
-bool GraphicDevice::PreUpdate() {
-  if (!window_.ProcessMessage()) { return false; }
-  command_list_set_.SucceedFrame();
-  UpdateImgui();
-  return true;
-}
-void GraphicDevice::Present() {
-  swapchain_.Present();
-  swapchain_.UpdateBackBufferIndex();
-}
 RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)
 std::unique_ptr<RenderGraph> RenderGraph::CreateRenderGraph(const Config& config) {
   return std::unique_ptr<RenderGraph>(new RenderGraph(config));
 }
 RenderGraph::RenderGraph(const Config& config) {
-  command_queue_num_ = config.command_queue_num;
-  frame_buffer_num_ = config.frame_buffer_num;
-  device_ = config.device;
-  frame_buffer_index_ = 0;
-  frame_count_ = 0;
-  buffer_allocator_ = GetBufferAllocator(config.dxgi_adapter, device_);
-  resource_transfer_ = PrepareResourceTransferer(frame_buffer_num_, config.max_buffer_transfer_num_per_frame, config.max_mip_map_num);
-  command_queue_signals_.Init(config.device, config.command_queue_num, config.command_queue_list);
-  frame_signals_ = AllocateArrayScene<uint64_t*>(frame_buffer_num_);
-  copy_queue_index_ = GetCopyQueueIndex(config.command_queue_num, config.command_queue_type);
-  for (uint32_t i = 0; i < frame_buffer_num_; i++) {
-    frame_signals_[i] = AllocateArrayScene<uint64_t>(command_queue_num_);
-    std::fill(frame_signals_[i], frame_signals_[i] + command_queue_num_, 0);
-  }
   {
     RpsDeviceCreateInfo create_info = {
       .allocator = {
@@ -1088,123 +1202,8 @@ RenderGraph::RenderGraph(const Config& config) {
   }
 }
 RenderGraph::~RenderGraph() {
-  WaitAll();
-  ClearResourceTransfer(frame_buffer_num_, GetResourceTransferManager());
-  buffer_allocator_->Release();
-  command_queue_signals_.Term();
   rpsRenderGraphDestroy(rps_render_graph_);
   rpsDeviceDestroy(rps_device_);
-}
-void RenderGraph::Update(const SwapchainData& swapchain_data) {
-  auto back_buffers = AllocateArrayFrame<RpsRuntimeResource>(swapchain_data.swapchain_buffer_num);
-  for (uint32_t i = 0; i < swapchain_data.swapchain_buffer_num; i++) {
-    back_buffers[i] = rpsD3D12ResourceToHandle(swapchain_data.swapchain_resources[i]);
-  }
-  RpsResourceDesc back_buffer_desc = {
-    .type              = RPS_RESOURCE_TYPE_IMAGE_2D,
-    .temporalLayers    = swapchain_data.swapchain_buffer_num,
-    .flags             = 0,
-    .image = {
-      .width       = swapchain_data.swapchain_width,
-      .height      = swapchain_data.swapchain_height,
-      .arrayLayers = 1,
-      .mipLevels   = 1,
-      .format      = rpsFormatFromDXGI(swapchain_data.swapchain_format),
-      .sampleCount = 1,
-    },
-  };
-  const auto camera_buffer_size = GetUint32(sizeof(shader::SceneCameraData));
-  RpsConstant args[] = {&back_buffer_desc, &frame_buffer_num_, &camera_buffer_size};
-  const RpsRuntimeResource* arg_resources[] = {back_buffers};
-  const auto gpu_completed_frame_index = (frame_count_ > frame_buffer_num_) ? static_cast<uint64_t>(frame_count_ - frame_buffer_num_) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
-  RpsRenderGraphUpdateInfo update_info = {
-    .frameIndex               = frame_count_,
-    .gpuCompletedFrameIndex   = gpu_completed_frame_index,
-    .diagnosticFlags          = RpsDiagnosticFlags(RPS_DIAGNOSTIC_ENABLE_RUNTIME_DEBUG_NAMES | ((gpu_completed_frame_index == RPS_GPU_COMPLETED_FRAME_INDEX_NONE) ? RPS_DIAGNOSTIC_ENABLE_ALL: RPS_DIAGNOSTIC_NONE)),
-    .numArgs                  = countof(args),
-    .ppArgs                   = args,
-    .ppArgResources           = arg_resources,
-  };
-  rpsRenderGraphUpdate(rps_render_graph_, &update_info);
-}
-void RenderGraph::RecordCommands(const RenderGraphRecordConfig& config, const RenderPassCommonData& render_pass_common_data) {
-  uint64_t copy_queue_signal = 0;
-  if (RecordTransferResourceCommand(config.get_cmd_list_wo_set_descriptor_heap(copy_queue_index_), &resource_transfer_, frame_buffer_index_)) {
-    copy_queue_signal = command_queue_signals_.SucceedSignal(copy_queue_index_);
-    assert(copy_queue_signal != CommandQueueSignals::kInvalidSignalVal);
-    config.execute_command_list(copy_queue_index_);
-  }
-  RpsRenderGraphBatchLayout batch_layout = {};
-  auto result = rpsRenderGraphGetBatchLayout(rps_render_graph_, &batch_layout);
-  if (result != RPS_OK) {
-    logerror("rpsRenderGraphGetBatchLayout failed. {}", result);
-    return;
-  }
-  auto first_batch_index_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
-  std::fill(first_batch_index_per_queue, first_batch_index_per_queue + command_queue_num_, ~0U);
-  auto last_batch_index_per_queue = AllocateArrayFrame<uint32_t>(command_queue_num_);
-  std::fill(last_batch_index_per_queue, last_batch_index_per_queue + command_queue_num_, ~0U);
-  for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
-    if (first_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] == ~0U) {
-      first_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] = batch_index;
-    }
-    last_batch_index_per_queue[batch_layout.pCmdBatches[batch_index].queueIndex] = batch_index;
-  }
-  for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
-    const auto& batch = batch_layout.pCmdBatches[batch_index];
-    const auto command_queue_index = batch.queueIndex;
-    if (batch_index == first_batch_index_per_queue[command_queue_index] && copy_queue_signal != 0) {
-      if (!command_queue_signals_.RegisterWaitOnCommandQueue(copy_queue_index_, command_queue_index, copy_queue_signal)) {
-        logerror("failed RegisterWaitOnCommandQueue for copy_queue_signal. {} {} {} {}", batch_index, copy_queue_index_, command_queue_index, copy_queue_signal);
-        assert(false);
-      }
-    }
-    auto command_list = (command_queue_index != copy_queue_index_) ? config.get_cmd_list(command_queue_index) : config.get_cmd_list_wo_set_descriptor_heap(command_queue_index);
-    RpsRenderGraphRecordCommandInfo record_info = {
-      .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
-      .pUserContext  = &const_cast<RenderPassCommonData&>(render_pass_common_data),
-      .cmdBeginIndex = batch.cmdBegin,
-      .numCmds       = batch.numCmds,
-      // .flags         = RPS_RECORD_COMMAND_FLAG_ENABLE_COMMAND_DEBUG_MARKERS,
-    };
-    auto signal_queue_index = AllocateArrayFrame<uint32_t>(batch_layout.numFenceSignals);
-    auto fence_val = AllocateArrayFrame<uint64_t>(batch_layout.numFenceSignals);
-    std::fill(signal_queue_index, signal_queue_index + batch_layout.numFenceSignals, 0);
-    std::fill(fence_val, fence_val + batch_layout.numFenceSignals, 0);
-    for (uint32_t wait_fence_index = batch.waitFencesBegin; wait_fence_index < (batch.waitFencesBegin + batch.numWaitFences); wait_fence_index++) {
-      const auto fence_index = batch_layout.pWaitFenceIndices[wait_fence_index];
-      if (!command_queue_signals_.RegisterWaitOnCommandQueue(signal_queue_index[fence_index], command_queue_index, fence_val[fence_index])) {
-        logerror("RegisterWaitOnCommandQueue failed. {} {} {} {}", command_queue_index, batch_index, wait_fence_index, fence_val[batch_layout.pWaitFenceIndices[wait_fence_index]]);
-        return;
-      }
-    }
-    result = rpsRenderGraphRecordCommands(rps_render_graph_, &record_info);
-    if (RPS_FAILED(result)) {
-      logerror("rpsRenderGraphRecordCommands failed. {} {}", result, batch_index);
-      assert(false);
-      return;
-    }
-    config.execute_command_list(command_queue_index);
-    if (batch.signalFenceIndex != RPS_INDEX_NONE_U32 || batch_index == last_batch_index_per_queue[command_queue_index]) {
-      const auto next_signal_val = command_queue_signals_.SucceedSignal(command_queue_index);
-      if (next_signal_val == CommandQueueSignals::kInvalidSignalVal) {
-        logerror("command_queue_signals.SucceedSignal failed. {} {}", command_queue_index, batch_index);
-        assert(false);
-        return;
-      }
-      frame_signals_[frame_buffer_index_][command_queue_index] = next_signal_val;
-      if (batch.signalFenceIndex != RPS_INDEX_NONE_U32) {
-        const auto fence_index = batch.signalFenceIndex;
-        signal_queue_index[fence_index] = command_queue_index;
-        fence_val[fence_index] = next_signal_val;
-      }
-    }
-  }
-}
-void RenderGraph::PostPresent() {
-  frame_count_++;
-  frame_buffer_index_ = (frame_count_) % frame_buffer_num_;
-  command_queue_signals_.WaitOnCpu(device_, frame_signals_[frame_buffer_index_]);
 }
 }
 #include "doctest/doctest.h"
@@ -1233,49 +1232,31 @@ TEST_CASE("scene loader") { // NOLINT
 }
 TEST_CASE("scene viewer") { // NOLINT
   using namespace illuminate; // NOLINT
-  auto graphic_device = GraphicDevice::CreateGraphicDevice(LoadJson("configs/config_default.json"));
+  auto [graphic_device, command_recorder] = SetupGraphicDevices(LoadJson("configs/config_default.json"));
   auto material_pack = BuildMaterialList(graphic_device->GetDevice(), LoadJson("configs/materials.json"));
-  auto render_graph = RenderGraph::CreateRenderGraph({
-      .dxgi_adapter       = graphic_device->GetDxgiAdapter(),
-      .device             = graphic_device->GetDevice(),
-      .command_queue_num  = graphic_device->GetCommandQueueNum(),
-      .command_queue_type = graphic_device->GetCommandQueueType(),
-      .command_queue_list = graphic_device->GetCommandQueueList(),
-      .frame_buffer_num   = graphic_device->GetFrameBufferNum(),
-      .material_hash_list_len = material_pack.material_list.material_num,
-      .material_hash_list     = material_pack.config.material_hash_list,
-    });
-  auto default_textures = LoadDefaultTextures(render_graph->GetFrameIndex(), graphic_device->GetDevice(), render_graph->GetGpuBufferAllocator(), render_graph->GetResourceTransferManager());
-  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, render_graph->GetFrameIndex(), graphic_device->GetDevice(), render_graph->GetGpuBufferAllocator(), render_graph->GetResourceTransferManager());
-  SwapchainData swapchain_data;
-  graphic_device->GetSwapchainData(&swapchain_data);
-  RenderGraphRecordConfig record_config;
-  graphic_device->GetRenderGraphRecordConfig(&record_config);
-  SceneParams scene_params;
-  UtilFuncs   util_funcs;
-  GpuHandles  gpu_handles;
-  graphic_device->GetUtilFuncs(&util_funcs);;
-  RenderPassCommonData render_pass_common_data{
+  auto render_graph = SetupRenderGraph(graphic_device.get(), command_recorder.get(), material_pack);
+  auto default_textures = LoadDefaultTextures(command_recorder->GetFrameBufferIndex(), graphic_device->GetDevice(), command_recorder->GetGpuBufferAllocator(), command_recorder->GetResourceTransferManager());
+  auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, command_recorder->GetFrameBufferIndex(), graphic_device->GetDevice(), command_recorder->GetGpuBufferAllocator(), command_recorder->GetResourceTransferManager());
+  SceneParams scene_params{};
+  SceneData scene_data{
     .model_data_set = &model_data_set,
     .material_list  = &material_pack.material_list,
     .scene_params   = &scene_params,
-    .util_funcs     = &util_funcs,
-    .gpu_handles    = &gpu_handles,
   };
   for (uint32_t i = 0; i < 100; i++) {
-    if (!graphic_device->PreUpdate()) { break; }
-    render_graph->Update(swapchain_data);
-    render_graph->RecordCommands(record_config, render_pass_common_data);
-    graphic_device->Present();
-    render_graph->PostPresent();
+    if (!command_recorder->ProcessWindowMessage()) { break; }
+    ResetAllocation(MemoryType::kFrame);
+    command_recorder->RecordCommands(render_graph.get(), scene_data);
+    command_recorder->Present();
   }
-  render_graph->WaitAll();
+  command_recorder->WaitAll();
   ReleaseResourceSet(&model_data_set.resource_set);
   ReleaseMaterialViewDescriptorHeaps(&model_data_set.descriptor_heaps);
   ReleaseResourceSet(&default_textures.resource_set);
   default_textures.descriptor_heap_set.heap->Release();
   ReleasePsoAndRootsig(&material_pack.material_list);
   render_graph.reset();
+  command_recorder.reset();
   graphic_device.reset();
   ClearAllAllocations();
 }

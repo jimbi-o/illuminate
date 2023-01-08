@@ -46,15 +46,24 @@ void ClearResourceTransfer(const uint32_t frame_buffer_num, ResourceTransfer* re
     NotifyTransferReservedResourcesProcessed(i, resource_transfer);
   }
 }
+bool IsResourceTransferReserved(const uint32_t frame_index, ResourceTransfer* resource_transfer) {
+  if (resource_transfer->transfer_reserved_buffer_num[frame_index] > 0) { return true; }
+  if ( resource_transfer->transfer_reserved_texture_num[frame_index] > 0) { return true; }
+  return false;
+}
 void NotifyTransferReservedResourcesProcessed(const uint32_t frame_index, ResourceTransfer* resource_transfer) {
-  const auto buffer_num  = resource_transfer->transfer_reserved_buffer_num[frame_index];
-  const auto texture_num = resource_transfer->transfer_reserved_texture_num[frame_index];
-  resource_transfer->transfer_reserved_buffer_num[frame_index]  = 0;
-  resource_transfer->transfer_reserved_texture_num[frame_index] = 0;
+  if (resource_transfer->transfer_processed_buffer_num[frame_index] == 0
+      && !IsResourceTransferReserved(frame_index, resource_transfer)) {
+    return;
+  }
   for (uint32_t i = 0; i < resource_transfer->transfer_processed_buffer_num[frame_index]; i++) {
     resource_transfer->transfer_processed_buffer[frame_index][i]->Release();
     resource_transfer->transfer_processed_buffer_allocation[frame_index][i]->Release();
   }
+  const auto buffer_num  = resource_transfer->transfer_reserved_buffer_num[frame_index];
+  const auto texture_num = resource_transfer->transfer_reserved_texture_num[frame_index];
+  resource_transfer->transfer_reserved_buffer_num[frame_index]  = 0;
+  resource_transfer->transfer_reserved_texture_num[frame_index] = 0;
   resource_transfer->transfer_processed_buffer_num[frame_index] = buffer_num + texture_num;
   std::copy(resource_transfer->transfer_reserved_buffer_src[frame_index],
             &resource_transfer->transfer_reserved_buffer_src[frame_index][buffer_num],

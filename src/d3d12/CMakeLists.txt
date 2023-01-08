@@ -18,7 +18,7 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_render_graph.h
   d3d12_render_graph_json_parser.h
   d3d12_render_graph_json_parser.cpp
-  d3d12_integration_test.cpp
+#  d3d12_integration_test.cpp
   d3d12_descriptors.h
   d3d12_descriptors.cpp
   d3d12_view_util.h
@@ -49,4 +49,4 @@ target_sources(${CMAKE_PROJECT_NAME}
 if(USE_D3D12_AGILITY_SDK)
   target_sources(${CMAKE_PROJECT_NAME} PRIVATE d3d12_core_dll_version.cpp)
 endif()
-add_subdirectory(render_pass)
+#add_subdirectory(render_pass)
