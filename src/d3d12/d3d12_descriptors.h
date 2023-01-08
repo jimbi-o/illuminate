@@ -5,39 +5,6 @@
 #include "d3d12_render_graph.h"
 #include "illuminate/util/hash_map.h"
 namespace illuminate {
-class DescriptorCpu {
- public:
-  bool Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t* descriptor_handle_num_per_type);
-  void Term();
-  const D3D12_CPU_DESCRIPTOR_HANDLE& CreateHandle(const uint32_t index, const DescriptorType type);
-  const D3D12_CPU_DESCRIPTOR_HANDLE& GetHandle(const uint32_t index, const DescriptorType type) const {
-    auto descriptor_type_index = static_cast<uint32_t>(type);
-    return handles_[descriptor_type_index][index];
-  }
-  void RegisterExternalHandle(const uint32_t index, const DescriptorType type, const D3D12_CPU_DESCRIPTOR_HANDLE& handle);
-  D3D12_CPU_DESCRIPTOR_HANDLE* GetCpuHandleList(const uint32_t buffer_num, const uint32_t* buffer_allocation_index_list, const ResourceStateType* resource_state_list, const D3D12_CPU_DESCRIPTOR_HANDLE scene_data_cpu_handles[], const MemoryType& memory_type) const;
- private:
-  static constexpr D3D12_DESCRIPTOR_HEAP_TYPE GetDescriptorTypeIndex(const DescriptorType& type) {
-    switch (type) {
-      case DescriptorType::kCbv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
-      case DescriptorType::kSrv: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
-      case DescriptorType::kUav: { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
-      case DescriptorType::kSampler: { return D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; }
-      case DescriptorType::kRtv: { return D3D12_DESCRIPTOR_HEAP_TYPE_RTV; }
-      case DescriptorType::kDsv: { return D3D12_DESCRIPTOR_HEAP_TYPE_DSV; }
-    }
-    assert(false && "invalid DescriptorType");
-    return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-  }
-  D3D12_CPU_DESCRIPTOR_HANDLE* handles_[kDescriptorTypeNum]{};
-  ID3D12DescriptorHeap* descriptor_heap_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
-  uint32_t total_handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
-  uint32_t handle_num_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
-  uint32_t handle_increment_size_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
-  uint64_t heap_start_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
-  uint32_t buffer_allocation_num_{0};
-  uint32_t sampler_num_{0};
-};
 class DescriptorGpu {
  public:
   bool Init(D3d12Device* device, const uint32_t handle_num_view, const uint32_t handle_num_sampler);
@@ -67,7 +34,6 @@ class DescriptorGpu {
   DescriptorHeapSetGpu descriptor_cbv_srv_uav_;
   DescriptorHeapSetGpu descriptor_sampler_;
 };
-ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 struct DescriptorHeapSet {
   ID3D12DescriptorHeap* heap{};
   D3D12_CPU_DESCRIPTOR_HANDLE heap_head_addr{};

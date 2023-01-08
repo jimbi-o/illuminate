@@ -2,7 +2,7 @@
 #include <memory>
 #include "DDSTextureLoader.h"
 #include "d3dx12.h"
-#include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_gpu_buffer_allocation.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
 namespace {

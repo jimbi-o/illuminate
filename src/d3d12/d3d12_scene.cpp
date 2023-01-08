@@ -765,7 +765,7 @@ uint32_t GetDecodedSceneBufferIndex(const uint32_t buffer_index) {
 #include "doctest/doctest.h"
 #include "d3d12_dxgi_core.h"
 #include "d3d12_device.h"
-#include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_gpu_buffer_allocation.h"
 TEST_CASE("gltf scene") { // NOLINT
   using namespace illuminate; // NOLINT
   DxgiCore dxgi_core;

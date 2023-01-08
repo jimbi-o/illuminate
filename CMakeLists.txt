@@ -54,12 +54,6 @@ CPMAddPackage(
   GIT_TAG "f78c4fbd38e309b36d7b0a7db3d44267d6ac23c0"
 )
 CPMAddPackage("gh:microsoft/DirectX-Headers#v1.700.10-preview")
-CPMAddPackage(
-  NAME tinygltf
-  GITHUB_REPOSITORY "syoyo/tinygltf"
-  VERSION 2.5.0
-  DOWNLOAD_ONLY yes
-)
 CPMAddPackage("gh:ocornut/imgui#v1.87")
 CPMAddPackage("gh:epezent/implot#v0.13")
 CPMAddPackage(
@@ -150,13 +144,6 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
 )
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-  TINYGLTF_NO_STB_IMAGE
-  TINYGLTF_NO_STB_IMAGE_WRITE
-  TINYGLTF_NO_EXTERNAL_IMAGE
-  TINYGLTF_NO_INCLUDE_JSON
-  TINYGLTF_NO_INCLUDE_STB_IMAGE
-  TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
-  TINYGLTF_USE_CPP14
   $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>)
 target_include_directories(${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -164,7 +151,6 @@ target_include_directories(${CMAKE_PROJECT_NAME}
   "${dxc_SOURCE_DIR}/inc"
   "${nlohmann_json_SOURCE_DIR}/include"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include"
-  "${tinygltf_SOURCE_DIR}"
   "${imgui_SOURCE_DIR}"
   "${implot_SOURCE_DIR}"
   "${WinPixEventRuntime_SOURCE_DIR}/Include"
@@ -188,7 +174,6 @@ target_precompile_headers(${CMAKE_PROJECT_NAME}
   "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp"
   "${spdlog_SOURCE_DIR}/include/spdlog/spdlog.h"
   "${D3D12MemoryAllocator_SOURCE_DIR}/include/D3D12MemAlloc.h"
-  "${tinygltf_SOURCE_DIR}/tiny_gltf.h"
   "${imgui_SOURCE_DIR}/imgui.h"
   "${implot_SOURCE_DIR}/implot.h"
   "${WinPixEventRuntime_SOURCE_DIR}/Include/WinPixEventRuntime/pix3.h"

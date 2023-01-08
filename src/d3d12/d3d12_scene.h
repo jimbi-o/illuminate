@@ -2,7 +2,7 @@
 #define ILLUMINATE_D3D12_SCENE_H
 #include "D3D12MemAlloc.h"
 #include "d3d12_header_common.h"
-#include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_gpu_buffer_allocation.h"
 #include "shader/include/shader_defines.h"
 namespace illuminate {
 struct ResourceTransfer;

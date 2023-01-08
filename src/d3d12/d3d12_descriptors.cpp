@@ -2,6 +2,7 @@
 #include "d3d12_scene.h"
 #include "d3d12_src_common.h"
 namespace illuminate {
+namespace {
 ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D12_DESCRIPTOR_HEAP_TYPE type, const uint32_t descriptor_num, const D3D12_DESCRIPTOR_HEAP_FLAGS flags) {
   D3D12_DESCRIPTOR_HEAP_DESC descriptor_heap_desc = {
     .Type = type,
@@ -18,77 +19,6 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(D3d12Device* const device, const D3D1
   }
   return descriptor_heap;
 }
-bool DescriptorCpu::Init(D3d12Device* const device, const uint32_t buffer_allocation_num, const uint32_t* descriptor_handle_num_per_type) {
-  buffer_allocation_num_ = buffer_allocation_num;
-  sampler_num_ = descriptor_handle_num_per_type[static_cast<uint32_t>(DescriptorType::kSampler)];
-  for (uint32_t i = 0; i < kDescriptorTypeNum; i++) {
-    const auto num = (i == static_cast<uint32_t>(DescriptorType::kSampler)) ? sampler_num_ : buffer_allocation_num_;
-    handles_[i] = AllocateArraySystem<D3D12_CPU_DESCRIPTOR_HANDLE>(num);
-    for (uint32_t j = 0; j < num; j++) {
-      handles_[i][j].ptr = 0;
-    }
-    total_handle_num_[GetDescriptorTypeIndex(static_cast<DescriptorType>(i))] += descriptor_handle_num_per_type[i];
-  }
-  for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
-    if (total_handle_num_[i] == 0) { continue; }
-    const auto type = static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(i);
-    handle_increment_size_[i] = device->GetDescriptorHandleIncrementSize(type);
-    descriptor_heap_[i] = CreateDescriptorHeap(device, type, total_handle_num_[i], D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
-    if (descriptor_heap_[i] == nullptr) {
-      assert(false && "CreateDescriptorHeap failed");
-      for (uint32_t j = 0; j < i; j++) {
-        descriptor_heap_[j]->Release();
-        descriptor_heap_[j] = nullptr;
-      }
-      return false;
-    }
-    SetD3d12Name(descriptor_heap_[i], "descriptor_heap" + std::to_string(i));
-    heap_start_[i] = descriptor_heap_[i]->GetCPUDescriptorHandleForHeapStart().ptr;
-    handle_num_[i] = 0;
-  }
-  return true;
-}
-void DescriptorCpu::Term() {
-  for (uint32_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
-    if (descriptor_heap_[i]) {
-      const auto refval = descriptor_heap_[i]->Release();
-      if (refval != 0) {
-        logwarn("DescriptorCpu refval:{}", refval);
-      }
-    }
-  }
-}
-const D3D12_CPU_DESCRIPTOR_HANDLE& DescriptorCpu::CreateHandle(const uint32_t index, const DescriptorType type) {
-  assert((type == DescriptorType::kSampler && index < sampler_num_) || (type != DescriptorType::kSampler && index < buffer_allocation_num_));
-  auto heap_index = GetDescriptorTypeIndex(type);
-  D3D12_CPU_DESCRIPTOR_HANDLE handle{};
-  handle.ptr = heap_start_[heap_index] + handle_num_[heap_index] * handle_increment_size_[heap_index];
-  auto descriptor_type_index = static_cast<uint32_t>(type);
-  assert(handles_[descriptor_type_index][index].ptr == 0);
-  handles_[descriptor_type_index][index].ptr = handle.ptr;
-  handle_num_[heap_index]++;
-  assert(handle_num_[heap_index] <= total_handle_num_[heap_index] && "handle num exceeded handle pool size");
-  logtrace("handle created. alloc:{} type:{} ptr:{:x}", index, type, handles_[descriptor_type_index][index].ptr);
-  return handles_[descriptor_type_index][index];
-}
-void DescriptorCpu::RegisterExternalHandle(const uint32_t index, const DescriptorType type, const D3D12_CPU_DESCRIPTOR_HANDLE& handle) {
-  auto descriptor_type_index = static_cast<uint32_t>(type);
-  handles_[descriptor_type_index][index].ptr = handle.ptr;
-  logtrace("handle registered. alloc:{} desc:{} ptr:{}", index, type, handles_[descriptor_type_index][index].ptr);
-}
-D3D12_CPU_DESCRIPTOR_HANDLE* DescriptorCpu::GetCpuHandleList(const uint32_t buffer_num, const uint32_t* buffer_allocation_index_list, const ResourceStateType* resource_state_list, const D3D12_CPU_DESCRIPTOR_HANDLE scene_data_cpu_handles[], const MemoryType& memory_type) const {
-  if (buffer_num == 0) { return (D3D12_CPU_DESCRIPTOR_HANDLE*)nullptr; }
-  auto cpu_handles_list = AllocateArray<D3D12_CPU_DESCRIPTOR_HANDLE>(memory_type, buffer_num);
-  for (uint32_t i = 0; i < buffer_num; i++) {
-    if (IsSceneBuffer(buffer_allocation_index_list[i])) {
-      cpu_handles_list[i] = scene_data_cpu_handles[GetDecodedSceneBufferIndex(buffer_allocation_index_list[i])];
-      continue;
-    }
-    cpu_handles_list[i] = GetHandle(buffer_allocation_index_list[i], ConvertToDescriptorType(resource_state_list[i]));
-  }
-  return cpu_handles_list;
-}
-namespace {
 uint32_t GetViewNum(const uint32_t buffer_num, const DescriptorType* descriptor_type_list) {
   uint32_t view_num = 0;
   for (uint32_t i = 0; i < buffer_num; i++) {

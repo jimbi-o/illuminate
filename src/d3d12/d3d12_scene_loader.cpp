@@ -2,7 +2,7 @@
 #include <fstream>
 #include "gfxminimath/gfxminimath.h"
 #include "d3d12_descriptors.h"
-#include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_gpu_buffer_allocation.h"
 #include "d3d12_memory_allocators.h"
 #include "d3d12_resource_transfer.h"
 #include "d3d12_src_common.h"

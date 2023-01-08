@@ -106,7 +106,7 @@ bool ReserveResourceTransfer(const uint32_t frame_index, const uint32_t subresou
 #include "doctest/doctest.h"
 #include "d3d12_dxgi_core.h"
 #include "d3d12_device.h"
-#include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_gpu_buffer_allocation.h"
 #include "d3d12_texture_util.h"
 TEST_CASE("ResourceTransfer") { // NOLINT
   using namespace illuminate; // NOLINT

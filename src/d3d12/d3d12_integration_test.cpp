@@ -9,7 +9,7 @@
 #include "d3d12_descriptors.h"
 #include "d3d12_device.h"
 #include "d3d12_dxgi_core.h"
-#include "d3d12_gpu_buffer_allocator.h"
+#include "d3d12_gpu_buffer_allocation.h"
 #include "d3d12_gpu_timestamp_set.h"
 #include "d3d12_render_graph_json_parser.h"
 #include "d3d12_resource_transfer.h"

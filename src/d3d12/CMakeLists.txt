@@ -16,21 +16,21 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_command_list.h
   d3d12_command_list.cpp
   d3d12_render_graph.h
-  d3d12_render_graph_json_parser.h
-  d3d12_render_graph_json_parser.cpp
+#  d3d12_render_graph_json_parser.h
+#  d3d12_render_graph_json_parser.cpp
 #  d3d12_integration_test.cpp
   d3d12_descriptors.h
   d3d12_descriptors.cpp
-  d3d12_view_util.h
-  d3d12_view_util.cpp
+#  d3d12_view_util.h
+#  d3d12_view_util.cpp
   d3d12_header_common.h
   d3d12_header_common.cpp
   d3d12_shader_compiler.h
   d3d12_shader_compiler.cpp
-  d3d12_scene.h
-  d3d12_scene.cpp
-  d3d12_gpu_buffer_allocator.h
-  d3d12_gpu_buffer_allocator.cpp
+#  d3d12_scene.h
+#  d3d12_scene.cpp
+  d3d12_gpu_buffer_allocation.h
+  d3d12_gpu_buffer_allocation.cpp
   d3d12_src_common.h
   d3d12_src_common.cpp
   d3d12_json_parser.h
