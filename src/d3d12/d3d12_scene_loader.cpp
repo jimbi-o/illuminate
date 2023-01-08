@@ -159,7 +159,6 @@ auto ParseMeshViews(const nlohmann::json& json, const char* const filename, cons
   char binary_path[binary_path_len];
   SwapFilename(filename, json.at("binary_filename").get<std::string>().c_str(), binary_path_len, binary_path);
   auto mesh_binary_buffer = ReadAllBytesFromFileToTemporaryBuffer(binary_path);
-  // TODO check transform matrix column/row-major
   const auto& json_binary_info = json.at("binary_info");
   const char* mesh_type_name[] = {
     "transform_offset",
@@ -658,6 +657,7 @@ struct RenderPassCommonData {
   SceneParams*  scene_params{nullptr};
   UtilFuncs*    util_funcs{nullptr};
   GpuHandles*   gpu_handles{nullptr};
+  Size2d        primarybuffer_size{};
 };
 struct SceneData {
   ModelDataSet* model_data_set{nullptr};
@@ -665,13 +665,12 @@ struct SceneData {
   SceneParams*  scene_params{nullptr};
 };
 struct SceneParams {
-  float camera_pos[3]{};
-  float fov_vertical{40.0f};
+  float camera_pos[3]{0.0f, 0.0f, -0.3f};
   float camera_focus[3]{};
+  float fov_vertical{40.0f};
   float near_z{0.001f};
-  Size2d primarybuffer_size;
   float far_z{1000.0f};
-  float light_direction[3]{};
+  float light_direction[3]{1.0f, 0.0f, 0.0f};
 };
 struct UtilFuncs {
   using WriteToGpuHandle = std::function<D3D12_GPU_DESCRIPTOR_HANDLE(const D3D12_CPU_DESCRIPTOR_HANDLE* const, const uint32_t)>;                                                                                
@@ -936,6 +935,7 @@ void CommandRecorder::RecordCommands(RenderGraph* render_graph, const SceneData&
     .scene_params   = scene_data.scene_params,
     .util_funcs     = &util_funcs,
     .gpu_handles    = &gpu_handles,
+    .primarybuffer_size = {swapchain_.GetWidth(), swapchain_.GetHeight()},
   };
   auto [signal_queue_index, fence_val] = AllocateFrameSignals(batch_layout.numFenceSignals);
   for (uint32_t batch_index = 0; batch_index < batch_layout.numCmdBatches; batch_index++) {
@@ -1078,11 +1078,11 @@ auto UpdateSceneData(const RpsCmdCallbackContext* context, ID3D12Resource* camer
   const auto scene_params = render_pass_common_data->scene_params;
   const auto view_matrix = CalcViewMatrix(scene_params->camera_pos, scene_params->camera_focus);
   float compact_projection_param[4];
-  GetCompactProjectionParam(scene_params->fov_vertical * gfxminimath::kDegreeToRadian, GetAspectRatio(scene_params->primarybuffer_size), scene_params->near_z, scene_params->far_z, compact_projection_param);
+  GetCompactProjectionParam(scene_params->fov_vertical * gfxminimath::kDegreeToRadian, GetAspectRatio(render_pass_common_data->primarybuffer_size), scene_params->near_z, scene_params->far_z, compact_projection_param);
   const auto projection_matrix = GetProjectionMatrix(compact_projection_param);
   const auto light_direction_vs = CalcLightVectorVs(scene_params->light_direction, view_matrix);
   int32_t light_origin_location_in_screen_space[2];
-  GetLightOriginLocationInScreenSpace(light_direction_vs, projection_matrix, scene_params->primarybuffer_size.width, scene_params->primarybuffer_size.height, light_origin_location_in_screen_space);
+  GetLightOriginLocationInScreenSpace(light_direction_vs, projection_matrix, render_pass_common_data->primarybuffer_size.width, render_pass_common_data->primarybuffer_size.height, light_origin_location_in_screen_space);
   float light_direction_vs_array[3];
   to_array(light_direction_vs, light_direction_vs_array);
   float view_matrix_array[16];
@@ -1160,6 +1160,8 @@ void RecordDebugMarker([[maybe_unused]] void* context, const RpsRuntimeOpRecordD
   }
 }
 void RpsLogger([[maybe_unused]]void* context, [[maybe_unused]]const char* format, ...) {
+}
+void UpdateSceneParams(SceneParams* scene_params) {
 }
 } // namespace
 RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)
@@ -1278,6 +1280,7 @@ TEST_CASE("scene viewer") { // NOLINT
   for (uint32_t i = 0; i < 100; i++) {
     if (!command_recorder->ProcessWindowMessage()) { break; }
     command_recorder->PreUpdate();
+    UpdateSceneParams(&scene_params);
     ResetAllocation(MemoryType::kFrame);
     command_recorder->RecordCommands(render_graph.get(), scene_data);
     command_recorder->Present();

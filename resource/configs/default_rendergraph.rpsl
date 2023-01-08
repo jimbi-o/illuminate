@@ -9,6 +9,7 @@ export void rps_main([readonly(present)] texture backbuffer, uint frame_buffer_n
   update_scene_data(camera_buffer, camera_buffer);
   RpsViewport dst_viewport = viewport(backbuffer_desc.Width, backbuffer_desc.Height);
   texture ds = create_tex2d(RPS_FORMAT_R24G8_TYPELESS, backbuffer_desc.Width, backbuffer_desc.Height);
+  clear(ds, 1.0f, 0);
   prez_pass(backbuffer, ds.format(RPS_FORMAT_D24_UNORM_S8_UINT), dst_viewport, camera_buffer);
   imgui(backbuffer, dst_viewport);
 }

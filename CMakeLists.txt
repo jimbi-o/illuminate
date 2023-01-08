@@ -82,7 +82,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME gfxminimath
   GITHUB_REPOSITORY "jimbi-o/gfxminimath"
-  GIT_TAG "e5b289ae4f4ac97755b053c5b2a97da6e4538c56"
+  GIT_TAG "43e645d6b61b4f074660aee556264f9b9dfd35a8"
 )
 CPMAddPackage(
   NAME RenderPipelineShaders

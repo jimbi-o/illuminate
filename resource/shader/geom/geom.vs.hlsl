@@ -50,15 +50,15 @@ ByteAddressBuffer               transforms                  : register(t2);
   RootConstants(num32BitConstants=1, b0),                \
   DescriptorTable(CBV(b1, numDescriptors=1),             \
                   SRV(t0, numDescriptors=1),             \
-                  SRV(t1, numDescriptors=1),            \
+                  SRV(t1, numDescriptors=1),             \
                   SRV(t2, numDescriptors=1)),            \
 "
 
 [RootSignature(RootsigGeomTest)]
 MeshTransformVsOutput main(const VsInput input, const uint instance_id : SV_InstanceID) {
   MeshTransformVsOutput output;
-  const uint transform_index_offset = transform_index_list_offset.Load<uint>(model_info.model_index);
-  const uint transform_index = transform_index_list.Load<uint>(transform_index_offset + instance_id);
+  const uint transform_index_offset = transform_index_list_offset.Load<uint>(model_info.model_index * sizeof(uint));
+  const uint transform_index = transform_index_list.Load<uint>((transform_index_offset + instance_id) * sizeof(uint));
   const matrix world_matrix = transforms.Load<matrix>(transform_index * sizeof(matrix));
   const matrix world_view_matrix = mul(world_matrix, camera_data.view_matrix);
   float4 position = mul(float4(input.position, 1.0f), world_view_matrix);

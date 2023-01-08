@@ -409,17 +409,17 @@ struct l_struct____rpsl_pipeline_res_binding_info_struct {
 #ifdef _MSC_VER
 #pragma pack(pop)
 #endif
-struct l_array_177_uint8_t {
-  uint8_t array[177];
+struct l_array_210_uint8_t {
+  uint8_t array[210];
 };
-struct l_array_4_struct_AC_l_struct____rpsl_node_info_struct {
-  struct l_struct____rpsl_node_info_struct array[4];
+struct l_array_5_struct_AC_l_struct____rpsl_node_info_struct {
+  struct l_struct____rpsl_node_info_struct array[5];
 };
-struct l_array_5_struct_AC_l_struct____rpsl_type_info_struct {
-  struct l_struct____rpsl_type_info_struct array[5];
+struct l_array_6_struct_AC_l_struct____rpsl_type_info_struct {
+  struct l_struct____rpsl_type_info_struct array[6];
 };
-struct l_array_12_struct_AC_l_struct____rpsl_params_info_struct {
-  struct l_struct____rpsl_params_info_struct array[12];
+struct l_array_16_struct_AC_l_struct____rpsl_params_info_struct {
+  struct l_struct____rpsl_params_info_struct array[16];
 };
 struct l_array_2_struct_AC_l_struct____rpsl_entry_desc_struct {
   struct l_struct____rpsl_entry_desc_struct array[2];
@@ -453,10 +453,10 @@ struct l_struct____rpsl_module_info_struct {
   uint32_t field10;
   uint32_t field11;
   uint32_t field12;
-  struct l_array_177_uint8_t* field13;
-  struct l_array_4_struct_AC_l_struct____rpsl_node_info_struct* field14;
-  struct l_array_5_struct_AC_l_struct____rpsl_type_info_struct* field15;
-  struct l_array_12_struct_AC_l_struct____rpsl_params_info_struct* field16;
+  struct l_array_210_uint8_t* field13;
+  struct l_array_5_struct_AC_l_struct____rpsl_node_info_struct* field14;
+  struct l_array_6_struct_AC_l_struct____rpsl_type_info_struct* field15;
+  struct l_array_16_struct_AC_l_struct____rpsl_params_info_struct* field16;
   struct l_array_2_struct_AC_l_struct____rpsl_entry_desc_struct* field17;
   struct l_array_1_struct_AC_l_struct____rpsl_shader_ref_struct* field18;
   struct l_array_1_struct_AC_l_struct____rpsl_pipeline_info_struct* field19;
@@ -504,14 +504,23 @@ struct l_array_16_uint8_t {
 struct l_array_2_struct_AC_l_struct_struct_OC_RpsParameterDesc {
   struct l_struct_struct_OC_RpsParameterDesc array[2];
 };
+struct l_array_20_uint8_t {
+  uint8_t array[20];
+};
+struct l_array_2_uint8_t {
+  uint8_t array[2];
+};
+struct l_array_7_uint8_t {
+  uint8_t array[7];
+};
+struct l_array_4_struct_AC_l_struct_struct_OC_RpsParameterDesc {
+  struct l_struct_struct_OC_RpsParameterDesc array[4];
+};
 struct l_array_10_uint8_t {
   uint8_t array[10];
 };
 struct l_array_3_uint8_t {
   uint8_t array[3];
-};
-struct l_array_4_struct_AC_l_struct_struct_OC_RpsParameterDesc {
-  struct l_struct_struct_OC_RpsParameterDesc array[4];
 };
 struct l_array_4_uint8_t {
   uint8_t array[4];
@@ -522,8 +531,8 @@ struct l_array_13_uint8_t {
 struct l_array_6_uint8_t {
   uint8_t array[6];
 };
-struct l_array_3_struct_AC_l_struct_struct_OC_RpsNodeDesc {
-  struct l_struct_struct_OC_RpsNodeDesc array[3];
+struct l_array_4_struct_AC_l_struct_struct_OC_RpsNodeDesc {
+  struct l_struct_struct_OC_RpsNodeDesc array[4];
 };
 struct l_array_9_uint8_t {
   uint8_t array[9];
@@ -564,45 +573,55 @@ void rpsl_M_rps_main_Fn_rps_main_wrapper(uint32_t, uint8_t**, uint32_t) __ATTRIB
 
 /* Global Variable Definitions and Initialization */
 static struct l_array_14_uint8_t _AE__AE_rps_Str0 = { "camera_buffer" };
-static __MSALIGN__(4) struct l_array_4_struct_AC_l_struct____rpsl_node_info_struct ___rpsl_nodedefs_default_rendergraph __attribute__((aligned(4))) = { { { 0, 87, 0, 2, 1 }, { 1, 105, 2, 4, 1 }, { 2, 115, 6, 2, 1 }, { 0, 0, 0, 0, 0 } } };
-static __MSALIGN__(4) struct l_array_2_struct_AC_l_struct____rpsl_entry_desc_struct ___rpsl_entries_default_rendergraph __attribute__((aligned(4))) = { { { 0, 121, 8, 3, ((uint8_t*)rpsl_M_rps_main_Fn_rps_main), ((uint8_t*)rpsl_M_rps_main_Fn_rps_main_wrapper) }, { 0, 0, 0, 0, ((uint8_t*)/*NULL*/0), ((uint8_t*)/*NULL*/0) } } };
-static __MSALIGN__(4) struct l_array_5_struct_AC_l_struct____rpsl_type_info_struct ___rpsl_types_metadata_default_rendergraph __attribute__((aligned(4))) = { { { 6, 0, 0, 0, 0, 40, 8 }, { 6, 0, 0, 0, 0, 36, 4 }, { 5, 0, 0, 0, 0, 24, 4 }, { 3, 32, 0, 0, 0, 4, 4 }, { 0, 0, 0, 0, 0, 0, 0 } } };
-static __MSALIGN__(4) struct l_array_12_struct_AC_l_struct____rpsl_params_info_struct ___rpsl_params_metadata_default_rendergraph __attribute__((aligned(4))) = { { { 37, 0, 538968064, -1, 0, 40, 0 }, { 53, 0, 8, -1, 0, 40, 40 }, { 67, 1, 128, -1, 0, 36, 0 }, { 71, 1, 2560, -1, 0, 36, 36 }, { 74, 2, 0, -1, 0, 24, 72 }, { 53, 0, 8, -1, 0, 40, 96 }, { 67, 1, 128, -1, 0, 36, 0 }, { 74, 2, 0, -1, 0, 24, 36 }, { 130, 1, 524288, -1, 0, 36, 0 }, { 141, 3, 0, -1, 0, 4, 36 }, { 158, 3, 0, -1, 0, 4, 40 }, { 0, 0, 0, 0, 0, 0, 0 } } };
+static __MSALIGN__(4) struct l_array_5_struct_AC_l_struct____rpsl_node_info_struct ___rpsl_nodedefs_default_rendergraph __attribute__((aligned(4))) = { { { 0, 100, 0, 2, 1 }, { 1, 118, 2, 4, 1 }, { 2, 138, 6, 4, 1 }, { 3, 148, 10, 2, 1 }, { 0, 0, 0, 0, 0 } } };
+static __MSALIGN__(4) struct l_array_2_struct_AC_l_struct____rpsl_entry_desc_struct ___rpsl_entries_default_rendergraph __attribute__((aligned(4))) = { { { 0, 154, 12, 3, ((uint8_t*)rpsl_M_rps_main_Fn_rps_main), ((uint8_t*)rpsl_M_rps_main_Fn_rps_main_wrapper) }, { 0, 0, 0, 0, ((uint8_t*)/*NULL*/0), ((uint8_t*)/*NULL*/0) } } };
+static __MSALIGN__(4) struct l_array_6_struct_AC_l_struct____rpsl_type_info_struct ___rpsl_types_metadata_default_rendergraph __attribute__((aligned(4))) = { { { 6, 0, 0, 0, 0, 40, 8 }, { 6, 0, 0, 0, 0, 36, 4 }, { 3, 32, 0, 0, 0, 4, 4 }, { 4, 32, 0, 0, 0, 4, 4 }, { 5, 0, 0, 0, 0, 24, 4 }, { 0, 0, 0, 0, 0, 0, 0 } } };
+static __MSALIGN__(4) struct l_array_16_struct_AC_l_struct____rpsl_params_info_struct ___rpsl_params_metadata_default_rendergraph __attribute__((aligned(4))) = { { { 37, 0, 538968064, -1, 0, 40, 0 }, { 53, 0, 8, -1, 0, 40, 40 }, { 67, 1, 805308928, -1, 0, 36, 0 }, { 69, 2, 0, -1, 0, 4, 36 }, { 76, 3, 0, -1, 0, 4, 40 }, { 78, 2, 0, -1, 0, 4, 44 }, { 80, 1, 128, -1, 0, 36, 0 }, { 84, 1, 2560, -1, 0, 36, 36 }, { 87, 4, 0, -1, 0, 24, 72 }, { 53, 0, 8, -1, 0, 40, 96 }, { 80, 1, 128, -1, 0, 36, 0 }, { 87, 4, 0, -1, 0, 24, 36 }, { 163, 1, 524288, -1, 0, 36, 0 }, { 174, 2, 0, -1, 0, 4, 36 }, { 191, 2, 0, -1, 0, 4, 40 }, { 0, 0, 0, 0, 0, 0, 0 } } };
 static __MSALIGN__(4) struct l_array_1_struct_AC_l_struct____rpsl_shader_ref_struct ___rpsl_shader_refs_default_rendergraph __attribute__((aligned(4)));
 static __MSALIGN__(4) struct l_array_1_struct_AC_l_struct____rpsl_pipeline_info_struct ___rpsl_pipelines_default_rendergraph __attribute__((aligned(4)));
 static __MSALIGN__(4) struct l_array_1_struct_AC_l_struct____rpsl_pipeline_field_info_struct ___rpsl_pipeline_fields_default_rendergraph __attribute__((aligned(4)));
 static __MSALIGN__(4) struct l_array_1_struct_AC_l_struct____rpsl_pipeline_res_binding_info_struct ___rpsl_pipeline_res_bindings_default_rendergraph __attribute__((aligned(4)));
-__MSALIGN__(4) struct l_array_177_uint8_t ___rpsl_string_table_default_rendergraph __attribute__((aligned(4))) = { { 99u, 97u, 109u, 101u, 114u, 97u, 95u, 98u, 117u, 102u, 102u, 101u, 114u, 0, 100u, 115u, 0, 100u, 101u, 102u, 97u, 117u, 108u, 116u, 95u, 114u, 101u, 110u, 100u, 101u, 114u, 103u, 114u, 97u, 112u, 104u, 0, 99u, 97u, 109u, 101u, 114u, 97u, 95u, 114u, 101u, 115u, 111u, 117u, 114u, 99u, 101u, 0, 99u, 97u, 109u, 101u, 114u, 97u, 95u, 104u, 97u, 110u, 100u, 108u, 101u, 0, 100u, 115u, 116u, 0, 100u, 115u, 0, 100u, 115u, 116u, 95u, 118u, 105u, 101u, 119u, 112u, 111u, 114u, 116u, 0, 117u, 112u, 100u, 97u, 116u, 101u, 95u, 115u, 99u, 101u, 110u, 101u, 95u, 100u, 97u, 116u, 97u, 0, 112u, 114u, 101u, 122u, 95u, 112u, 97u, 115u, 115u, 0, 105u, 109u, 103u, 117u, 105u, 0, 114u, 112u, 115u, 95u, 109u, 97u, 105u, 110u, 0, 98u, 97u, 99u, 107u, 98u, 117u, 102u, 102u, 101u, 114u, 0, 102u, 114u, 97u, 109u, 101u, 95u, 98u, 117u, 102u, 102u, 101u, 114u, 95u, 110u, 117u, 109u, 0, 99u, 97u, 109u, 101u, 114u, 97u, 95u, 98u, 117u, 102u, 102u, 101u, 114u, 95u, 115u, 105u, 122u, 101u, 0 } };
-__declspec(dllexport) __MSALIGN__(4) struct l_struct____rpsl_module_info_struct ___rpsl_module_info_default_rendergraph __attribute__((aligned(4))) = { 1297305682u, 3, 9, 17, 177, 3, 4, 11, 1, 0, 0, 0, 0, (&___rpsl_string_table_default_rendergraph), (&___rpsl_nodedefs_default_rendergraph), (&___rpsl_types_metadata_default_rendergraph), (&___rpsl_params_metadata_default_rendergraph), (&___rpsl_entries_default_rendergraph), (&___rpsl_shader_refs_default_rendergraph), (&___rpsl_pipelines_default_rendergraph), (&___rpsl_pipeline_fields_default_rendergraph), (&___rpsl_pipeline_res_bindings_default_rendergraph), 1297305682u };
+__MSALIGN__(4) struct l_array_210_uint8_t ___rpsl_string_table_default_rendergraph __attribute__((aligned(4))) = { { 99u, 97u, 109u, 101u, 114u, 97u, 95u, 98u, 117u, 102u, 102u, 101u, 114u, 0, 100u, 115u, 0, 100u, 101u, 102u, 97u, 117u, 108u, 116u, 95u, 114u, 101u, 110u, 100u, 101u, 114u, 103u, 114u, 97u, 112u, 104u, 0, 99u, 97u, 109u, 101u, 114u, 97u, 95u, 114u, 101u, 115u, 111u, 117u, 114u, 99u, 101u, 0, 99u, 97u, 109u, 101u, 114u, 97u, 95u, 104u, 97u, 110u, 100u, 108u, 101u, 0, 116u, 0, 111u, 112u, 116u, 105u, 111u, 110u, 0, 100u, 0, 115u, 0, 100u, 115u, 116u, 0, 100u, 115u, 0, 100u, 115u, 116u, 95u, 118u, 105u, 101u, 119u, 112u, 111u, 114u, 116u, 0, 117u, 112u, 100u, 97u, 116u, 101u, 95u, 115u, 99u, 101u, 110u, 101u, 95u, 100u, 97u, 116u, 97u, 0, 99u, 108u, 101u, 97u, 114u, 95u, 100u, 101u, 112u, 116u, 104u, 95u, 115u, 116u, 101u, 110u, 99u, 105u, 108u, 0, 112u, 114u, 101u, 122u, 95u, 112u, 97u, 115u, 115u, 0, 105u, 109u, 103u, 117u, 105u, 0, 114u, 112u, 115u, 95u, 109u, 97u, 105u, 110u, 0, 98u, 97u, 99u, 107u, 98u, 117u, 102u, 102u, 101u, 114u, 0, 102u, 114u, 97u, 109u, 101u, 95u, 98u, 117u, 102u, 102u, 101u, 114u, 95u, 110u, 117u, 109u, 0, 99u, 97u, 109u, 101u, 114u, 97u, 95u, 98u, 117u, 102u, 102u, 101u, 114u, 95u, 115u, 105u, 122u, 101u, 0 } };
+__declspec(dllexport) __MSALIGN__(4) struct l_struct____rpsl_module_info_struct ___rpsl_module_info_default_rendergraph __attribute__((aligned(4))) = { 1297305682u, 3, 9, 17, 210, 4, 5, 15, 1, 0, 0, 0, 0, (&___rpsl_string_table_default_rendergraph), (&___rpsl_nodedefs_default_rendergraph), (&___rpsl_types_metadata_default_rendergraph), (&___rpsl_params_metadata_default_rendergraph), (&___rpsl_entries_default_rendergraph), (&___rpsl_shader_refs_default_rendergraph), (&___rpsl_pipelines_default_rendergraph), (&___rpsl_pipeline_fields_default_rendergraph), (&___rpsl_pipeline_res_bindings_default_rendergraph), 1297305682u };
 static struct l_array_18_uint8_t _AE__AE_rps_Str2 = { "update_scene_data" };
 static struct l_array_16_uint8_t _AE__AE_rps_Str3 = { "camera_resource" };
 static struct l_unnamed_1 _AE__AE_rps_ParamAttr4 = { 538968064, 0, 0, 0 };
 static struct l_unnamed_1 _AE__AE_rps_ParamAttr6 = { 8, 1, 0, 0 };
-static struct l_array_10_uint8_t _AE__AE_rps_Str8 = { "prez_pass" };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr10 = { 128, 0, 35, 0 };
-static struct l_array_3_uint8_t _AE__AE_rps_Str11 = { "ds" };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr12 = { 2560, 0, 36, 0 };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr14 = { 0, 0, 17, 0 };
-static struct l_array_14_uint8_t _AE__AE_rps_Str15 = { "camera_handle" };
-static struct l_array_2_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray7 = { { { { 40, 65 }, 0, (&_AE__AE_rps_ParamAttr4), ((&_AE__AE_rps_Str3.array[((int32_t)0)])), 4 }, { { 40, 65 }, 0, (&_AE__AE_rps_ParamAttr6), ((&_AE__AE_rps_Str15.array[((int32_t)0)])), 4 } } };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr16 = { 8, 1, 0, 0 };
-static struct l_array_6_uint8_t _AE__AE_rps_Str18 = { "imgui" };
-static struct l_array_4_uint8_t _AE__AE_rps_Str19 = { "dst" };
+static struct l_array_20_uint8_t _AE__AE_rps_Str8 = { "clear_depth_stencil" };
+static struct l_array_2_uint8_t _AE__AE_rps_Str9 = { "t" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr10 = { 805308928, 0, 0, 0 };
+static struct l_array_7_uint8_t _AE__AE_rps_Str11 = { "option" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr12;
+static struct l_array_2_uint8_t _AE__AE_rps_Str13 = { "d" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr14 = { 0, 0, 28, 0 };
+static struct l_array_2_uint8_t _AE__AE_rps_Str15 = { "s" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr16 = { 0, 0, 29, 0 };
+static struct l_array_4_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray17 = { { { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr10), ((&_AE__AE_rps_Str9.array[((int32_t)0)])), 4 }, { { 4, 0 }, 0, (&_AE__AE_rps_ParamAttr12), ((&_AE__AE_rps_Str11.array[((int32_t)0)])), 0 }, { { 4, 0 }, 0, (&_AE__AE_rps_ParamAttr14), ((&_AE__AE_rps_Str13.array[((int32_t)0)])), 0 }, { { 4, 0 }, 0, (&_AE__AE_rps_ParamAttr16), ((&_AE__AE_rps_Str15.array[((int32_t)0)])), 0 } } };
+static struct l_array_10_uint8_t _AE__AE_rps_Str18 = { "prez_pass" };
 static struct l_unnamed_1 _AE__AE_rps_ParamAttr20 = { 128, 0, 35, 0 };
-static struct l_array_13_uint8_t _AE__AE_rps_Str21 = { "dst_viewport" };
-static struct l_array_4_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray17 = { { { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr10), ((&_AE__AE_rps_Str19.array[((int32_t)0)])), 4 }, { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr12), ((&_AE__AE_rps_Str11.array[((int32_t)0)])), 4 }, { { 24, 0 }, 0, (&_AE__AE_rps_ParamAttr14), ((&_AE__AE_rps_Str21.array[((int32_t)0)])), 0 }, { { 40, 65 }, 0, (&_AE__AE_rps_ParamAttr16), ((&_AE__AE_rps_Str15.array[((int32_t)0)])), 4 } } };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr22 = { 0, 0, 17, 0 };
-static struct l_array_2_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray23 = { { { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr20), ((&_AE__AE_rps_Str19.array[((int32_t)0)])), 4 }, { { 24, 0 }, 0, (&_AE__AE_rps_ParamAttr22), ((&_AE__AE_rps_Str21.array[((int32_t)0)])), 0 } } };
-__declspec(dllexport) struct l_array_3_struct_AC_l_struct_struct_OC_RpsNodeDesc NodeDecls_default_rendergraph = { { { 1, 2, ((&_AE__AE_rps_ParamDescArray7.array[((int32_t)0)])), ((&_AE__AE_rps_Str2.array[((int32_t)0)])) }, { 1, 4, ((&_AE__AE_rps_ParamDescArray17.array[((int32_t)0)])), ((&_AE__AE_rps_Str8.array[((int32_t)0)])) }, { 1, 2, ((&_AE__AE_rps_ParamDescArray23.array[((int32_t)0)])), ((&_AE__AE_rps_Str18.array[((int32_t)0)])) } } };
-static struct l_array_9_uint8_t _AE__AE_rps_Str24 = { "rps_main" };
-static struct l_array_11_uint8_t _AE__AE_rps_Str25 = { "backbuffer" };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr26 = { 524288, 0, 0, 0 };
-static struct l_array_17_uint8_t _AE__AE_rps_Str27 = { "frame_buffer_num" };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr28;
-static struct l_array_19_uint8_t _AE__AE_rps_Str29 = { "camera_buffer_size" };
-static struct l_unnamed_1 _AE__AE_rps_ParamAttr30;
-static struct l_array_3_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray31 = { { { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr26), ((&_AE__AE_rps_Str25.array[((int32_t)0)])), 4 }, { { 4, 0 }, 0, (&_AE__AE_rps_ParamAttr28), ((&_AE__AE_rps_Str27.array[((int32_t)0)])), 0 }, { { 4, 0 }, 0, (&_AE__AE_rps_ParamAttr30), ((&_AE__AE_rps_Str29.array[((int32_t)0)])), 0 } } };
-struct l_struct_struct_OC_RpslEntry rpsl_M_default_rendergraph_E_rps_main_AE_value = { ((&_AE__AE_rps_Str24.array[((int32_t)0)])), rpsl_M_rps_main_Fn_rps_main_wrapper, ((&_AE__AE_rps_ParamDescArray31.array[((int32_t)0)])), ((&NodeDecls_default_rendergraph.array[((int32_t)0)])), 3, 3 };
+static struct l_array_3_uint8_t _AE__AE_rps_Str21 = { "ds" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr22 = { 2560, 0, 36, 0 };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr24 = { 0, 0, 17, 0 };
+static struct l_array_14_uint8_t _AE__AE_rps_Str25 = { "camera_handle" };
+static struct l_array_2_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray7 = { { { { 40, 65 }, 0, (&_AE__AE_rps_ParamAttr4), ((&_AE__AE_rps_Str3.array[((int32_t)0)])), 4 }, { { 40, 65 }, 0, (&_AE__AE_rps_ParamAttr6), ((&_AE__AE_rps_Str25.array[((int32_t)0)])), 4 } } };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr26 = { 8, 1, 0, 0 };
+static struct l_array_6_uint8_t _AE__AE_rps_Str28 = { "imgui" };
+static struct l_array_4_uint8_t _AE__AE_rps_Str29 = { "dst" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr30 = { 128, 0, 35, 0 };
+static struct l_array_13_uint8_t _AE__AE_rps_Str31 = { "dst_viewport" };
+static struct l_array_4_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray27 = { { { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr20), ((&_AE__AE_rps_Str29.array[((int32_t)0)])), 4 }, { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr22), ((&_AE__AE_rps_Str21.array[((int32_t)0)])), 4 }, { { 24, 0 }, 0, (&_AE__AE_rps_ParamAttr24), ((&_AE__AE_rps_Str31.array[((int32_t)0)])), 0 }, { { 40, 65 }, 0, (&_AE__AE_rps_ParamAttr26), ((&_AE__AE_rps_Str25.array[((int32_t)0)])), 4 } } };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr32 = { 0, 0, 17, 0 };
+static struct l_array_2_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray33 = { { { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr30), ((&_AE__AE_rps_Str29.array[((int32_t)0)])), 4 }, { { 24, 0 }, 0, (&_AE__AE_rps_ParamAttr32), ((&_AE__AE_rps_Str31.array[((int32_t)0)])), 0 } } };
+__declspec(dllexport) struct l_array_4_struct_AC_l_struct_struct_OC_RpsNodeDesc NodeDecls_default_rendergraph = { { { 1, 2, ((&_AE__AE_rps_ParamDescArray7.array[((int32_t)0)])), ((&_AE__AE_rps_Str2.array[((int32_t)0)])) }, { 1, 4, ((&_AE__AE_rps_ParamDescArray17.array[((int32_t)0)])), ((&_AE__AE_rps_Str8.array[((int32_t)0)])) }, { 1, 4, ((&_AE__AE_rps_ParamDescArray27.array[((int32_t)0)])), ((&_AE__AE_rps_Str18.array[((int32_t)0)])) }, { 1, 2, ((&_AE__AE_rps_ParamDescArray33.array[((int32_t)0)])), ((&_AE__AE_rps_Str28.array[((int32_t)0)])) } } };
+static struct l_array_9_uint8_t _AE__AE_rps_Str34 = { "rps_main" };
+static struct l_array_11_uint8_t _AE__AE_rps_Str35 = { "backbuffer" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr36 = { 524288, 0, 0, 0 };
+static struct l_array_17_uint8_t _AE__AE_rps_Str37 = { "frame_buffer_num" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr38;
+static struct l_array_19_uint8_t _AE__AE_rps_Str39 = { "camera_buffer_size" };
+static struct l_unnamed_1 _AE__AE_rps_ParamAttr40;
+static struct l_array_3_struct_AC_l_struct_struct_OC_RpsParameterDesc _AE__AE_rps_ParamDescArray41 = { { { { 36, 64 }, 0, (&_AE__AE_rps_ParamAttr36), ((&_AE__AE_rps_Str35.array[((int32_t)0)])), 4 }, { { 4, 0 }, 0, (&_AE__AE_rps_ParamAttr38), ((&_AE__AE_rps_Str37.array[((int32_t)0)])), 0 }, { { 4, 0 }, 0, (&_AE__AE_rps_ParamAttr40), ((&_AE__AE_rps_Str39.array[((int32_t)0)])), 0 } } };
+struct l_struct_struct_OC_RpslEntry rpsl_M_default_rendergraph_E_rps_main_AE_value = { ((&_AE__AE_rps_Str34.array[((int32_t)0)])), rpsl_M_rps_main_Fn_rps_main_wrapper, ((&_AE__AE_rps_ParamDescArray41.array[((int32_t)0)])), ((&NodeDecls_default_rendergraph.array[((int32_t)0)])), 3, 4 };
 __declspec(dllexport) struct l_struct_struct_OC_RpslEntry* rpsl_M_default_rendergraph_E_rps_main = (&rpsl_M_default_rendergraph_E_rps_main_AE_value);
 __declspec(dllexport) struct l_struct_struct_OC_RpslEntry** rpsl_M_default_rendergraph_E_rps_main_pp = (&rpsl_M_default_rendergraph_E_rps_main);
 
@@ -711,6 +730,7 @@ llvm_cbe_temp__5:
 void rpsl_M_rps_main_Fn_rps_main(struct texture* backbuffer, uint32_t frame_buffer_num, uint32_t camera_buffer_size) {
     struct buffer camera_buffer;    /* Address-exposed local */
     struct RpsViewport dst_viewport;    /* Address-exposed local */
+    __MSALIGN__(8) struct texture ds __attribute__((aligned(8)));    /* Address-exposed local */
 
   struct {
     __MSALIGN__(8) struct texture _7 __attribute__((aligned(8)));    /* Address-exposed local */
@@ -739,49 +759,75 @@ void rpsl_M_rps_main_Fn_rps_main(struct texture* backbuffer, uint32_t frame_buff
     uint32_t _29;
     uint32_t UMin;
     uint32_t _30;
-    struct texture* _2e_tvd_2e_0;
-    struct texture _31;
-    struct texture _32;
-    struct texture _33;
-    struct texture _34;
-    struct texture _35;
-    struct texture _36;
-    struct texture _37;
-    struct texture _38;
-    struct texture _39;
-    struct texture _40;
-    uint32_t _41;
-    uint32_t _42;
-    uint32_t _43;
-    uint16_t _44;
-    uint16_t _45;
-    uint32_t _46;
-    uint32_t _47;
-    float _48;
-    uint32_t _49;
-    struct l_array_4_uint8_t_KC_* _50;
+    uint32_t* _31;
+    uint32_t* _32;
+    uint32_t* _33;
+    uint32_t* _34;
+    uint16_t* _35;
+    uint16_t* _36;
+    uint32_t* _37;
+    uint32_t* _38;
+    float* _39;
+    uint32_t* _40;
+    struct l_array_4_uint8_t_KC_* _41;
     uint8_t** _2e_sub_2e_2;
-    uint32_t _51;
-    struct l_array_2_uint8_t_KC_* _52;
+    uint32_t* _42;
+    float* _43;
+    uint32_t* _44;
+    uint32_t _45;
+    struct texture* _2e_tvd_2e_0;
+    uint32_t _46;
+    struct texture _47;
+    uint32_t _48;
+    struct texture _49;
+    uint32_t _50;
+    struct texture _51;
+    uint32_t _52;
+    struct texture _53;
+    uint16_t _54;
+    struct texture _55;
+    uint16_t _56;
+    struct texture _57;
+    uint32_t _58;
+    struct texture _59;
+    uint32_t _60;
+    struct texture _61;
+    float _62;
+    struct texture _63;
+    uint32_t _64;
+    struct texture _65;
+    uint32_t _66;
+    uint32_t _67;
+    uint32_t _68;
+    uint16_t _69;
+    uint16_t _70;
+    uint32_t _71;
+    uint32_t _72;
+    float _73;
+    uint32_t _74;
+    struct l_array_4_uint8_t_KC_* _75;
     uint8_t** _2e_sub_2e_3;
-    uint32_t _53;
+    uint32_t _76;
+    struct l_array_2_uint8_t_KC_* _77;
+    uint8_t** _2e_sub_2e_4;
+    uint32_t _78;
   } _llvm_cbe_tmps;
 
   struct {
-    uint32_t mips_2e_i_2e_i_2e_040;
-    uint32_t mips_2e_i_2e_i_2e_040__PHI_TEMPORARY;
-    uint32_t d_2e_i_2e_i_2e_039;
-    uint32_t d_2e_i_2e_i_2e_039__PHI_TEMPORARY;
-    uint32_t h_2e_i_2e_i_2e_038;
-    uint32_t h_2e_i_2e_i_2e_038__PHI_TEMPORARY;
-    uint32_t w_2e_i_2e_i_2e_037;
-    uint32_t w_2e_i_2e_i_2e_037__PHI_TEMPORARY;
+    uint32_t mips_2e_i_2e_i_2e_041;
+    uint32_t mips_2e_i_2e_i_2e_041__PHI_TEMPORARY;
+    uint32_t d_2e_i_2e_i_2e_040;
+    uint32_t d_2e_i_2e_i_2e_040__PHI_TEMPORARY;
+    uint32_t h_2e_i_2e_i_2e_039;
+    uint32_t h_2e_i_2e_i_2e_039__PHI_TEMPORARY;
+    uint32_t w_2e_i_2e_i_2e_038;
+    uint32_t w_2e_i_2e_i_2e_038__PHI_TEMPORARY;
     uint32_t mips_2e_i_2e_i_2e_0_2e_lcssa;
     uint32_t mips_2e_i_2e_i_2e_0_2e_lcssa__PHI_TEMPORARY;
   } _llvm_cbe_phi_tmps = {0};
 
 #line 5 "default_rendergraph.rpsl"
-  ___rpsl_block_marker(0, 0, 2, 3, -1, 0, -1);
+  ___rpsl_block_marker(0, 0, 2, 4, -1, 0, -1);
 #line 5 "default_rendergraph.rpsl"
   _llvm_cbe_tmps._9 = (&_llvm_cbe_tmps._7.Resource);
 #line 5 "default_rendergraph.rpsl"
@@ -886,13 +932,13 @@ void rpsl_M_rps_main_Fn_rps_main(struct texture* backbuffer, uint32_t frame_buff
 
 _2e_lr_2e_ph_2e_preheader:
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_040__PHI_TEMPORARY = 1;   /* for PHI node */
+  _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_041__PHI_TEMPORARY = 1;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_039__PHI_TEMPORARY = 1;   /* for PHI node */
+  _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_040__PHI_TEMPORARY = 1;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_038__PHI_TEMPORARY = _llvm_cbe_tmps._22;   /* for PHI node */
+  _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_039__PHI_TEMPORARY = _llvm_cbe_tmps._22;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_037__PHI_TEMPORARY = _llvm_cbe_tmps._21;   /* for PHI node */
+  _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_038__PHI_TEMPORARY = _llvm_cbe_tmps._21;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
   goto _2e_lr_2e_ph;
 #line 228 "./___rpsl_builtin_header_.rpsl"
@@ -901,32 +947,32 @@ _2e_lr_2e_ph_2e_preheader:
   do {     /* Syntactic loop '.lr.ph' to make GCC happy */
 _2e_lr_2e_ph:
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_040 = _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_040__PHI_TEMPORARY;
+  _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_041 = _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_041__PHI_TEMPORARY;
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_039 = _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_039__PHI_TEMPORARY;
+  _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_040 = _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_040__PHI_TEMPORARY;
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_038 = _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_038__PHI_TEMPORARY;
+  _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_039 = _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_039__PHI_TEMPORARY;
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_037 = _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_037__PHI_TEMPORARY;
+  _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_038 = _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_038__PHI_TEMPORARY;
 #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_tmps._26 = llvm_add_u32(_llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_040, 1);
+  _llvm_cbe_tmps._26 = llvm_add_u32(_llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_041, 1);
   #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_tmps._27 = llvm_lshr_u32(_llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_037, 1);
+  _llvm_cbe_tmps._27 = llvm_lshr_u32(_llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_038, 1);
   #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_tmps._28 = llvm_lshr_u32(_llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_038, 1);
+  _llvm_cbe_tmps._28 = llvm_lshr_u32(_llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_039, 1);
   #line 228 "./___rpsl_builtin_header_.rpsl"
-  _llvm_cbe_tmps._29 = llvm_lshr_u32(_llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_039, 1);
+  _llvm_cbe_tmps._29 = llvm_lshr_u32(_llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_040, 1);
   #line 228 "./___rpsl_builtin_header_.rpsl"
 #line 228 "./___rpsl_builtin_header_.rpsl"
   if ((((((uint32_t)((_llvm_cbe_tmps._28 | _llvm_cbe_tmps._27) | _llvm_cbe_tmps._29)) > ((uint32_t)1u))&1))) {
 #line 228 "./___rpsl_builtin_header_.rpsl"
-    _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_040__PHI_TEMPORARY = _llvm_cbe_tmps._26;   /* for PHI node */
+    _llvm_cbe_phi_tmps.mips_2e_i_2e_i_2e_041__PHI_TEMPORARY = _llvm_cbe_tmps._26;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
-    _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_039__PHI_TEMPORARY = _llvm_cbe_tmps._29;   /* for PHI node */
+    _llvm_cbe_phi_tmps.d_2e_i_2e_i_2e_040__PHI_TEMPORARY = _llvm_cbe_tmps._29;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
-    _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_038__PHI_TEMPORARY = _llvm_cbe_tmps._28;   /* for PHI node */
+    _llvm_cbe_phi_tmps.h_2e_i_2e_i_2e_039__PHI_TEMPORARY = _llvm_cbe_tmps._28;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
-    _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_037__PHI_TEMPORARY = _llvm_cbe_tmps._27;   /* for PHI node */
+    _llvm_cbe_phi_tmps.w_2e_i_2e_i_2e_038__PHI_TEMPORARY = _llvm_cbe_tmps._27;   /* for PHI node */
 #line 228 "./___rpsl_builtin_header_.rpsl"
     goto _2e_lr_2e_ph;
 #line 228 "./___rpsl_builtin_header_.rpsl"
@@ -952,140 +998,226 @@ _1__3f_create_tex2d_40__40_YA_3f_AUtexture_40__40_IIIIIIIII_40_Z_2e_exit:
   #line 11 "default_rendergraph.rpsl"
   _llvm_cbe_tmps._30 = ___rpsl_create_resource(3, 0, 44, _llvm_cbe_tmps._21, _llvm_cbe_tmps._22, 1, _llvm_cbe_tmps.UMin, 1, 0, 1, 1);
   #line 232 "./___rpsl_builtin_header_.rpsl"
-  ___rpsl_name_resource(_llvm_cbe_tmps._30, ((&_AE__AE_rps_Str11.array[((int32_t)0)])), 2);
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._2e_tvd_2e_0 = (struct texture*) alloca(sizeof(struct texture));
+  ___rpsl_name_resource(_llvm_cbe_tmps._30, ((&_AE__AE_rps_Str21.array[((int32_t)0)])), 2);
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._31 = (&ds.Resource);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._31 = _llvm_cbe_tmps._30;
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._32 = (&ds.Format);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._32 = 0;
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._33 = (&ds.TemporalLayer);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._33 = 0;
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._34 = (&ds.Flags);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._34 = 0;
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._35 = (&ds.SubresourceRange.base_mip_level);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._35 = 0;
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._36 = (&ds.SubresourceRange.mip_level_count);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._36 = (((uint16_t)_llvm_cbe_tmps.UMin));
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._37 = (&ds.SubresourceRange.base_array_layer);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._37 = 0;
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._38 = (&ds.SubresourceRange.array_layer_count);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._38 = 1;
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._39 = (&ds.MinLodClamp);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._39 = ((float)(0.000000e+00));
+#line 11 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._40 = (&ds.ComponentMapping);
+#line 11 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._40 = 50462976;
   #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._31 = llvm_ctor_struct_struct_OC_texture(0, 0, 0, 0, llvm_ctor_struct_struct_OC_SubresourceRange(0, 0, 0, 0), ((float)(0.000000e+00)), 0);
+  _llvm_cbe_tmps._41 = (struct l_array_4_uint8_t_KC_*) alloca(sizeof(struct l_array_4_uint8_t_KC_));
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._31.Resource = _llvm_cbe_tmps._30;
+  _llvm_cbe_tmps._2e_sub_2e_2 = (&(*_llvm_cbe_tmps._41).array[((int32_t)0)]);
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._32 = _llvm_cbe_tmps._31;
+  *(((struct texture**)_llvm_cbe_tmps._2e_sub_2e_2)) = (&ds);
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._32.Format = 0;
+  _llvm_cbe_tmps._42 = (uint32_t*) alloca(sizeof(uint32_t));
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._33 = _llvm_cbe_tmps._32;
+  *_llvm_cbe_tmps._42 = 6;
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._33.TemporalLayer = 0;
+  *(((uint32_t**)((&(*_llvm_cbe_tmps._41).array[((int32_t)1)])))) = _llvm_cbe_tmps._42;
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._34 = _llvm_cbe_tmps._33;
+  _llvm_cbe_tmps._43 = (float*) alloca(sizeof(float));
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._34.Flags = 0;
+  *_llvm_cbe_tmps._43 = ((float)(1.000000e+00));
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._35 = _llvm_cbe_tmps._34;
+  *(((float**)((&(*_llvm_cbe_tmps._41).array[((int32_t)2)])))) = _llvm_cbe_tmps._43;
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._35.SubresourceRange.base_mip_level = 0;
+  _llvm_cbe_tmps._44 = (uint32_t*) alloca(sizeof(uint32_t));
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._36 = _llvm_cbe_tmps._35;
+  *_llvm_cbe_tmps._44 = 0;
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._36.SubresourceRange.mip_level_count = (((uint16_t)_llvm_cbe_tmps.UMin));
+  *(((uint32_t**)((&(*_llvm_cbe_tmps._41).array[((int32_t)3)])))) = _llvm_cbe_tmps._44;
 #line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._37 = _llvm_cbe_tmps._36;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._37.SubresourceRange.base_array_layer = 0;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._38 = _llvm_cbe_tmps._37;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._38.SubresourceRange.array_layer_count = 1;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._39 = _llvm_cbe_tmps._38;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._39.MinLodClamp = ((float)(0.000000e+00));
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._40 = _llvm_cbe_tmps._39;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._40.ComponentMapping = 50462976;
-#line 12 "default_rendergraph.rpsl"
-  *_llvm_cbe_tmps._2e_tvd_2e_0 = _llvm_cbe_tmps._40;
-#line 12 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._45 = ___rpsl_node_call(1, 4, _llvm_cbe_tmps._2e_sub_2e_2, 0, 1);
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._2e_tvd_2e_0 = (struct texture*) alloca(sizeof(struct texture));
+  #line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._46 = *_llvm_cbe_tmps._31;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._47 = llvm_ctor_struct_struct_OC_texture(0, 0, 0, 0, llvm_ctor_struct_struct_OC_SubresourceRange(0, 0, 0, 0), ((float)(0.000000e+00)), 0);
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._47.Resource = _llvm_cbe_tmps._46;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._48 = *_llvm_cbe_tmps._32;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._49 = _llvm_cbe_tmps._47;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._49.Format = _llvm_cbe_tmps._48;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._50 = *_llvm_cbe_tmps._33;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._51 = _llvm_cbe_tmps._49;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._51.TemporalLayer = _llvm_cbe_tmps._50;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._52 = *_llvm_cbe_tmps._34;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._53 = _llvm_cbe_tmps._51;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._53.Flags = _llvm_cbe_tmps._52;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._54 = *_llvm_cbe_tmps._35;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._55 = _llvm_cbe_tmps._53;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._55.SubresourceRange.base_mip_level = _llvm_cbe_tmps._54;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._56 = *_llvm_cbe_tmps._36;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._57 = _llvm_cbe_tmps._55;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._57.SubresourceRange.mip_level_count = _llvm_cbe_tmps._56;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._58 = *_llvm_cbe_tmps._37;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._59 = _llvm_cbe_tmps._57;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._59.SubresourceRange.base_array_layer = _llvm_cbe_tmps._58;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._60 = *_llvm_cbe_tmps._38;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._61 = _llvm_cbe_tmps._59;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._61.SubresourceRange.array_layer_count = _llvm_cbe_tmps._60;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._62 = *_llvm_cbe_tmps._39;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._63 = _llvm_cbe_tmps._61;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._63.MinLodClamp = _llvm_cbe_tmps._62;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._64 = *_llvm_cbe_tmps._40;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._65 = _llvm_cbe_tmps._63;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._65.ComponentMapping = _llvm_cbe_tmps._64;
+#line 13 "default_rendergraph.rpsl"
+  *_llvm_cbe_tmps._2e_tvd_2e_0 = _llvm_cbe_tmps._65;
+#line 13 "default_rendergraph.rpsl"
   *((&_llvm_cbe_tmps._2e_tvd_2e_0->Format)) = 45;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._41 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->Resource));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.Resource)) = _llvm_cbe_tmps._41;
-#line 12 "default_rendergraph.rpsl"
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._66 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->Resource));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.Resource)) = _llvm_cbe_tmps._66;
+#line 13 "default_rendergraph.rpsl"
   *((&_llvm_cbe_tmps._8.Format)) = 45;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._42 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->TemporalLayer));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.TemporalLayer)) = _llvm_cbe_tmps._42;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._43 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->Flags));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.Flags)) = _llvm_cbe_tmps._43;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._44 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.base_mip_level));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.SubresourceRange.base_mip_level)) = _llvm_cbe_tmps._44;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._45 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.mip_level_count));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.SubresourceRange.mip_level_count)) = _llvm_cbe_tmps._45;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._46 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.base_array_layer));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.SubresourceRange.base_array_layer)) = _llvm_cbe_tmps._46;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._47 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.array_layer_count));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.SubresourceRange.array_layer_count)) = _llvm_cbe_tmps._47;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._48 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->MinLodClamp));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.MinLodClamp)) = _llvm_cbe_tmps._48;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._49 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->ComponentMapping));
-#line 12 "default_rendergraph.rpsl"
-  *((&_llvm_cbe_tmps._8.ComponentMapping)) = _llvm_cbe_tmps._49;
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._50 = (struct l_array_4_uint8_t_KC_*) alloca(sizeof(struct l_array_4_uint8_t_KC_));
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._2e_sub_2e_2 = (&(*_llvm_cbe_tmps._50).array[((int32_t)0)]);
-#line 12 "default_rendergraph.rpsl"
-  *(((struct texture**)_llvm_cbe_tmps._2e_sub_2e_2)) = (&_llvm_cbe_tmps._7);
-#line 12 "default_rendergraph.rpsl"
-  *(((struct texture**)((&(*_llvm_cbe_tmps._50).array[((int32_t)1)])))) = (&_llvm_cbe_tmps._8);
-#line 12 "default_rendergraph.rpsl"
-  *(((struct RpsViewport**)((&(*_llvm_cbe_tmps._50).array[((int32_t)2)])))) = (&dst_viewport);
-#line 12 "default_rendergraph.rpsl"
-  *(((struct buffer**)((&(*_llvm_cbe_tmps._50).array[((int32_t)3)])))) = (&camera_buffer);
-#line 12 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._51 = ___rpsl_node_call(1, 4, _llvm_cbe_tmps._2e_sub_2e_2, 0, 1);
 #line 13 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._52 = (struct l_array_2_uint8_t_KC_*) alloca(sizeof(struct l_array_2_uint8_t_KC_));
+  _llvm_cbe_tmps._67 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->TemporalLayer));
 #line 13 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._2e_sub_2e_3 = (&(*_llvm_cbe_tmps._52).array[((int32_t)0)]);
+  *((&_llvm_cbe_tmps._8.TemporalLayer)) = _llvm_cbe_tmps._67;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._68 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->Flags));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.Flags)) = _llvm_cbe_tmps._68;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._69 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.base_mip_level));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.SubresourceRange.base_mip_level)) = _llvm_cbe_tmps._69;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._70 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.mip_level_count));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.SubresourceRange.mip_level_count)) = _llvm_cbe_tmps._70;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._71 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.base_array_layer));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.SubresourceRange.base_array_layer)) = _llvm_cbe_tmps._71;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._72 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->SubresourceRange.array_layer_count));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.SubresourceRange.array_layer_count)) = _llvm_cbe_tmps._72;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._73 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->MinLodClamp));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.MinLodClamp)) = _llvm_cbe_tmps._73;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._74 = *((&_llvm_cbe_tmps._2e_tvd_2e_0->ComponentMapping));
+#line 13 "default_rendergraph.rpsl"
+  *((&_llvm_cbe_tmps._8.ComponentMapping)) = _llvm_cbe_tmps._74;
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._75 = (struct l_array_4_uint8_t_KC_*) alloca(sizeof(struct l_array_4_uint8_t_KC_));
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._2e_sub_2e_3 = (&(*_llvm_cbe_tmps._75).array[((int32_t)0)]);
 #line 13 "default_rendergraph.rpsl"
   *(((struct texture**)_llvm_cbe_tmps._2e_sub_2e_3)) = (&_llvm_cbe_tmps._7);
 #line 13 "default_rendergraph.rpsl"
-  *(((struct RpsViewport**)((&(*_llvm_cbe_tmps._52).array[((int32_t)1)])))) = (&dst_viewport);
+  *(((struct texture**)((&(*_llvm_cbe_tmps._75).array[((int32_t)1)])))) = (&_llvm_cbe_tmps._8);
 #line 13 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._53 = ___rpsl_node_call(2, 2, _llvm_cbe_tmps._2e_sub_2e_3, 0, 2);
+  *(((struct RpsViewport**)((&(*_llvm_cbe_tmps._75).array[((int32_t)2)])))) = (&dst_viewport);
+#line 13 "default_rendergraph.rpsl"
+  *(((struct buffer**)((&(*_llvm_cbe_tmps._75).array[((int32_t)3)])))) = (&camera_buffer);
+#line 13 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._76 = ___rpsl_node_call(2, 4, _llvm_cbe_tmps._2e_sub_2e_3, 0, 2);
 #line 14 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._77 = (struct l_array_2_uint8_t_KC_*) alloca(sizeof(struct l_array_2_uint8_t_KC_));
+#line 14 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._2e_sub_2e_4 = (&(*_llvm_cbe_tmps._77).array[((int32_t)0)]);
+#line 14 "default_rendergraph.rpsl"
+  *(((struct texture**)_llvm_cbe_tmps._2e_sub_2e_4)) = (&_llvm_cbe_tmps._7);
+#line 14 "default_rendergraph.rpsl"
+  *(((struct RpsViewport**)((&(*_llvm_cbe_tmps._77).array[((int32_t)1)])))) = (&dst_viewport);
+#line 14 "default_rendergraph.rpsl"
+  _llvm_cbe_tmps._78 = ___rpsl_node_call(3, 2, _llvm_cbe_tmps._2e_sub_2e_4, 0, 3);
+#line 15 "default_rendergraph.rpsl"
 }
 
 
 #line 5 "default_rendergraph.rpsl"
-void rpsl_M_rps_main_Fn_rps_main_wrapper(uint32_t llvm_cbe_temp__54, uint8_t** llvm_cbe_temp__55, uint32_t llvm_cbe_temp__56) {
+void rpsl_M_rps_main_Fn_rps_main_wrapper(uint32_t llvm_cbe_temp__79, uint8_t** llvm_cbe_temp__80, uint32_t llvm_cbe_temp__81) {
 
   struct {
-    uint8_t* _57;
-    struct texture* _58;
-    struct texture* _59;
-    uint8_t* _60;
-    uint32_t _61;
-    uint8_t* _62;
-    uint32_t _63;
+    uint8_t* _82;
+    struct texture* _83;
+    struct texture* _84;
+    uint8_t* _85;
+    uint32_t _86;
+    uint8_t* _87;
+    uint32_t _88;
   } _llvm_cbe_tmps;
 
   struct {
-    struct texture* _64;
-    struct texture* _64__PHI_TEMPORARY;
+    struct texture* _89;
+    struct texture* _89__PHI_TEMPORARY;
   } _llvm_cbe_phi_tmps = {0};
 
 #line 5 "default_rendergraph.rpsl"
 #line 5 "default_rendergraph.rpsl"
-  if ((((llvm_cbe_temp__54 == 3u)&1))) {
+  if ((((llvm_cbe_temp__79 == 3u)&1))) {
 #line 5 "default_rendergraph.rpsl"
     goto trunk;
 #line 5 "default_rendergraph.rpsl"
@@ -1097,19 +1229,19 @@ void rpsl_M_rps_main_Fn_rps_main_wrapper(uint32_t llvm_cbe_temp__54, uint8_t** l
 
 trunk:
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._57 = *llvm_cbe_temp__55;
+  _llvm_cbe_tmps._82 = *llvm_cbe_temp__80;
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._58 = (struct texture*) alloca(sizeof(struct texture));
+  _llvm_cbe_tmps._83 = (struct texture*) alloca(sizeof(struct texture));
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._59 = ((struct texture*)_llvm_cbe_tmps._57);
+  _llvm_cbe_tmps._84 = ((struct texture*)_llvm_cbe_tmps._82);
 #line 5 "default_rendergraph.rpsl"
-  if (((((llvm_cbe_temp__56 & 1) == 0u)&1))) {
+  if (((((llvm_cbe_temp__81 & 1) == 0u)&1))) {
 #line 5 "default_rendergraph.rpsl"
     goto _2e_preheader;
 #line 5 "default_rendergraph.rpsl"
   } else {
 #line 5 "default_rendergraph.rpsl"
-    _llvm_cbe_phi_tmps._64__PHI_TEMPORARY = _llvm_cbe_tmps._59;   /* for PHI node */
+    _llvm_cbe_phi_tmps._89__PHI_TEMPORARY = _llvm_cbe_tmps._84;   /* for PHI node */
 #line 5 "default_rendergraph.rpsl"
     goto _2e_loopexit;
 #line 5 "default_rendergraph.rpsl"
@@ -1122,26 +1254,26 @@ err:
   return;
 _2e_preheader:
 #line 5 "default_rendergraph.rpsl"
-  _BA__PD_make_default_texture_view_from_desc_AE__AE_YA_PD_AUtexture_AE__AE_IUResourceDesc_AE__AE__AE_Z(_llvm_cbe_tmps._58, 0, (((struct ResourceDesc*)_llvm_cbe_tmps._57)));
+  _BA__PD_make_default_texture_view_from_desc_AE__AE_YA_PD_AUtexture_AE__AE_IUResourceDesc_AE__AE__AE_Z(_llvm_cbe_tmps._83, 0, (((struct ResourceDesc*)_llvm_cbe_tmps._82)));
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_phi_tmps._64__PHI_TEMPORARY = _llvm_cbe_tmps._58;   /* for PHI node */
+  _llvm_cbe_phi_tmps._89__PHI_TEMPORARY = _llvm_cbe_tmps._83;   /* for PHI node */
 #line 5 "default_rendergraph.rpsl"
   goto _2e_loopexit;
 #line 5 "default_rendergraph.rpsl"
 
 _2e_loopexit:
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_phi_tmps._64 = _llvm_cbe_phi_tmps._64__PHI_TEMPORARY;
+  _llvm_cbe_phi_tmps._89 = _llvm_cbe_phi_tmps._89__PHI_TEMPORARY;
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._60 = *((&llvm_cbe_temp__55[((int32_t)1)]));
+  _llvm_cbe_tmps._85 = *((&llvm_cbe_temp__80[((int32_t)1)]));
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._61 = *(((uint32_t*)_llvm_cbe_tmps._60));
+  _llvm_cbe_tmps._86 = *(((uint32_t*)_llvm_cbe_tmps._85));
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._62 = *((&llvm_cbe_temp__55[((int32_t)2)]));
+  _llvm_cbe_tmps._87 = *((&llvm_cbe_temp__80[((int32_t)2)]));
 #line 5 "default_rendergraph.rpsl"
-  _llvm_cbe_tmps._63 = *(((uint32_t*)_llvm_cbe_tmps._62));
+  _llvm_cbe_tmps._88 = *(((uint32_t*)_llvm_cbe_tmps._87));
 #line 5 "default_rendergraph.rpsl"
-  rpsl_M_rps_main_Fn_rps_main(_llvm_cbe_phi_tmps._64, _llvm_cbe_tmps._61, _llvm_cbe_tmps._63);
+  rpsl_M_rps_main_Fn_rps_main(_llvm_cbe_phi_tmps._89, _llvm_cbe_tmps._86, _llvm_cbe_tmps._88);
 #line 5 "default_rendergraph.rpsl"
 }
 
