@@ -614,6 +614,7 @@ class CommandRecorder final {
   void operator=(const CommandRecorder&) = delete;
   void operator=(CommandRecorder&&) = delete;
 };
+struct RenderPassCommonData;
 class RenderGraph final {
  public:
   struct Config {
@@ -628,12 +629,15 @@ class RenderGraph final {
   };
   static std::unique_ptr<RenderGraph> CreateRenderGraph(const Config& config);
   ~RenderGraph();
-  constexpr auto GetRenderGraph() { return rps_render_graph_; }
+  bool UpdateRenderGraph(const Swapchain* swapchain, const uint32_t frame_count, const uint32_t frame_buffer_num);
+  const RpsRenderGraphBatchLayout& UpdateBatchLayout();
+  void RecordBatch(D3d12CommandList* command_list, RenderPassCommonData* render_pass_common_data, const uint32_t batch_index);
  private:
   RenderGraph(const Config& config);
   RpsDevice rps_device_;
   RpsRenderGraph rps_render_graph_;
   GeomPassParams prez_pass_params_;
+  RpsRenderGraphBatchLayout batch_layout_{};
   RenderGraph(const RenderGraph&) = delete;
   RenderGraph(RenderGraph&&) = delete;
   void operator=(const RenderGraph&) = delete;
@@ -912,16 +916,9 @@ void CommandRecorder::RecordCommands(RenderGraph* render_graph, const SceneData&
   swapchain_.UpdateBackBufferIndex();
   command_queue_signals_.WaitOnCpu(device_, frame_signals_[frame_buffer_index_]);
   command_list_set_.SetCurrentFrameBufferIndex(frame_buffer_index_);
-  if (const auto result = UpdateRenderGraph(render_graph); result != RPS_OK) {
-    logerror("rpsRenderGraphUpdate failed. {}", result);
-    return;
-  }
+  if (!render_graph->UpdateRenderGraph(&swapchain_, frame_count_, frame_buffer_num_)) { return; }
   const auto copy_queue_signal = TrasnferReservedResources();
-  RpsRenderGraphBatchLayout batch_layout = {};
-  if (const auto result = rpsRenderGraphGetBatchLayout(render_graph->GetRenderGraph(), &batch_layout); result != RPS_OK) {
-    logerror("rpsRenderGraphGetBatchLayout failed. {}", result);
-    return;
-  }
+  const auto batch_layout = render_graph->UpdateBatchLayout();
   auto [first_batch_index_per_queue, last_batch_index_per_queue] = GetFirstAndLastBatchIndexPerQueue(batch_layout);
   UtilFuncs util_funcs {
     .write_to_gpu_handle = [descriptor_gpu = &descriptor_gpu_, device = device_](const D3D12_CPU_DESCRIPTOR_HANDLE* const cpu_handles, const uint32_t cpu_handle_num) {
@@ -944,17 +941,7 @@ void CommandRecorder::RecordCommands(RenderGraph* render_graph, const SceneData&
     RegisterWaitSignalForResourceTransfer(batch_index, first_batch_index_per_queue, command_queue_index, copy_queue_signal, copy_queue_index_, &command_queue_signals_);
     auto command_list = GetCommandList(command_queue_index);
     if (!RegisterWaitOnCommandQueue(batch_layout, batch, &command_queue_signals_, signal_queue_index, fence_val, command_queue_index)) { return; }
-    RpsRenderGraphRecordCommandInfo record_info = {
-      .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
-      .pUserContext  = &render_pass_common_data,
-      .cmdBeginIndex = batch.cmdBegin,
-      .numCmds       = batch.numCmds,
-      // .flags         = RPS_RECORD_COMMAND_FLAG_ENABLE_COMMAND_DEBUG_MARKERS,
-    };
-    if (const auto result = rpsRenderGraphRecordCommands(render_graph->GetRenderGraph(), &record_info); result != RPS_OK) {
-      logerror("rpsRenderGraphRecordCommands failed. {} {}", result, batch_index);
-      return;
-    }
+    render_graph->RecordBatch(command_list, &render_pass_common_data, batch_index);
     command_list_set_.ExecuteCommandList(command_queue_index);
     RegisterQueueSignal(batch, batch_index, last_batch_index_per_queue, &command_queue_signals_, command_queue_index, frame_signals_[frame_buffer_index_], signal_queue_index, fence_val);
   }
@@ -970,38 +957,6 @@ D3d12CommandList* CommandRecorder::GetCommandList(const uint32_t command_queue_i
     descriptor_gpu_.SetDescriptorHeapsToCommandList(1, &command_list);
   }
   return command_list;
-}
-RpsResult CommandRecorder::UpdateRenderGraph(RenderGraph* render_graph) {
-  auto back_buffers = AllocateArrayFrame<RpsRuntimeResource>(swapchain_.GetSwapchainBufferNum());
-  for (uint32_t i = 0; i < swapchain_.GetSwapchainBufferNum(); i++) {
-    back_buffers[i] = rpsD3D12ResourceToHandle(swapchain_.GetResource(i));
-  }
-  RpsResourceDesc back_buffer_desc = {
-    .type              = RPS_RESOURCE_TYPE_IMAGE_2D,
-    .temporalLayers    = swapchain_.GetSwapchainBufferNum(),
-    .flags             = 0,
-    .image = {
-      .width       = swapchain_.GetWidth(),
-      .height      = swapchain_.GetHeight(),
-      .arrayLayers = 1,
-      .mipLevels   = 1,
-      .format      = rpsFormatFromDXGI(swapchain_.GetDxgiFormat()),
-      .sampleCount = 1,
-    },
-  };
-  const auto camera_buffer_size = GetUint32(sizeof(shader::SceneCameraData));
-  RpsConstant args[] = {&back_buffer_desc, &frame_buffer_num_, &camera_buffer_size};
-  const RpsRuntimeResource* arg_resources[] = {back_buffers};
-  const auto gpu_completed_frame_index = (frame_count_ > frame_buffer_num_) ? static_cast<uint64_t>(frame_count_ - frame_buffer_num_) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
-  RpsRenderGraphUpdateInfo update_info = {
-    .frameIndex               = frame_count_,
-    .gpuCompletedFrameIndex   = gpu_completed_frame_index,
-    .diagnosticFlags          = RpsDiagnosticFlags(RPS_DIAGNOSTIC_ENABLE_RUNTIME_DEBUG_NAMES | ((gpu_completed_frame_index == RPS_GPU_COMPLETED_FRAME_INDEX_NONE) ? RPS_DIAGNOSTIC_ENABLE_ALL: RPS_DIAGNOSTIC_NONE)),
-    .numArgs                  = countof(args),
-    .ppArgs                   = args,
-    .ppArgResources           = arg_resources,
-  };
-  return rpsRenderGraphUpdate(render_graph->GetRenderGraph(), &update_info);
 }
 uint64_t CommandRecorder::TrasnferReservedResources() {
   auto copy_queue_signal = CommandQueueSignals::kInvalidSignalVal;
@@ -1242,6 +1197,63 @@ RenderGraph::RenderGraph(const Config& config) {
 RenderGraph::~RenderGraph() {
   rpsRenderGraphDestroy(rps_render_graph_);
   rpsDeviceDestroy(rps_device_);
+}
+bool RenderGraph::UpdateRenderGraph(const Swapchain* swapchain, const uint32_t frame_count, const uint32_t frame_buffer_num) {
+  auto back_buffers = AllocateArrayFrame<RpsRuntimeResource>(swapchain->GetSwapchainBufferNum());
+  for (uint32_t i = 0; i < swapchain->GetSwapchainBufferNum(); i++) {
+    back_buffers[i] = rpsD3D12ResourceToHandle(swapchain->GetResource(i));
+  }
+  RpsResourceDesc back_buffer_desc = {
+    .type              = RPS_RESOURCE_TYPE_IMAGE_2D,
+    .temporalLayers    = swapchain->GetSwapchainBufferNum(),
+    .flags             = 0,
+    .image = {
+      .width       = swapchain->GetWidth(),
+      .height      = swapchain->GetHeight(),
+      .arrayLayers = 1,
+      .mipLevels   = 1,
+      .format      = rpsFormatFromDXGI(swapchain->GetDxgiFormat()),
+      .sampleCount = 1,
+    },
+  };
+  const auto camera_buffer_size = GetUint32(sizeof(shader::SceneCameraData));
+  RpsConstant args[] = {&back_buffer_desc, &frame_buffer_num, &camera_buffer_size};
+  const RpsRuntimeResource* arg_resources[] = {back_buffers};
+  const auto gpu_completed_frame_index = (frame_count > frame_buffer_num) ? static_cast<uint64_t>(frame_count - frame_buffer_num) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
+  RpsRenderGraphUpdateInfo update_info = {
+    .frameIndex               = frame_count,
+    .gpuCompletedFrameIndex   = gpu_completed_frame_index,
+    .diagnosticFlags          = RpsDiagnosticFlags(RPS_DIAGNOSTIC_ENABLE_RUNTIME_DEBUG_NAMES | ((gpu_completed_frame_index == RPS_GPU_COMPLETED_FRAME_INDEX_NONE) ? RPS_DIAGNOSTIC_ENABLE_ALL: RPS_DIAGNOSTIC_NONE)),
+    .numArgs                  = countof(args),
+    .ppArgs                   = args,
+    .ppArgResources           = arg_resources,
+  };
+  if (const auto result = rpsRenderGraphUpdate(rps_render_graph_, &update_info); result != RPS_OK) {
+    logerror("rpsRenderGraphUpdate failed. {}", result);
+    return false;
+  }
+  return true;
+}
+const RpsRenderGraphBatchLayout& RenderGraph::UpdateBatchLayout() {
+  if (const auto result = rpsRenderGraphGetBatchLayout(rps_render_graph_, &batch_layout_); result != RPS_OK) {
+    logerror("rpsRenderGraphGetBatchLayout failed. {}", result);
+    assert(false);
+  }
+  return batch_layout_;
+}
+void RenderGraph::RecordBatch(D3d12CommandList* command_list, RenderPassCommonData* render_pass_common_data, const uint32_t batch_index) {
+  const auto& batch = batch_layout_.pCmdBatches[batch_index];
+  RpsRenderGraphRecordCommandInfo record_info = {
+    .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
+    .pUserContext  = render_pass_common_data,
+    .cmdBeginIndex = batch.cmdBegin,
+    .numCmds       = batch.numCmds,
+    .flags         = RPS_RECORD_COMMAND_FLAG_ENABLE_COMMAND_DEBUG_MARKERS,
+  };
+  if (const auto result = rpsRenderGraphRecordCommands(rps_render_graph_, &record_info); result != RPS_OK) {
+    logerror("rpsRenderGraphRecordCommands failed. {} {}", result, batch_index);
+    assert(false);
+  }
 }
 }
 #include "doctest/doctest.h"
