@@ -1121,6 +1121,7 @@ void RpsLogger([[maybe_unused]]void* context, const char* format, va_list args) 
   loginfo(args);
 }
 void UpdateSceneParams(SceneParams* scene_params) {
+  // TODO
 }
 } // namespace
 RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)

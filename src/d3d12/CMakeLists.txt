@@ -41,8 +41,8 @@ target_sources(${CMAKE_PROJECT_NAME}
   d3d12_resource_transfer.cpp
   d3d12_texture_util.h
   d3d12_texture_util.cpp
-  d3d12_gpu_timestamp_set.h
-  d3d12_gpu_timestamp_set.cpp
+#  d3d12_gpu_timestamp_set.h
+#  d3d12_gpu_timestamp_set.cpp
   d3d12_scene_loader.h
   d3d12_scene_loader.cpp
 )
