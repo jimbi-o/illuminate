@@ -1,6 +1,7 @@
 #include "d3d12_scene_loader.h"
 #include <fstream>
 #include "gfxminimath/gfxminimath.h"
+#include "illuminate/util/util_functions.h"
 #include "d3d12_descriptors.h"
 #include "d3d12_gpu_buffer_allocation.h"
 #include "d3d12_memory_allocators.h"
@@ -638,10 +639,26 @@ class RenderGraph final {
   RpsRenderGraph rps_render_graph_;
   GeomPassParams prez_pass_params_;
   RpsRenderGraphBatchLayout batch_layout_{};
+  RenderGraph() = delete;
   RenderGraph(const RenderGraph&) = delete;
   RenderGraph(RenderGraph&&) = delete;
   void operator=(const RenderGraph&) = delete;
   void operator=(RenderGraph&&) = delete;
+};
+class TimingCollector final {
+ public:
+  static std::unique_ptr<TimingCollector> CreateTimingCollector();
+  void ResetTimings();
+  void UpdateCpuTiming() { UpdateTimeDuration(&time_duration_data_set_cpu_); }
+  void ShowTimeDurations();
+ private:
+  TimingCollector();
+  TimeDurationDataSet time_duration_data_set_cpu_{};
+  // TimingCollector() = delete;
+  TimingCollector(const TimingCollector&) = delete;
+  TimingCollector(TimingCollector&&) = delete;
+  void operator=(const TimingCollector&) = delete;
+  void operator=(TimingCollector&&) = delete;
 };
 } // namespace illuminate
 #include "imgui.h"
@@ -722,7 +739,8 @@ auto UpdateImgui() {
 auto SetupGraphicDevices(const nlohmann::json& json) {
   auto graphic_device = GraphicDevice::CreateGraphicDevice();
   auto command_recorder = CommandRecorder::CreateCommandRecorder(json, graphic_device->GetDxgiFactory(), graphic_device->GetDxgiAdapter(), graphic_device->GetDevice());
-  return std::make_pair(std::move(graphic_device), std::move(command_recorder));
+  auto timing_collector = TimingCollector::CreateTimingCollector();
+  return std::make_tuple(std::move(graphic_device), std::move(command_recorder), std::move(timing_collector));
 }
 auto SetupRenderGraph(GraphicDevice* graphic_device, CommandRecorder* command_recorder, const MaterialPack& material_pack) {
   auto render_graph = RenderGraph::CreateRenderGraph({
@@ -1120,8 +1138,44 @@ void RpsLogger([[maybe_unused]]void* context, const char* format, va_list args) 
   snprintf(buffer, len, format, args);
   loginfo(args);
 }
-void UpdateSceneParams(SceneParams* scene_params) {
+void UpdateGui(const SceneParams& scene_params) {
   // TODO
+  // UpdateCamera(&gui_data->scene_params);
+  // UpdateLight(&gui_data->scene_params);
+}
+struct TimeDurationsToShow {
+  static const uint32_t kMaxRenderPassNum = 32;
+  static const uint32_t kMaxRenderPassNameLen = 16;
+  float total_time_msec_cpu{};
+  float total_time_msec_gpu{};
+  uint32_t render_pass_num{};
+  const char render_pass_name[kMaxRenderPassNum][kMaxRenderPassNameLen]{};
+  uint32_t command_queue_index[kMaxRenderPassNum]{};
+  float duration_msec[kMaxRenderPassNum]{};
+};
+auto ConvertToTimeDurationsToShow(const float total_time_msec_cpu) {
+  return TimeDurationsToShow{
+    .total_time_msec_cpu = total_time_msec_cpu,
+  };
+}
+auto ShowTimeDurationsImgui(const TimeDurationsToShow& time_durations) {
+  ImGui::SetNextWindowSize(ImVec2{});
+  if (!ImGui::Begin("performance", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { return; }
+  ImGui::Text("CPU: %7.4f", time_durations.total_time_msec_cpu);
+  ImGui::Text("GPU: %7.4f", time_durations.total_time_msec_gpu);
+  if (ImGui::BeginTable("render pass", 3)) {
+    for (uint32_t i = 0; i < time_durations.render_pass_num; i++) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("%s", time_durations.render_pass_name[i]);
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("%2d", time_durations.command_queue_index[i]);
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("%7.4f", time_durations.duration_msec[i]);
+    }
+    ImGui::EndTable();
+  }
+  ImGui::End();
 }
 } // namespace
 RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)
@@ -1256,6 +1310,17 @@ void RenderGraph::RecordBatch(D3d12CommandList* command_list, RenderPassCommonDa
     assert(false);
   }
 }
+std::unique_ptr<TimingCollector> TimingCollector::CreateTimingCollector() {
+  return std::unique_ptr<TimingCollector>(new TimingCollector());
+}
+TimingCollector::TimingCollector() {
+}
+void TimingCollector::ResetTimings() {
+  ResetTimeDuration(&time_duration_data_set_cpu_);
+}
+void TimingCollector::ShowTimeDurations() {
+  ShowTimeDurationsImgui(ConvertToTimeDurationsToShow(time_duration_data_set_cpu_.prev_duration_per_frame_msec_avg));
+}
 }
 #include "doctest/doctest.h"
 TEST_CASE("scene loader") { // NOLINT
@@ -1283,7 +1348,7 @@ TEST_CASE("scene loader") { // NOLINT
 }
 TEST_CASE("scene viewer") { // NOLINT
   using namespace illuminate; // NOLINT
-  auto [graphic_device, command_recorder] = SetupGraphicDevices(LoadJson("configs/config_default.json"));
+  auto [graphic_device, command_recorder, timing_collector] = SetupGraphicDevices(LoadJson("configs/config_default.json"));
   auto material_pack = BuildMaterialList(graphic_device->GetDevice(), LoadJson("configs/materials.json"));
   auto render_graph = SetupRenderGraph(graphic_device.get(), command_recorder.get(), material_pack);
   auto default_textures = LoadDefaultTextures(command_recorder->GetFrameBufferIndex(), graphic_device->GetDevice(), command_recorder->GetGpuBufferAllocator(), command_recorder->GetResourceTransferManager());
@@ -1294,11 +1359,14 @@ TEST_CASE("scene viewer") { // NOLINT
     .material_list  = &material_pack.material_list,
     .scene_params   = &scene_params,
   };
+  timing_collector->ResetTimings();
   for (uint32_t i = 0; i < 100; i++) {
+    timing_collector->UpdateCpuTiming();
+    ResetAllocation(MemoryType::kFrame);
     if (!command_recorder->ProcessWindowMessage()) { break; }
     command_recorder->PreUpdate();
-    UpdateSceneParams(&scene_params);
-    ResetAllocation(MemoryType::kFrame);
+    UpdateGui(scene_params);
+    timing_collector->ShowTimeDurations();
     command_recorder->RecordCommands(render_graph.get(), scene_data);
     command_recorder->Present();
   }

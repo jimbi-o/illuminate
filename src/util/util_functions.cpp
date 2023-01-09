@@ -77,13 +77,20 @@ void CalcTimestampAverage(uint32_t* frame_count, float* duration_msec_sum, float
   *duration_msec_sum = 0.0f;
   *frame_count = 0;
 }
-bool UpdateTimeDuration(const float frame_count_reset_time_threshold_msec, uint32_t* frame_count, std::chrono::high_resolution_clock::time_point* last_time_point, float* delta_time_msec, float* duration_msec_sum, float* prev_duration_per_frame_msec_avg) {
-  UpdateTimestamp(frame_count, last_time_point, delta_time_msec, duration_msec_sum);
-  if (*duration_msec_sum >= frame_count_reset_time_threshold_msec) {
-    CalcTimestampAverage(frame_count, duration_msec_sum, prev_duration_per_frame_msec_avg);
+bool UpdateTimeDuration(TimeDurationDataSet* time_duration_data_set) {
+  UpdateTimestamp(&time_duration_data_set->frame_count, &time_duration_data_set->last_time_point, &time_duration_data_set->delta_time_msec, &time_duration_data_set->duration_msec_sum);
+  if (time_duration_data_set->duration_msec_sum >= time_duration_data_set->frame_count_reset_time_threshold_msec) {
+    CalcTimestampAverage(&time_duration_data_set->frame_count, &time_duration_data_set->duration_msec_sum, &time_duration_data_set->prev_duration_per_frame_msec_avg);
     return true;
   }
   return false;
+}
+void ResetTimeDuration(TimeDurationDataSet* time_duration_data_set) {
+  time_duration_data_set->frame_count = 0;
+  time_duration_data_set->last_time_point = std::chrono::high_resolution_clock::now();
+  time_duration_data_set->delta_time_msec = 0.0f;
+  time_duration_data_set->duration_msec_sum = 0.0f;
+  time_duration_data_set->prev_duration_per_frame_msec_avg = 0.0f;
 }
 }
 #include "doctest/doctest.h"
@@ -226,36 +233,35 @@ TEST_CASE("succeed multiple index") {
 }
 TEST_CASE("UpdateTimeDuration") { // NOLINT
   using namespace illuminate; // NOLINT
-  float frame_count_reset_time_threshold_msec = 500.0f;
-  uint32_t frame_count = 0U;
   const auto time_point_initial_val = std::chrono::high_resolution_clock::now() - std::chrono::milliseconds(16);
-  auto last_time_point = time_point_initial_val;
-  float delta_time_msec = 0.0f;
-  float duration_msec_sum = 0.0f;
-  float prev_duration_per_frame_msec_avg = 0.0f;
-  UpdateTimeDuration(frame_count_reset_time_threshold_msec, &frame_count, &last_time_point, &delta_time_msec, &duration_msec_sum, &prev_duration_per_frame_msec_avg);
-  CHECK_EQ(frame_count, 1U);
-  CHECK_GE(last_time_point, time_point_initial_val);
-  CHECK_LE(last_time_point, std::chrono::high_resolution_clock::now());
-  CHECK_GE(delta_time_msec, 16.0f);
-  CHECK_EQ(duration_msec_sum, delta_time_msec);
-  CHECK_EQ(prev_duration_per_frame_msec_avg, 0.0f);
-  const auto prev_time_point_val = last_time_point;
-  auto prev_duration = duration_msec_sum;
-  UpdateTimeDuration(frame_count_reset_time_threshold_msec, &frame_count, &last_time_point, &delta_time_msec, &duration_msec_sum, &prev_duration_per_frame_msec_avg);
-  CHECK_EQ(frame_count, 2U);
-  CHECK_GE(last_time_point, prev_time_point_val);
-  CHECK_LE(last_time_point, std::chrono::high_resolution_clock::now());
-  CHECK_GE(delta_time_msec, 0.0f);
-  CHECK_EQ(duration_msec_sum, prev_duration + delta_time_msec);
-  CHECK_EQ(prev_duration_per_frame_msec_avg, 0.0f);
-  prev_duration = duration_msec_sum;
-  last_time_point = std::chrono::high_resolution_clock::now() - std::chrono::milliseconds(500);
-  UpdateTimeDuration(frame_count_reset_time_threshold_msec, &frame_count, &last_time_point, &delta_time_msec, &duration_msec_sum, &prev_duration_per_frame_msec_avg);
-  CHECK_EQ(frame_count, 0U);
-  CHECK_GE(last_time_point, std::chrono::high_resolution_clock::now() - std::chrono::milliseconds(500));
-  CHECK_LE(last_time_point, std::chrono::high_resolution_clock::now());
-  CHECK_GE(delta_time_msec, 500.0f);
-  CHECK_EQ(duration_msec_sum, 0.0f);
-  CHECK_GT(prev_duration_per_frame_msec_avg, (500.0f + prev_duration) / 3.0f);
+  TimeDurationDataSet time_duration_data_set{
+    .frame_count_reset_time_threshold_msec = 500.0f,
+    .frame_count = 0U,
+    .last_time_point = time_point_initial_val,
+  };
+  UpdateTimeDuration(&time_duration_data_set);
+  CHECK_EQ(time_duration_data_set.frame_count, 1U);
+  CHECK_GE(time_duration_data_set.last_time_point, time_point_initial_val);
+  CHECK_LE(time_duration_data_set.last_time_point, std::chrono::high_resolution_clock::now());
+  CHECK_GE(time_duration_data_set.delta_time_msec, 16.0f);
+  CHECK_EQ(time_duration_data_set.duration_msec_sum, time_duration_data_set.delta_time_msec);
+  CHECK_EQ(time_duration_data_set.prev_duration_per_frame_msec_avg, 0.0f);
+  const auto prev_time_point_val = time_duration_data_set.last_time_point;
+  auto prev_duration = time_duration_data_set.duration_msec_sum;
+  UpdateTimeDuration(&time_duration_data_set);
+  CHECK_EQ(time_duration_data_set.frame_count, 2U);
+  CHECK_GE(time_duration_data_set.last_time_point, prev_time_point_val);
+  CHECK_LE(time_duration_data_set.last_time_point, std::chrono::high_resolution_clock::now());
+  CHECK_GE(time_duration_data_set.delta_time_msec, 0.0f);
+  CHECK_EQ(time_duration_data_set.duration_msec_sum, prev_duration + time_duration_data_set.delta_time_msec);
+  CHECK_EQ(time_duration_data_set.prev_duration_per_frame_msec_avg, 0.0f);
+  prev_duration = time_duration_data_set.duration_msec_sum;
+  time_duration_data_set.last_time_point = std::chrono::high_resolution_clock::now() - std::chrono::milliseconds(500);
+  UpdateTimeDuration(&time_duration_data_set);
+  CHECK_EQ(time_duration_data_set.frame_count, 0U);
+  CHECK_GE(time_duration_data_set.last_time_point, std::chrono::high_resolution_clock::now() - std::chrono::milliseconds(500));
+  CHECK_LE(time_duration_data_set.last_time_point, std::chrono::high_resolution_clock::now());
+  CHECK_GE(time_duration_data_set.delta_time_msec, 500.0f);
+  CHECK_EQ(time_duration_data_set.duration_msec_sum, 0.0f);
+  CHECK_GT(time_duration_data_set.prev_duration_per_frame_msec_avg, (500.0f + prev_duration) / 3.0f);
 }
