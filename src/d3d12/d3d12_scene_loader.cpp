@@ -615,7 +615,8 @@ class CommandRecorder final {
   void operator=(const CommandRecorder&) = delete;
   void operator=(CommandRecorder&&) = delete;
 };
-struct RenderPassCommonData;
+struct FramePersistentData;
+struct RenderBatchData;
 class RenderGraph final {
  public:
   struct Config {
@@ -624,6 +625,7 @@ class RenderGraph final {
     const D3D12_COMMAND_LIST_TYPE* command_queue_type{};
     uint32_t material_hash_list_len{};
     StrHash* material_hash_list{};
+    FramePersistentData* frame_persistent_data{};
   };
   struct GeomPassParams {
     StrHash material_index{};
@@ -632,7 +634,7 @@ class RenderGraph final {
   ~RenderGraph();
   bool UpdateRenderGraph(const Swapchain* swapchain, const uint32_t frame_count, const uint32_t frame_buffer_num);
   const RpsRenderGraphBatchLayout& UpdateBatchLayout();
-  void RecordBatch(D3d12CommandList* command_list, RenderPassCommonData* render_pass_common_data, const uint32_t batch_index);
+  void RecordBatch(D3d12CommandList* command_list, RenderBatchData* render_batch_data, const uint32_t batch_index);
  private:
   RenderGraph(const Config& config);
   RpsDevice rps_device_;
@@ -645,16 +647,21 @@ class RenderGraph final {
   void operator=(const RenderGraph&) = delete;
   void operator=(RenderGraph&&) = delete;
 };
+struct GpuTimestampSet;
 class TimingCollector final {
  public:
-  static std::unique_ptr<TimingCollector> CreateTimingCollector();
+  static std::unique_ptr<TimingCollector> CreateTimingCollector(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type);
+  ~TimingCollector();
   void ResetTimings();
   void UpdateCpuTiming() { UpdateTimeDuration(&time_duration_data_set_cpu_); }
   void ShowTimeDurations();
+  GpuTimestampSet* GetGpuTimestampSet() { return gpu_timestamp_set_.get(); }
  private:
-  TimingCollector();
+  TimingCollector(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type);
+  const uint32_t command_queue_num_;
   TimeDurationDataSet time_duration_data_set_cpu_{};
-  // TimingCollector() = delete;
+  std::unique_ptr<GpuTimestampSet> gpu_timestamp_set_;
+  TimingCollector() = delete;
   TimingCollector(const TimingCollector&) = delete;
   TimingCollector(TimingCollector&&) = delete;
   void operator=(const TimingCollector&) = delete;
@@ -669,6 +676,11 @@ class TimingCollector final {
 #include "d3d12_shader_compiler.h"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
+struct RenderPassCommonData;
+struct RenderBatchData {
+  RenderPassCommonData* render_pass_common_data;
+  uint32_t command_queue_index;
+};
 struct SceneParams;
 struct UtilFuncs;
 struct GpuHandles;
@@ -739,16 +751,17 @@ auto UpdateImgui() {
 auto SetupGraphicDevices(const nlohmann::json& json) {
   auto graphic_device = GraphicDevice::CreateGraphicDevice();
   auto command_recorder = CommandRecorder::CreateCommandRecorder(json, graphic_device->GetDxgiFactory(), graphic_device->GetDxgiAdapter(), graphic_device->GetDevice());
-  auto timing_collector = TimingCollector::CreateTimingCollector();
+  auto timing_collector = TimingCollector::CreateTimingCollector(graphic_device->GetDevice(), command_recorder->GetCommandQueueNum(), command_recorder->GetCommandQueueType());
   return std::make_tuple(std::move(graphic_device), std::move(command_recorder), std::move(timing_collector));
 }
-auto SetupRenderGraph(GraphicDevice* graphic_device, CommandRecorder* command_recorder, const MaterialPack& material_pack) {
+auto SetupRenderGraph(GraphicDevice* graphic_device, CommandRecorder* command_recorder, const MaterialPack& material_pack, FramePersistentData* frame_persistent_data) {
   auto render_graph = RenderGraph::CreateRenderGraph({
       .device             = graphic_device->GetDevice(),
       .command_queue_num  = command_recorder->GetCommandQueueNum(),
       .command_queue_type = command_recorder->GetCommandQueueType(),
       .material_hash_list_len = material_pack.material_list.material_num,
       .material_hash_list     = material_pack.config.material_hash_list,
+      .frame_persistent_data  = frame_persistent_data,
     });
   return render_graph;
 }
@@ -959,7 +972,11 @@ void CommandRecorder::RecordCommands(RenderGraph* render_graph, const SceneData&
     RegisterWaitSignalForResourceTransfer(batch_index, first_batch_index_per_queue, command_queue_index, copy_queue_signal, copy_queue_index_, &command_queue_signals_);
     auto command_list = GetCommandList(command_queue_index);
     if (!RegisterWaitOnCommandQueue(batch_layout, batch, &command_queue_signals_, signal_queue_index, fence_val, command_queue_index)) { return; }
-    render_graph->RecordBatch(command_list, &render_pass_common_data, batch_index);
+    RenderBatchData render_batch_data {
+      .render_pass_common_data = &render_pass_common_data,
+      .command_queue_index = command_queue_index,
+    };
+    render_graph->RecordBatch(command_list, &render_batch_data, batch_index);
     command_list_set_.ExecuteCommandList(command_queue_index);
     RegisterQueueSignal(batch, batch_index, last_batch_index_per_queue, &command_queue_signals_, command_queue_index, frame_signals_[frame_buffer_index_], signal_queue_index, fence_val);
   }
@@ -1000,6 +1017,16 @@ std::pair<uint32_t*, uint32_t*> CommandRecorder::GetFirstAndLastBatchIndexPerQue
   }
   return {first_batch_index_per_queue, last_batch_index_per_queue};
 }
+struct FramePersistentData {
+  GpuTimestampSet* gpu_timestamp_set{};
+};
+struct GpuTimestampSet {
+  static const uint32_t kTimestampNumPerPass = 2;
+  uint32_t* render_pass_num_per_queue{};
+  ID3D12QueryHeap** timestamp_query_heaps{};
+  uint32_t* timestamp_query_heap_index{};
+  char*** pass_name{};
+};
 namespace {
 auto MakeVec3(const float array[3]) {
   return gfxminimath::vec3(array[0], array[1], array[2]);
@@ -1047,7 +1074,7 @@ auto CalcViewMatrix(float camera_pos[3], float camera_focus[3]) {
 }
 auto UpdateSceneData(const RpsCmdCallbackContext* context, ID3D12Resource* camera_data_resource, D3D12_CPU_DESCRIPTOR_HANDLE camera_data_handle) {
   using namespace gfxminimath;
-  const auto render_pass_common_data = static_cast<RenderPassCommonData*>(context->pUserRecordContext);
+  const auto render_pass_common_data = static_cast<RenderBatchData*>(context->pUserRecordContext)->render_pass_common_data;
   const auto scene_params = render_pass_common_data->scene_params;
   const auto view_matrix = CalcViewMatrix(scene_params->camera_pos, scene_params->camera_focus);
   float compact_projection_param[4];
@@ -1085,7 +1112,7 @@ auto UpdateSceneData(const RpsCmdCallbackContext* context, ID3D12Resource* camer
 auto GeomPass(const RpsCmdCallbackContext* context) {
   auto command_list = rpsD3D12CommandListFromHandle(context->hCommandBuffer);
   const auto& pass_params = static_cast<RenderGraph::GeomPassParams*>(context->pCmdCallbackContext);
-  const auto render_pass_common_data = static_cast<RenderPassCommonData*>(context->pUserRecordContext);
+  const auto render_pass_common_data = static_cast<RenderBatchData*>(context->pUserRecordContext)->render_pass_common_data;
   command_list->SetGraphicsRootSignature(GetMaterialRootsig(*render_pass_common_data->material_list, pass_params->material_index));
   command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   command_list->SetGraphicsRootDescriptorTable(1, render_pass_common_data->gpu_handles->geom_pass_gpu_handle);
@@ -1117,15 +1144,37 @@ auto RenderImgui(const RpsCmdCallbackContext* context) {
   auto command_list = rpsD3D12CommandListFromHandle(context->hCommandBuffer);
   ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), command_list);
 }
+auto QueryGpuTimestamp(ID3D12GraphicsCommandList* command_list, const char* const pass_name, GpuTimestampSet* gpu_timestamp_set, const uint32_t command_queue_index) {
+  const auto timestamp_index = gpu_timestamp_set->timestamp_query_heap_index[command_queue_index];
+  if (const auto pass_name_len = GetUint32(strlen(pass_name)); pass_name_len > 0) {
+    // set pass name
+    const auto buffer_len = pass_name_len + 1;
+    auto buffer = AllocateArrayFrame<char>(buffer_len);
+    strcpy_s(buffer, buffer_len, pass_name);
+    gpu_timestamp_set->pass_name[command_queue_index][timestamp_index] = buffer;
+  } else {
+    gpu_timestamp_set->pass_name[command_queue_index][timestamp_index] = nullptr;
+  }
+  command_list->EndQuery(gpu_timestamp_set->timestamp_query_heaps[command_queue_index], D3D12_QUERY_TYPE_TIMESTAMP, timestamp_index);
+  gpu_timestamp_set->timestamp_query_heap_index[command_queue_index]++;
+}
+auto StartGpuTimestamp(ID3D12GraphicsCommandList* command_list, const char* const pass_name, GpuTimestampSet* gpu_timestamp_set, const uint32_t command_queue_index) {
+  QueryGpuTimestamp(command_list, pass_name, gpu_timestamp_set, command_queue_index);
+}
+auto EndGpuTimestamp(ID3D12GraphicsCommandList* command_list, GpuTimestampSet* gpu_timestamp_set, const uint32_t command_queue_index) {
+  QueryGpuTimestamp(command_list, "", gpu_timestamp_set, command_queue_index);
+}
 void RecordDebugMarker([[maybe_unused]] void* context, const RpsRuntimeOpRecordDebugMarkerArgs* args) {
   auto* command_list = rpsD3D12CommandListFromHandle(args->hCommandBuffer);
   switch (args->mode)
   {
     case RPS_RUNTIME_DEBUG_MARKER_BEGIN:
       PIXBeginEvent(command_list, 0, args->text);
+      StartGpuTimestamp(command_list, args->text, static_cast<FramePersistentData*>(context)->gpu_timestamp_set, static_cast<RenderBatchData*>(args->pUserRecordContext)->command_queue_index);
       break;
     case RPS_RUNTIME_DEBUG_MARKER_END:
       PIXEndEvent(command_list);
+      EndGpuTimestamp(command_list, static_cast<FramePersistentData*>(context)->gpu_timestamp_set, static_cast<RenderBatchData*>(args->pUserRecordContext)->command_queue_index);
       break;
     case RPS_RUNTIME_DEBUG_MARKER_LABEL:
       PIXSetMarker(command_list, 0, args->text);
@@ -1177,6 +1226,57 @@ auto ShowTimeDurationsImgui(const TimeDurationsToShow& time_durations) {
   }
   ImGui::End();
 }
+auto GetRenderPassNumPerQueue(const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type) {
+  auto render_pass_num_per_queue = AllocateArraySystem<uint32_t>(command_queue_num);
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    switch (command_queue_type[i]) {
+      case D3D12_COMMAND_LIST_TYPE_DIRECT:
+        render_pass_num_per_queue[i] = 32;
+        break;
+      case D3D12_COMMAND_LIST_TYPE_COMPUTE:
+        render_pass_num_per_queue[i] = 16;
+        break;
+      case D3D12_COMMAND_LIST_TYPE_COPY:
+        render_pass_num_per_queue[i] = 4;
+        break;
+    }
+  }
+  return render_pass_num_per_queue;
+}
+auto CreateGpuTimestampSet(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type) {
+  auto render_pass_num_per_queue = GetRenderPassNumPerQueue(command_queue_num, command_queue_type);
+  auto timestamp_query_heaps = AllocateArraySystem<ID3D12QueryHeap*>(command_queue_num);
+  auto timestamp_query_heap_index = AllocateArraySystem<uint32_t>(command_queue_num);
+  auto pass_name = AllocateArraySystem<char**>(command_queue_num);
+  D3D12_QUERY_HEAP_DESC desc{};
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    pass_name[i] = AllocateArraySystem<char*>(render_pass_num_per_queue[i] * GpuTimestampSet::kTimestampNumPerPass);
+    desc.Type = (command_queue_type[i] == D3D12_COMMAND_LIST_TYPE_COPY) ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    desc.Count = render_pass_num_per_queue[i];
+    auto hr = device->CreateQueryHeap(&desc, IID_PPV_ARGS(&timestamp_query_heaps[i]));
+    if (FAILED(hr)) {
+      assert(timestamp_query_heaps[i] == nullptr);
+      logwarn("CreateQueryHeap failed. {} {} {} {}", desc.Type, desc.Count, i, hr);
+      continue;
+    }
+    SetD3d12Name(timestamp_query_heaps[i], "timestamp" + std::to_string(i));
+  }
+  GpuTimestampSet gpu_timestamp_set{
+    .render_pass_num_per_queue = render_pass_num_per_queue,
+    .timestamp_query_heaps = timestamp_query_heaps,
+    .timestamp_query_heap_index = timestamp_query_heap_index,
+    .pass_name = pass_name,
+  };
+  return gpu_timestamp_set;
+}
+auto ReleaseGpuTimestampSet(GpuTimestampSet* gpu_timestamp_set, const uint32_t command_queue_num) {
+  for (uint32_t i = 0; i < command_queue_num; i++) {
+    gpu_timestamp_set->timestamp_query_heaps[i]->Release();
+  }
+}
+auto ResetIndex(const uint32_t command_queue_num, GpuTimestampSet* gpu_timestamp_set) {
+  memset(gpu_timestamp_set->timestamp_query_heap_index, 0, command_queue_num);
+}
 } // namespace
 RPS_DECLARE_RPSL_ENTRY(default_rendergraph, rps_main)
 std::unique_ptr<RenderGraph> RenderGraph::CreateRenderGraph(const Config& config) {
@@ -1194,7 +1294,7 @@ RenderGraph::RenderGraph(const Config& config) {
       },
     };
     RpsRuntimeDeviceCreateInfo runtime_create_info = {
-      .pUserContext = this,
+      .pUserContext = config.frame_persistent_data,
       .callbacks = {
         .pfnRecordDebugMarker = &RecordDebugMarker,
       },
@@ -1296,11 +1396,11 @@ const RpsRenderGraphBatchLayout& RenderGraph::UpdateBatchLayout() {
   }
   return batch_layout_;
 }
-void RenderGraph::RecordBatch(D3d12CommandList* command_list, RenderPassCommonData* render_pass_common_data, const uint32_t batch_index) {
+void RenderGraph::RecordBatch(D3d12CommandList* command_list, RenderBatchData* render_batch_data, const uint32_t batch_index) {
   const auto& batch = batch_layout_.pCmdBatches[batch_index];
   RpsRenderGraphRecordCommandInfo record_info = {
     .hCmdBuffer    = rpsD3D12CommandListToHandle(command_list),
-    .pUserContext  = render_pass_common_data,
+    .pUserContext  = render_batch_data,
     .cmdBeginIndex = batch.cmdBegin,
     .numCmds       = batch.numCmds,
     .flags         = RPS_RECORD_COMMAND_FLAG_ENABLE_COMMAND_DEBUG_MARKERS,
@@ -1310,10 +1410,14 @@ void RenderGraph::RecordBatch(D3d12CommandList* command_list, RenderPassCommonDa
     assert(false);
   }
 }
-std::unique_ptr<TimingCollector> TimingCollector::CreateTimingCollector() {
-  return std::unique_ptr<TimingCollector>(new TimingCollector());
+std::unique_ptr<TimingCollector> TimingCollector::CreateTimingCollector(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type) {
+  return std::unique_ptr<TimingCollector>(new TimingCollector(device, command_queue_num, command_queue_type));
 }
-TimingCollector::TimingCollector() {
+TimingCollector::TimingCollector(D3d12Device* device, const uint32_t command_queue_num, const D3D12_COMMAND_LIST_TYPE* command_queue_type) : command_queue_num_(command_queue_num) {
+  gpu_timestamp_set_ = std::make_unique<GpuTimestampSet>(CreateGpuTimestampSet(device, command_queue_num, command_queue_type));
+}
+TimingCollector::~TimingCollector() {
+  ReleaseGpuTimestampSet(gpu_timestamp_set_.get(), command_queue_num_);
 }
 void TimingCollector::ResetTimings() {
   ResetTimeDuration(&time_duration_data_set_cpu_);
@@ -1350,7 +1454,10 @@ TEST_CASE("scene viewer") { // NOLINT
   using namespace illuminate; // NOLINT
   auto [graphic_device, command_recorder, timing_collector] = SetupGraphicDevices(LoadJson("configs/config_default.json"));
   auto material_pack = BuildMaterialList(graphic_device->GetDevice(), LoadJson("configs/materials.json"));
-  auto render_graph = SetupRenderGraph(graphic_device.get(), command_recorder.get(), material_pack);
+  FramePersistentData frame_persistent_data{
+    .gpu_timestamp_set = timing_collector->GetGpuTimestampSet(),
+  };
+  auto render_graph = SetupRenderGraph(graphic_device.get(), command_recorder.get(), material_pack, &frame_persistent_data);
   auto default_textures = LoadDefaultTextures(command_recorder->GetFrameBufferIndex(), graphic_device->GetDevice(), command_recorder->GetGpuBufferAllocator(), command_recorder->GetResourceTransferManager());
   auto model_data_set = LoadModelData("scenedata/BoomBoxWithAxes/BoomBoxWithAxes.json", default_textures.descriptor_heap_set, command_recorder->GetFrameBufferIndex(), graphic_device->GetDevice(), command_recorder->GetGpuBufferAllocator(), command_recorder->GetResourceTransferManager());
   SceneParams scene_params{};
@@ -1367,6 +1474,7 @@ TEST_CASE("scene viewer") { // NOLINT
     command_recorder->PreUpdate();
     UpdateGui(scene_params);
     timing_collector->ShowTimeDurations();
+    ResetIndex(command_recorder->GetCommandQueueNum(), timing_collector->GetGpuTimestampSet());
     command_recorder->RecordCommands(render_graph.get(), scene_data);
     command_recorder->Present();
   }
@@ -1376,6 +1484,7 @@ TEST_CASE("scene viewer") { // NOLINT
   ReleaseResourceSet(&default_textures.resource_set);
   default_textures.descriptor_heap_set.heap->Release();
   ReleasePsoAndRootsig(&material_pack.material_list);
+  timing_collector.reset();
   render_graph.reset();
   command_recorder.reset();
   graphic_device.reset();
