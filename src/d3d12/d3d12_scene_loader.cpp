@@ -674,6 +674,7 @@ class TimingCollector final {
 #include "rps/runtime/d3d12/rps_d3d12_runtime.h"
 #include "d3d12_json_parser.h"
 #include "d3d12_shader_compiler.h"
+#include "configs/render_graph_args.inl"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 namespace illuminate {
 struct RenderPassCommonData;
@@ -1371,8 +1372,11 @@ bool RenderGraph::UpdateRenderGraph(const Swapchain* swapchain, const uint32_t f
       .sampleCount = 1,
     },
   };
-  const auto camera_buffer_size = GetUint32(sizeof(shader::SceneCameraData));
-  RpsConstant args[] = {&back_buffer_desc, &frame_buffer_num, &camera_buffer_size};
+  rpsargs::Args rps_args {
+    .frame_buffer_num   = frame_buffer_num,
+    .camera_buffer_size = GetUint32(sizeof(shader::SceneCameraData)),
+  };
+  RpsConstant args[] = {&back_buffer_desc, &rps_args};
   const RpsRuntimeResource* arg_resources[] = {back_buffers};
   const auto gpu_completed_frame_index = (frame_count > frame_buffer_num) ? static_cast<uint64_t>(frame_count - frame_buffer_num) : RPS_GPU_COMPLETED_FRAME_INDEX_NONE;
   RpsRenderGraphUpdateInfo update_info = {

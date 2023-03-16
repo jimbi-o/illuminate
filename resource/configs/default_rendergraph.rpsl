@@ -1,11 +1,12 @@
+#include "render_graph_args.inl"
 node update_scene_data([writeonly(cpu)] buffer camera_resource, [readonly(cb, vs)] buffer camera_handle);
 node prez_pass(rtv dst : SV_Target0, dsv ds : SV_DepthStencil, RpsViewport dst_viewport : SV_Viewport, [readonly(cb, vs)] buffer camera_handle/*needed to keep update_scene_data*/);
 node imgui(rtv dst : SV_Target0, RpsViewport dst_viewport : SV_Viewport);
 
-export void rps_main([readonly(present)] texture backbuffer, uint frame_buffer_num, uint camera_buffer_size)
+export void rps_main([readonly(present)] texture backbuffer, Args args)
 {
   ResourceDesc backbuffer_desc = backbuffer.desc();
-  buffer camera_buffer = create_buffer(camera_buffer_size, frame_buffer_num, RPS_RESOURCE_FLAG_PREFER_GPU_LOCAL_CPU_VISIBLE);
+  buffer camera_buffer = create_buffer(args.camera_buffer_size, args.frame_buffer_num, RPS_RESOURCE_FLAG_PREFER_GPU_LOCAL_CPU_VISIBLE);
   update_scene_data(camera_buffer, camera_buffer);
   RpsViewport dst_viewport = viewport(backbuffer_desc.Width, backbuffer_desc.Height);
   texture ds = create_tex2d(RPS_FORMAT_R24G8_TYPELESS, backbuffer_desc.Width, backbuffer_desc.Height);
